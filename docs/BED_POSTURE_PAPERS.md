@@ -4,7 +4,7 @@
 
 논문 결과와 프로젝트 적용 제안을 구분합니다. 관절 PCK/AP, 자세 분류 정확도, 이벤트 검출은 서로 다른 지표입니다. RGB·IR·LWIR·깊이·압력 입력 및 추정 3D와 실측 깊이를 구분합니다. 문헌 검토는 모델 실행·성능 재현을 뜻하지 않습니다.
 
-**검토 이력:** P01–P25는 기존 저장소의 2026-10-24 UTC 원문 대조 기록을 이어받았습니다. 이번 작업에서 이들 모두를 새로 원문 검증한 것은 아닙니다. P05·P06은 이번 대화의 본문 검토로 보완·정정했고, P26–P29는 이번에 본문을 검토한 논문입니다. P11·P12·P19는 여전히 본문 검증 보류입니다.
+**재검토(2026-10-25):** 이 문서의 17편 중 14편은 원문 또는 공개 저자판의 방법·자료·평가 조건·결과를 다시 대조했습니다. P11·P12·P19는 본문을 확보하지 못해 검증 보류입니다. ‘본문 대조’는 저자의 결과를 재현하거나 원자료의 진위를 보증했다는 뜻이 아닙니다. 판본·근거 위치·정정 사항은 [전체 재검토 기록](LITERATURE_AUDIT.md)에 남겼습니다.
 
 침대 자세·이탈·복귀, 가림, 수면 데이터셋과 관련 리뷰 **17편**입니다. 관절을 직접 추정하는 침대 특화 연구도 응용 목적에 따라 이 문서에 분류했습니다.
 
@@ -14,23 +14,23 @@
 
 | ID | 논문 | 확인 상태 |
 |---|---|---|
-| [P01](#p01) | Simultaneously-Collected Multimodal Lying Pose Dataset: Towards In-Bed Human Pose Monitoring under Adverse Vision Conditions | 본문 검토 기록 있음 |
-| [P02](#p02) | Posture Monitoring for Health Care of Bedridden Elderly Patients Using 3D Human Skeleton Analysis via Machine Learning Approach | 본문 검토 기록 있음 |
-| [P03](#p03) | BedEye: A Bed Exit and Bedside Fall Warning System Based on Skeleton Recognition Technology for Elderly Patients | 본문 검토 기록 있음 |
-| [P04](#p04) | RGB-Only in-Bed Pose Estimation Under Occlusion via Image Reconstruction | 본문 검토 기록 있음 |
+| [P01](#p01) | Simultaneously-Collected Multimodal Lying Pose Dataset: Towards In-Bed Human Pose Monitoring under Adverse Vision Conditions | 본문 대조 |
+| [P02](#p02) | Posture Monitoring for Health Care of Bedridden Elderly Patients Using 3D Human Skeleton Analysis via Machine Learning Approach | 본문 대조·수치/표기 주의 |
+| [P03](#p03) | BedEye: A Bed Exit and Bedside Fall Warning System Based on Skeleton Recognition Technology for Elderly Patients | 본문 대조·수치/표기 주의 |
+| [P04](#p04) | RGB-Only in-Bed Pose Estimation Under Occlusion via Image Reconstruction | 본문 대조·수치/표기 주의 |
 | [P11](#p11) | Bed Exit Action Detection Based on Patient Posture with Long Short-Term Memory | 본문 검증 보류 |
 | [P12](#p12) | Bed-Exit Prediction Applying Neural Network Combining Bed Position Detection and Patient Posture Estimation | 본문 검증 보류 |
-| [P13](#p13) | BlanketGen2-Fit3D: Synthetic Blanket Augmentation Towards Improving Real-World In-Bed Blanket Occluded Human Pose Estimation | 본문 검토 기록 있음 |
-| [P14](#p14) | BlanketSet – A Clinical Real-World In-Bed Action Recognition and Qualitative Semi-Synchronised Motion Capture Dataset | 본문 검토 기록 있음 |
-| [P15](#p15) | In-Bed Pose Estimation: A Review | 본문 검토 기록 있음 |
-| [P16](#p16) | Deep learning methods for single camera based clinical in-bed movement action recognition | 본문 검토 기록 있음 |
-| [P17](#p17) | SaccpaNet: A Separable Atrous Convolution-Based Cascade Pyramid Attention Network to Estimate Body Landmarks Using Cross-Modal Knowledge Transfer for Under-Blanket Sleep Posture Classification | 본문 검토 기록 있음 |
+| [P13](#p13) | BlanketGen2-Fit3D: Synthetic Blanket Augmentation Towards Improving Real-World In-Bed Blanket Occluded Human Pose Estimation | 본문 대조 |
+| [P14](#p14) | BlanketSet – A Clinical Real-World In-Bed Action Recognition and Qualitative Semi-Synchronised Motion Capture Dataset | 본문 대조 |
+| [P15](#p15) | In-Bed Pose Estimation: A Review | 본문 대조 |
+| [P16](#p16) | Deep learning methods for single camera based clinical in-bed movement action recognition | 본문 대조 |
+| [P17](#p17) | SaccpaNet: A Separable Atrous Convolution-Based Cascade Pyramid Attention Network to Estimate Body Landmarks Using Cross-Modal Knowledge Transfer for Under-Blanket Sleep Posture Classification | 본문 대조 |
 | [P19](#p19) | Skeleton-Based Sleep Posture Recognition with BP Neural Network | 본문 검증 보류 |
-| [P20](#p20) | A New Hybrid Algorithm for Vision-Based Sleep Posture Analysis Integrating CNN, LSTM and MediaPipe | 본문 기록 있음·보고 수치 불일치 |
-| [P21](#p21) | Towards automated joint detection in sleep studies: bridging clinical insight and artificial intelligence | 본문 검토 기록 있음 |
-| [P22](#p22) | A Vision-Based System for In-Sleep Upper-Body and Head Pose Classification | 본문 검토 기록 있음 |
-| [P23](#p23) | Classification of In-Bed Sleeping Position using U-Net and MobileNetV3 | 본문 검토 기록 있음 |
-| [P25](#p25) | Fall-from-Bed Risk Prediction Using Physics-Based Bed Simulation | 본문 검토 기록 있음 |
+| [P20](#p20) | A New Hybrid Algorithm for Vision-Based Sleep Posture Analysis Integrating CNN, LSTM and MediaPipe | 본문 대조·보고 수치 불일치 |
+| [P21](#p21) | Towards automated joint detection in sleep studies: bridging clinical insight and artificial intelligence | 본문 대조·수치/표기 주의 |
+| [P22](#p22) | A Vision-Based System for In-Sleep Upper-Body and Head Pose Classification | 본문 대조 |
+| [P23](#p23) | Classification of In-Bed Sleeping Position using U-Net and MobileNetV3 | 본문 대조 |
+| [P25](#p25) | Fall-from-Bed Risk Prediction Using Physics-Based Bed Simulation | 본문 대조 |
 
 ## 사용 기술 비교
 
@@ -52,7 +52,7 @@
 | [P21 HypnoPose](#p21) | HigherHRNet + CBAM | 9개 상체 관절 추정 | AlphaPose·ViTPose는 비교 모델 |
 | [P22 Upper-Body and Head Pose](#p22) | RGB/IR → ResNet-50·RPN·RoI | SleePose-FRCNN-Net 머리·상체 검출/분류 | 전신 스켈레톤이 필수 출력은 아님 |
 | [P23 U-Net + MobileNetV3](#p23) | U-Net 사람 분할 → MobileNetV3 | 3자세 영상 분류 | 281/300=93.67% 산술 확인 |
-| [P25 Physics-Based Bed Simulation](#p25) | MuJoCo → 13개 2D 관절 | MLP 위험 회귀; RF·CNN·GCN·LSTM 비교 | 실제 영상 관절 추정 실험 아님 |
+| [P25 Physics-Based Bed Simulation](#p25) | MuJoCo → 13개 2D 관절 | MLP 위험 회귀; RF·CNN·GCN·LSTM 비교 | 합성 시험 + 실제 영상의 수작업 관절 평가; 자동 관절 검출 미검증 |
 
 
 ## 논문별 상세 정리
@@ -62,12 +62,13 @@
 
 **저자·출처:** Shuangjun Liu 외. arXiv, 2020. 정식 게재 제목은 *Simultaneously-Collected Multimodal Lying Pose Dataset: Enabling In-Bed Human Pose Monitoring*, IEEE TPAMI 45(1), 1106–1118, 2023(온라인 2022).  
 **링크:** [프리프린트](https://arxiv.org/abs/2008.08735) · [DOI: 10.1109/TPAMI.2022.3155712](https://doi.org/10.1109/TPAMI.2022.3155712) · [저자 데이터·코드 안내](https://github.com/ostadabbas/SLP-Dataset-and-Code)  
-**확인 범위:** 본문 확인 — 공개 PDF §4.1·§4.4, 데이터 구성과 단일 입력 벤치마크 표. 정식 게재본과 초기 프리프린트의 제목을 구분합니다.
+**확인 범위:** 본문 확인 — [arXiv v1 PDF](https://arxiv.org/pdf/2008.08735v1) §4.1·§4.4·§4.6, 데이터 구성과 단일 입력 벤치마크 표. 정식 게재본과 초기 프리프린트의 제목을 구분합니다.
 
 - **문제·처리 흐름:** 누운 자세를 RGB·LWIR·깊이·압력으로 동시 수집한 데이터셋입니다. 데이터 공개만 하는 연구가 아니라 HRNet-W32, SimpleBaseline(ResNet-50), ChainedPredictions, PoseAttention, PyraNet, StackedHourglass의 관절 추정 실험도 수행합니다.
 - **데이터·정답:** 가정 환경 102명과 모의 병원 환경 7명, 총 109명입니다. 모집 대상은 대학생으로, 109명의 입원 환자 자료가 아닙니다. 각 사람에게 3종 기본 자세 × 15개 변형 × 3종 가림 조건을 수집해 입력 종류별 14,715개 표본과 14개 관절 정보를 제공합니다.
 - **학습·시험:** 가정 환경 첫 90명을 학습, 나머지 12명을 시험에 사용하고 모의 병원 7명에서 환경 변화도 평가합니다. 모델은 100 epochs 학습합니다. 주요 단일 입력 벤치마크는 어두움·가림 때문에 **RGB를 제외하고 LWIR·깊이·압력**을 비교합니다.
 - **결과·검증:** PyraNet의 PCKh@0.5는 LWIR 94.2%, 압력 90.7%, 깊이 96.6%로 보고됩니다. 이는 머리 크기로 정규화한 **관절 위치 지표**이며 RGB 자세 분류 정확도가 아닙니다. 기존 설명에 빠졌던 벤치마크 모델·입력과 참가자 성격을 보완했습니다.
+- **3D 범위:** §4.6은 사전학습 3D 모델의 정성적 예시도 제시하지만, SLP 자체에 3D 관절 정답은 없다고 명시합니다. ‘3D 연구가 전혀 없다’와 ‘3D 정답을 제공하는 데이터셋이다’는 모두 부정확합니다.
 - **한계·활용 제안:** 정적 자세 및 가림 평가에 활용합니다. 이탈·복귀 연속 이벤트의 정답 자료나 고령 환자 일반화 검증으로 해석하지 않습니다.
 
 
@@ -81,7 +82,7 @@
 - **기술·처리 흐름:** Intel RealSense D435의 RGB에서 **OpenPose**로 18개 관절을 검출한 뒤 코·목·양쪽 어깨 4개를 선택합니다. 대응 깊이를 33×33 영역의 trilateral filter로 보정하고, 2D 좌표+깊이 또는 카메라 3D 좌표로 만든 12개 특징을 **XGBoost**에 입력합니다. 코를 원점으로 이동한 특징도 비교합니다. 출력은 바로 누움·좌측·우측 3종입니다.
 - **장비·자료:** 높이 174 cm, 수직 방향에서 약 10° 기울인 RGB-D 카메라를 사용합니다. 지원자 20명(남 15·여 5)의 표본 3,154개와 실제 와상 고령 환자 2명(남 1,525개·여 1,056개)의 자료를 구분합니다.
 - **분할:** Setting 1은 지원자 19명 학습·1명 시험을 반복하는 사람 단위 평가입니다. Setting 2는 지원자로 학습하고 두 환자로 시험합니다. Settings 3–5는 같은 환자 자료 일부가 학습에도 들어가므로 새로운 환자에 대한 성능과 구별해야 합니다.
-- **결과·검증:** 같은 2D+depth 표현에서 지원자 평가의 보고값 96.32%가 환자 남 46.55%·여 78.31%로 낮아집니다(Tables 4–5). 따라서 초록의 ‘95% 이상’을 임상 일반화 성능으로 쓰면 안 됩니다. §4.3.1은 accuracy를 TP/(TP+FP)로 정의하는데 이는 통상 precision 식입니다. 수치는 저자의 보고값으로 인용하며 지표 명칭의 혼동을 함께 기록합니다.
+- **결과·검증:** 코 중심으로 정규화한 2D+depth 표현에서 지원자 평가의 보고값 96.32%가 환자 남 46.55%·여 78.31%로 낮아집니다(Tables 4–5). 따라서 초록의 ‘95% 이상’을 임상 일반화 성능으로 쓰면 안 됩니다. §4.3.1은 accuracy를 TP/(TP+FP)로 정의하는데 이는 통상 precision 식입니다. 수치는 저자의 보고값으로 인용하며 지표 명칭의 혼동을 함께 기록합니다. Table 5의 일부 3D 혼동행렬에도 행 합계·전체 수치의 불일치가 있어 [재검토 기록](LITERATURE_AUDIT.md)을 참조해야 합니다.
 - **한계·활용 제안:** 일부 상체 관절만 사용하는 기준선 설계에 유용합니다. 깊이 센서가 필요하고 실제 환자는 2명뿐입니다. MediaPipe의 추정 z로 동일 결과를 얻는다고 가정하지 않습니다.
 
 
@@ -96,6 +97,7 @@
 - **시간 모델:** 어깨·골반·무릎의 중심 좌표 3쌍을 특징으로, 약 15.4 FPS의 5초·77프레임 창을 LSTM에 입력합니다. 누움·몸 일으킴·가장자리 앉음·이탈을 구분합니다.
 - **실험:** 주간·야간 시험 자료와 병원 시험을 분리합니다. 병원 시험에는 간호사 26명, 고령 지원자 11명, 입원 환자 11명이 참여합니다. 지정된 연속 동작 150회와 분해 동작 594회를 수행했습니다.
 - **결과·검증:** §IV-C의 병원 평가 보고값은 97.72%입니다. 주간·야간 자세 인식 값 및 초록의 97.4%와 동일한 시험으로 합치지 않습니다. 장기간 자연 발생 낙상 감소를 입증한 임상시험으로 해석할 수도 없습니다.
+- **추가 불일치:** §IV-B에는 4,000개 중 3,943개 정분류와 ‘overall accuracy 97.4%’가 함께 적혀 있습니다. 단순 비율은 **98.575%**이므로 같은 전체 정확도라면 일치하지 않습니다. 이를 97.72%의 병원 평가와도 구분하며, 원자료 없이 어느 숫자가 맞는지 결정하지 않습니다.
 - **활용 제안:** 침대 상대 위치와 상태 전이 규칙의 직접 참고 자료입니다. 우리 데이터에서 경고 지연·환자별 성능·시간당 오경보를 별도로 측정해야 합니다.
 
 
@@ -110,6 +112,7 @@
 - **학습:** SLP의 비가림 RGB에 인공 마스크를 씌워 복원을 학습합니다. 사람 단위로 87명·3,915장 학습 / 22명·990장 검증을 나눕니다. MAE 입력은 224×224, 200 epochs, batch 32, AdamW입니다.
 - **외부 자료:** EWHA_BED는 55명의 비가림 595장·부분 가림 595장으로 구성됩니다. 개인정보 때문에 비공개입니다. 합성 마스크 실험과 부록의 실제 이불 검출 실험을 구분해야 합니다.
 - **결과·검증:** MAE와 ViTPose 조합의 개선을 보고하지만 AOT-GAN 조합은 외부 자료에서 악화되기도 합니다. 복원 영상의 자연스러움만으로 관절 정확도를 판단할 수 없습니다.
+- **판본·수치 주의:** 공개 게재승인본 추출 텍스트에서 외부 자료의 하체 MPJPE 개선은 초록 35%, Table 8·결론 37%로 다릅니다. AOT-GAN 악화도 초록 21%, 본문·결론 13%로 적혀 있습니다. 최종 편집본의 수정 여부는 미확인이라 단일 개선율을 확정하지 않습니다.
 - **활용 제안:** 자동 이불 마스크 생성까지 포함한 후속 가림 실험 후보입니다. 복원한 신체를 실제 관측 정답으로 저장하거나, 정적 이미지 결과를 연속 이탈 탐지 성능으로 바꾸어 해석하지 않습니다.
 
 
@@ -149,7 +152,7 @@
 - **기술·흐름:** Fit3D의 인체 표현과 물리 기반 이불 합성으로 BlanketGen2-Fit3D를 만듭니다. 합성 프레임 1,217,312개를 이용해 **ViTPose-B(약 86M 파라미터, 256×192 입력, MMPose)**를 미세 조정합니다. 합성기는 영상 추론 단계의 필수 모듈이 아니라 학습 데이터 생성 도구입니다.
 - **분할·학습:** Fit3D의 S3·4·5·7·8·9를 학습, S10을 시험, S11을 검증에 사용합니다. backbone을 고정하고 head를 학습한 뒤 전체를 미세 조정하는 조건을 비교합니다. 평가에는 관절 정답에서 만든 인물 박스와 30픽셀 여유 영역을 사용합니다.
 - **외부 평가:** SLP의 가림 9,810장·비가림 4,905장을 별도 평가에 사용합니다. 합성 자료의 개선과 실제 이불 자료로 옮겨 갔을 때의 개선을 구분합니다.
-- **결과·검증:** Table II의 FT-Mixed는 합성 시험에서 PCK 0.977을 보고하고, 실제 자료의 개선은 약 **0.023 PCK, 즉 2.3%p** 수준입니다. 2.3% 상대 개선이나 모든 관절의 동일 개선으로 바꾸지 않습니다. 골반 관절 정의의 데이터 간 차이도 결과에 영향을 줍니다.
+- **결과·검증:** Table II의 FT-Mixed는 합성 시험에서 PCK 0.977을 보고하고, 실제 가림 자료는 **0.313→0.336 PCK, 즉 2.3%p** 개선입니다. 비가림 SLP에서는 0.810→0.798로 낮아집니다. 2.3% 상대 개선이나 모든 관절의 동일 개선으로 바꾸지 않습니다. 골반 관절 정의의 데이터 간 차이도 결과에 영향을 줍니다.
 - **한계·활용 제안:** 실제 검출기가 만든 박스와 우리 카메라에서도 효과가 유지되는지 확인해야 합니다. 합성 이불 사전학습 후보로 두고 실제 자료만 학습한 기준선과 동일 조건으로 비교합니다.
 
 
@@ -238,13 +241,13 @@
 ### P21. Towards automated joint detection in sleep studies: bridging clinical insight and artificial intelligence
 
 **저자·출처:** Alexis Dorier 외. *Sleep*, 49(7), zsag108, 2026. HypnoPose 연구.  
-**링크:** [DOI: 10.1093/sleep/zsag108](https://doi.org/10.1093/sleep/zsag108) · [출판사 원문](https://academic.oup.com/sleep/article/49/7/zsag108/8659223) · [PubMed](https://pubmed.ncbi.nlm.nih.gov/42007581/)  
-**확인 범위:** 본문 확인 — 출판사 원문의 Dataset/Network training/Evaluation, Tables 3·5·6. 표의 단일 분할 결과와 교차 검증을 구분했습니다.
+**링크:** [DOI: 10.1093/sleep/zsag108](https://doi.org/10.1093/sleep/zsag108) · [출판사 원문](https://academic.oup.com/sleep/article/49/7/zsag108/8659223) · [PubMed](https://pubmed.ncbi.nlm.nih.gov/42007581/) · [공개 본문](https://pmc.ncbi.nlm.nih.gov/articles/PMC13357495/)  
+**확인 범위:** 본문 확인 — 출판사 공개 논문(PMC/Europe PMC)의 Dataset/Network training/Evaluation, Tables 2·3·5·6. 표의 단일 분할 결과와 교차 검증을 구분했습니다.
 
 - **기술·흐름:** **HigherHRNet에 CBAM attention**을 여러 위치에 넣어 비교합니다. COCO에서 상체 관절로 사전학습한 뒤 수면 영상으로 미세 조정합니다. AlphaPose·ViTPose는 비교 모델입니다.
 - **자료·관절:** 74명, 89회 기록, 198개 움직임 구간, 4,419개 주석 프레임입니다. 자료의 수작업 관절 주석은 13개지만 **모델 출력은 머리·양쪽 어깨/팔꿈치/손목/골반의 9개 상체 관절**입니다. ‘13개를 출력하는 모델’로 쓰지 않습니다.
 - **분할·학습:** 주 실험은 사람을 분리한 59명 학습·15명 검증입니다. 긴 영상의 과대표집을 줄이도록 사람별 프레임 수를 조정합니다. 선택한 Stage 4 모델은 별도로 **참가자 단위 5-fold 교차 검증**을 수행합니다. 사전학습·미세 조정은 각각 50 epochs입니다. 표본 추출 후 시간적 연속성이 유지되지 않아 프레임 단위 자세 추정 자료입니다.
-- **결과·검증:** Table 5의 Stage 4는 mAP 0.090, AP@0.5 0.335입니다. Table 6의 5-fold 결과는 mAP **0.120±0.031**, AP@0.5 **0.350±0.032**입니다. 초록의 0.088/0.326과 본문 표 값에는 차이가 있으므로 이 문서는 표 번호와 평가 설정을 붙여 인용합니다.
+- **결과·검증:** Table 5의 Stage 4는 mAP 0.090, AP@0.5 0.335입니다. Table 6의 5-fold 결과는 mAP **0.120±0.031**, AP@0.5 **0.350±0.032**입니다. 초록의 0.088/0.326과 본문 표 값에는 차이가 있으므로 이 문서는 표 번호와 평가 설정을 붙여 인용합니다. Table 3의 ‘recordings’ 합계는 198로, Table 2의 기록 수 89와 다르고 본문의 움직임 구간 수와 같습니다. 89회 기록·198개 구간을 같은 단위로 합치지 않습니다.
 - **한계·활용 제안:** 이 값은 OKS 기반 관절 위치 AP이며 자세 분류 정확도가 아닙니다. 실제 수면 환경에서 엄격한 관절 위치 추정이 여전히 어렵다는 근거입니다. 검출 실패·가림·카메라 시점별 성능과 판정 불가 구간을 함께 보고합니다.
 
 
@@ -257,7 +260,7 @@
 
 - **기술·흐름:** **SleePose-FRCNN-Net**은 ImageNet 사전학습 ResNet-50 backbone, RPN, RoI 특징, 머리·상체의 검출/분류 head를 쓰는 Faster R-CNN 계열 멀티태스크 모델입니다. 전신 관절을 먼저 얻는 MediaPipe 방식이 아닙니다.
 - **자료·분할:** SLP는 90명 학습·12명 검증·모의 병원 7명 시험을 사용합니다. 자체 iSP 통제 촬영은 36명(남 29·여 7), 여러 자세 변형과 3종 덮개 조건입니다. 25명·15,000장 학습 / 11명·6,600장 시험으로 분리합니다.
-- **실제 수면 평가:** 별도의 성인 4명 야간 자료에서 평균 91.67%를 보고합니다. 그러나 같은 사람의 서로 다른 수면 구간을 80/20으로 나눈 조건이므로 새로운 사람에 대한 91.67%로 해석하지 않습니다.
+- **실제 수면 평가:** 별도의 성인 4명 야간 자료에서 **상체 분류 91.67%, 머리 분류 94.37%**를 보고합니다(§4.3.2). 그러나 같은 사람의 서로 다른 수면 구간을 80/20으로 나눈 조건이므로 새로운 사람에 대한 91.67%로 해석하지 않습니다.
 - **속도·검증:** RTX 2070에서 영상 한 장 처리 약 0.7초를 보고합니다. 수집 영상의 20 FPS를 추론 속도 20 FPS로 옮기면 안 됩니다. 머리 방향과 상체 방향의 결과 역시 구분해야 합니다.
 - **한계·활용 제안:** 하체 가림 때 상체·머리 영상 특징을 쓰는 보조 기준선입니다. 머리를 돌린 상태를 몸 전체의 옆누움 또는 침대 이탈로 곧바로 바꾸지 않습니다.
 
@@ -281,10 +284,11 @@
 
 **저자·출처:** Jaeyong Kim 외. *Sensors*, 26(10), 2979, 2026.  
 **링크:** [출판사 / DOI: 10.3390/s26102979](https://www.mdpi.com/1424-8220/26/10/2979) · 서지·초록 대조 [1](https://consensus.app/papers/fallfrombed-risk-prediction-using-physicsbased-bed-kim-kim/2033f2b2108c5c459e76d3cfcd7b0bf2/?utm_source=chatgpt)  
-**확인 범위:** 본문 확인 — §3.1–3.2, §4.2–4.3, Tables 1–3. 초록 중심 설명을 입력·라벨·학습·시험 조건까지 확장했습니다.
+**확인 범위:** 본문 확인 — §3.1–3.2, §4.2–4.6, Tables 1–3·6–7. §4.6과 Table 7은 PDF p.12의 실제 영상 추가 평가까지 확인했습니다.
 
-- **자료·라벨:** **MuJoCo 3.4.0**의 humanoid와 침대를 구성하고 초기 자세에서 3초간 제어 없는 움직임을 계산합니다. 손 접촉을 제외한 신체의 바닥 접촉으로 낙상 이벤트를 정하고, 발생까지의 시간으로 할인한 연속 위험 라벨을 만듭니다. 시뮬레이터의 13개 관절을 침대 좌표의 2D로 투영·정규화합니다. 영상에서 관절을 검출한 실험이 아닙니다.
+- **자료·라벨:** **MuJoCo 3.4.0**의 humanoid와 침대를 구성하고 초기 자세에서 3초간 제어 없는 움직임을 계산합니다. 손 접촉을 제외한 신체의 바닥 접촉으로 낙상 이벤트를 정하고, 발생까지의 시간으로 할인한 연속 위험 라벨을 만듭니다. 주 실험은 시뮬레이터의 13개 관절을 침대 좌표의 2D로 투영·정규화합니다.
 - **모델:** 26차원 좌표를 **MLP 26→256→128→1(ReLU, dropout 0.1)**에 입력해 위험도를 회귀합니다. CNN·GCN·RandomForestRegressor도 비교합니다. LSTM 비교 모델은 **시작 5프레임**을 쓰므로 단일 정적 자세 모델들과 입력 정보량이 다릅니다.
 - **학습·시험:** 기본 비교는 균형화한 합성 표본 100,000개, 학습/검증 약 9:1, 별도 자세 균형 시험 50,000개입니다. 신경망은 MSE·Adam·학습률 0.001·batch 512·최대 50 epochs, seed 41–45를 사용합니다. 임계값은 검증 자료에서 선택합니다.
 - **결과·검증:** Table 3의 MLP는 AUROC **0.9755±0.0006**, F1 **0.9138±0.0015**입니다. LSTM은 AUROC 0.9750±0.0008로 비슷합니다. 동일 시뮬레이션 분포의 결과이며 실제 병동 낙상 빈도를 반영한 시험이 아닙니다.
-- **한계·활용 제안:** 실제 관절 검출 오차·이불·자발적 움직임·현장 낙상을 검증하지 않았습니다. 침대 상대 위치 특징의 연구 참고로 두고, 합성 위험 점수를 실제 이탈 이벤트 정답과 분리합니다.
+- **실제 영상 추가 평가 — 누락 정정:** §4.6은 FallVision에서 침대 가장자리가 식별되는 영상 100개(낙상 50·비낙상 50)를 선별합니다. 각 영상의 한 프레임에 사람이 13개 관절을 표시하고 재학습 없이 MLP를 평가합니다. Table 7은 AUROC **0.8175±0.0188**, F1 **0.7497±0.0265**입니다. 따라서 기존의 ‘실제 자료 평가가 없다’는 취지의 설명은 부정확했습니다.
+- **한계·활용 제안:** 이 추가 실험도 영상에서 관절을 자동 검출한 전체 시스템 시험이나 실제 병동의 전향적 검증은 아닙니다. 침대 상대 위치 특징을 참고하되, 합성 점수·선별 영상 평가·현장 이탈 경고를 분리합니다.

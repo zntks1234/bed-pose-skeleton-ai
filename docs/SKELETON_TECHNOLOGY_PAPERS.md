@@ -4,7 +4,7 @@
 
 논문 결과와 프로젝트 적용 제안을 구분합니다. 관절 PCK/AP, 자세 분류 정확도, 이벤트 검출은 서로 다른 지표입니다. RGB·IR·LWIR·깊이·압력 입력 및 추정 3D와 실측 깊이를 구분합니다. 문헌 검토는 모델 실행·성능 재현을 뜻하지 않습니다.
 
-**검토 이력:** P01–P25는 기존 저장소의 2026-10-24 UTC 원문 대조 기록을 이어받았습니다. 이번 작업에서 이들 모두를 새로 원문 검증한 것은 아닙니다. P05·P06은 이번 대화의 본문 검토로 보완·정정했고, P26–P29는 이번에 본문을 검토한 논문입니다. P11·P12·P19는 여전히 본문 검증 보류입니다.
+**재검토(2026-10-25):** 이 문서의 12편은 원문 또는 공개 저자판의 방법·평가 조건·결과를 다시 대조했습니다. ‘본문 대조’는 코드 실행·성능 재현이나 침대 환경의 정확도 보증을 뜻하지 않습니다. 판본과 확인한 절·표는 [전체 재검토 기록](LITERATURE_AUDIT.md)에 남겼습니다.
 
 **12편**을 관절 추출·프레임워크 **6편**과 후속 시계열·행동 분석 및 리뷰 **6편**으로 나눕니다. ST-GCN·TCN 등의 후속 모델은 영상에서 관절을 추출하는 모델과 다릅니다. 기존 25편 중 BlazePose·RTMPose는 중복 추가하지 않았습니다.
 
@@ -14,25 +14,29 @@
 
 | ID | 논문 | 확인 상태 |
 |---|---|---|
-| [P05](#p05) | BlazePose: On-device Real-time Body Pose tracking | 본문 검토 기록 있음 |
-| [P06](#p06) | RTMPose: Real-Time Multi-Person Pose Estimation based on MMPose | 본문 검토 기록 있음 |
-| [P26](#p26) | BlazePose GHUM Holistic: Real-time 3D Human Landmarks and Pose Estimation | 본문 검토 기록 있음 |
-| [P27](#p27) | Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields | 본문 검토 기록 있음 |
-| [P28](#p28) | Deep High-Resolution Representation Learning for Human Pose Estimation | 본문 검토 기록 있음 |
-| [P29](#p29) | MediaPipe: A Framework for Building Perception Pipelines | 본문 검토 기록 있음 |
-| [P07](#p07) | Spatial Temporal Graph Convolutional Networks for Skeleton-Based Action Recognition | 본문 검토 기록 있음 |
-| [P08](#p08) | Two-Stream Adaptive Graph Convolutional Networks for Skeleton-Based Action Recognition | 본문 검토 기록 있음 |
-| [P09](#p09) | Revisiting Skeleton-based Action Recognition | 본문 검토 기록 있음 |
-| [P10](#p10) | An Empirical Evaluation of Generic Convolutional and Recurrent Networks for Sequence Modeling | 본문 검토 기록 있음 |
-| [P18](#p18) | Advances in Skeleton-Based Fall Detection in RGB Videos: From Handcrafted to Deep Learning Approaches | 본문 검토 기록 있음 |
-| [P24](#p24) | Deep State-Space Model for Noise Tolerant Skeleton-Based Action Recognition | 본문 검토 기록 있음 |
+| [P05](#p05) | BlazePose: On-device Real-time Body Pose tracking | 본문 대조 |
+| [P06](#p06) | RTMPose: Real-Time Multi-Person Pose Estimation based on MMPose | 본문 대조 |
+| [P26](#p26) | BlazePose GHUM Holistic: Real-time 3D Human Landmarks and Pose Estimation | 본문 대조 |
+| [P27](#p27) | Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields | 본문 대조 |
+| [P28](#p28) | Deep High-Resolution Representation Learning for Human Pose Estimation | 본문 대조 |
+| [P29](#p29) | MediaPipe: A Framework for Building Perception Pipelines | 본문 대조 |
+| [P07](#p07) | Spatial Temporal Graph Convolutional Networks for Skeleton-Based Action Recognition | 본문 대조 |
+| [P08](#p08) | Two-Stream Adaptive Graph Convolutional Networks for Skeleton-Based Action Recognition | 본문 대조 |
+| [P09](#p09) | Revisiting Skeleton-based Action Recognition | 본문 대조 |
+| [P10](#p10) | An Empirical Evaluation of Generic Convolutional and Recurrent Networks for Sequence Modeling | 본문 대조 |
+| [P18](#p18) | Advances in Skeleton-Based Fall Detection in RGB Videos: From Handcrafted to Deep Learning Approaches | 본문 대조 |
+| [P24](#p24) | Deep State-Space Model for Noise Tolerant Skeleton-Based Action Recognition | 본문 대조 |
 
-## 기존 기술 비교
+## 사용 기술 비교
 
 | 논문 | 관절 추출·전처리·주요 기술 | 자세 분류·시간 분석 또는 연구 역할 | 구분·확인할 점 |
 |---|---|---|---|
 | [P05 BlazePose](#p05) | 얼굴 기반 검출 → BlazePose 추적 | 33개 2D 랜드마크 | 2020 논문과 현재 MediaPipe 3D를 구분 |
 | [P06 RTMPose](#p06) | RTMDet-nano → CSPNeXt·SimCC·GAU | RTMPose 관절 좌표 분류 | 검출 포함 경로의 속도 별도 |
+| [P26 GHUM Holistic](#p26) | GHUM fitting 기반 학습 → 몸·손 3D 랜드마크 | GHUM Lifter로 자세·형상 변환 | 단안 추정 및 fitting 정답; 실측 깊이 아님 |
+| [P27 OpenPose/PAF](#p27) | 관절 히트맵·PAF → 사람별 연결 | 다인 2D 관절 추정 | CVPR 2017 원문과 후속 버전 구분 |
+| [P28 HRNet](#p28) | 병렬 해상도 경로·반복 융합 | 관절 히트맵 추정 | 검출기·입력 크기·평가 설정 명시 |
+| [P29 MediaPipe](#p29) | Packet·Stream·Calculator·Graph | 인식 처리 프레임워크 | 33관절 모델 성능 논문과 구분 |
 | [P07 ST-GCN](#p07) | OpenPose 18관절 / Kinect 25관절 | ST-GCN 행동 분류 | 영상 추정 2D와 센서 3D 입력 구분 |
 | [P08 2s-AGCN](#p08) | OpenPose / Kinect → 관절·뼈 두 흐름 | 2s-AGCN 행동 분류 | 전처리·학습 설정도 성능에 영향 |
 | [P09 PoseC3D](#p09) | Faster R-CNN → HRNet → 관절 히트맵 | SlowOnly 3D CNN 행동 분류 | FineGYM 정답 인물 박스 조건 주의 |
@@ -77,7 +81,7 @@
 <a id="p26"></a>
 ### P26. BlazePose GHUM Holistic: Real-time 3D Human Landmarks and Pose Estimation
 
-**저자·출처:** Ivan Grishchenko 외, 2022. CVPR 워크숍 / arXiv:2206.11678.  
+**저자·출처:** Ivan Grishchenko 외, 2022. [CVPR 2022 연계 CV4ARVR 워크숍 Extended Abstract](https://xr.cornell.edu/workshop/2022/papers) / arXiv:2206.11678.  
 **원문:** https://arxiv.org/html/2206.11678v1  
 **확인 범위:** 2026-10-25 본문 §2–4, Tables 1–4 확인. 코드 실행·재현은 수행하지 않았습니다.
 

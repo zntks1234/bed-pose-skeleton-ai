@@ -65,6 +65,7 @@
 - [결정/미정/보류 사항](docs/DECISIONS.md)
 - [침대 위 자세 구분을 위한 논문 — 17편](docs/BED_POSTURE_PAPERS.md)
 - [스켈레톤 인식 기술 — 12편](docs/SKELETON_TECHNOLOGY_PAPERS.md)
+- [스켈레톤 인식 기술 후보 비교 및 선정 가이드](docs/TECHNOLOGY_CANDIDATES.md)
 - [전체 논문 색인 및 공통 평가 기준](docs/LITERATURE_REVIEW.md)
 
 **원칙:** 기술 미선정 사항을 임의로 확정하지 않으며, 사용자·외부 개발자 협의 없이 기존 결정을 바꾸지 않습니다. 실험 영상·개인정보·학습 데이터는 Git 저장소에 커밋하지 않습니다.

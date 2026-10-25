@@ -1,73 +1,62 @@
 # 스켈레톤 인식 기술
 
-**정리일:** 2026-10-25 (한국 시간)
+[논문 안내](LITERATURE_REVIEW.md) · [침대 자세 논문](BED_POSTURE_PAPERS.md) · [기술 후보 비교](TECHNOLOGY_CANDIDATES.md) · [프로젝트 홈](../README.md)
 
-논문 결과와 프로젝트 적용 제안을 구분합니다. 관절 PCK/AP, 자세 분류 정확도, 이벤트 검출은 서로 다른 지표입니다. RGB·IR·LWIR·깊이·압력 입력 및 추정 3D와 실측 깊이를 구분합니다. 문헌 검토는 모델 실행·성능 재현을 뜻하지 않습니다.
+**기준일: 2026-10-25 · 12편 · 관련 본문 확인 12편**
 
-**재검토(2026-10-25):** 이 문서의 12편은 원문 또는 공개 저자판의 방법·평가 조건·결과를 다시 대조했습니다. ‘본문 대조’는 코드 실행·성능 재현이나 침대 환경의 정확도 보증을 뜻하지 않습니다. 판본과 확인한 절·표는 [전체 재검토 기록](LITERATURE_AUDIT.md)에 남겼습니다.
+관절 추출·프레임워크 6편과, 추출한 관절의 시계열·행동 분석 및 리뷰 6편입니다. 관절을 찾는 모델과 관절로 자세·동작을 분류하는 모델은 역할이 다릅니다.
 
-**12편**을 관절 추출·프레임워크 **6편**과 후속 시계열·행동 분석 및 리뷰 **6편**으로 나눕니다. ST-GCN·TCN 등의 후속 모델은 영상에서 관절을 추출하는 모델과 다릅니다. 기존 25편 중 BlazePose·RTMPose는 중복 추가하지 않았습니다.
+> **확인 범위:** 원문 또는 공개 저자판의 방법·평가 조건·결과를 대조했습니다. 확인한 판본·절·표는 각 항목에 표시합니다. 문헌 검토는 코드 실행·성능 재현이나 침대 환경의 정확도 보증을 뜻하지 않습니다.
 
-[침대 위 자세 구분 논문](BED_POSTURE_PAPERS.md) · [전체 색인과 평가 기준](LITERATURE_REVIEW.md)
+## 빠른 안내
 
-## 논문 목록
+- **MediaPipe 이해:** [P29](#p29) 처리 프레임워크 → [P05](#p05) BlazePose 2D → [P26](#p26) GHUM 3D.
+- **관절 추출 비교:** [P06](#p06) RTMPose, [P27](#p27) OpenPose, [P28](#p28) HRNet.
+- **시간·행동 분석:** [P10](#p10) TCN → [P07](#p07)·[P08](#p08) 그래프 → [P09](#p09) 히트맵 시계열. [P18](#p18)은 전체 연구 지도, [P24](#p24)는 잡음·결측 연구입니다.
 
-| ID | 논문 | 확인 상태 |
+## 논문 한눈에 보기
+
+| 논문 | 기술·역할 | 구분 |
 |---|---|---|
-| [P05](#p05) | BlazePose: On-device Real-time Body Pose tracking | 본문 대조 |
-| [P06](#p06) | RTMPose: Real-Time Multi-Person Pose Estimation based on MMPose | 본문 대조 |
-| [P26](#p26) | BlazePose GHUM Holistic: Real-time 3D Human Landmarks and Pose Estimation | 본문 대조 |
-| [P27](#p27) | Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields | 본문 대조 |
-| [P28](#p28) | Deep High-Resolution Representation Learning for Human Pose Estimation | 본문 대조 |
-| [P29](#p29) | MediaPipe: A Framework for Building Perception Pipelines | 본문 대조 |
-| [P07](#p07) | Spatial Temporal Graph Convolutional Networks for Skeleton-Based Action Recognition | 본문 대조 |
-| [P08](#p08) | Two-Stream Adaptive Graph Convolutional Networks for Skeleton-Based Action Recognition | 본문 대조 |
-| [P09](#p09) | Revisiting Skeleton-based Action Recognition | 본문 대조 |
-| [P10](#p10) | An Empirical Evaluation of Generic Convolutional and Recurrent Networks for Sequence Modeling | 본문 대조 |
-| [P18](#p18) | Advances in Skeleton-Based Fall Detection in RGB Videos: From Handcrafted to Deep Learning Approaches | 본문 대조 |
-| [P24](#p24) | Deep State-Space Model for Noise Tolerant Skeleton-Based Action Recognition | 본문 대조 |
-
-## 사용 기술 비교
-
-| 논문 | 관절 추출·전처리·주요 기술 | 자세 분류·시간 분석 또는 연구 역할 | 구분·확인할 점 |
-|---|---|---|---|
-| [P05 BlazePose](#p05) | 얼굴 기반 검출 → BlazePose 추적 | 33개 2D 랜드마크 | 2020 논문과 현재 MediaPipe 3D를 구분 |
-| [P06 RTMPose](#p06) | RTMDet-nano → CSPNeXt·SimCC·GAU | RTMPose 관절 좌표 분류 | 검출 포함 경로의 속도 별도 |
-| [P26 GHUM Holistic](#p26) | GHUM fitting 기반 학습 → 몸·손 3D 랜드마크 | GHUM Lifter로 자세·형상 변환 | 단안 추정 및 fitting 정답; 실측 깊이 아님 |
-| [P27 OpenPose/PAF](#p27) | 관절 히트맵·PAF → 사람별 연결 | 다인 2D 관절 추정 | CVPR 2017 원문과 후속 버전 구분 |
-| [P28 HRNet](#p28) | 병렬 해상도 경로·반복 융합 | 관절 히트맵 추정 | 검출기·입력 크기·평가 설정 명시 |
-| [P29 MediaPipe](#p29) | Packet·Stream·Calculator·Graph | 인식 처리 프레임워크 | 33관절 모델 성능 논문과 구분 |
-| [P07 ST-GCN](#p07) | OpenPose 18관절 / Kinect 25관절 | ST-GCN 행동 분류 | 영상 추정 2D와 센서 3D 입력 구분 |
-| [P08 2s-AGCN](#p08) | OpenPose / Kinect → 관절·뼈 두 흐름 | 2s-AGCN 행동 분류 | 전처리·학습 설정도 성능에 영향 |
-| [P09 PoseC3D](#p09) | Faster R-CNN → HRNet → 관절 히트맵 | SlowOnly 3D CNN 행동 분류 | FineGYM 정답 인물 박스 조건 주의 |
-| [P10 TCN 연구](#p10) | 인과적·팽창 1D 합성곱·잔차 연결 | TCN 일반 시계열 모델링 | 침대 전용 평가 아님 |
-| [P18 Skeleton-Based Fall Detection Review](#p18) | OpenPose·MediaPipe 등과 전처리·시간 모델 검토 | 낙상 탐지 리뷰 | 특정 단일 구현이 아님 |
-| [P24 Deep State-Space Model](#p24) | Kinect 스켈레톤 → DSSM | BiLSTM 행동 분류 | 무작위 프레임 결측과 실제 가림 구분 |
-
+| [P05 · BlazePose](#p05) | 33개 2D 랜드마크 | 관절 추출 |
+| [P06 · RTMPose](#p06) | CSPNeXt·SimCC·GAU | 관절 추출 |
+| [P26 · BlazePose GHUM Holistic](#p26) | 몸·손 3D 추정·GHUM Lifter | 관절 추출·3D 표현 |
+| [P27 · OpenPose / PAF](#p27) | 관절 히트맵·신체 연결 | 관절 추출 |
+| [P28 · HRNet](#p28) | 병렬 해상도·반복 융합 | 관절 추출 |
+| [P29 · MediaPipe 프레임워크](#p29) | Packet·Stream·Calculator·Graph | 실행 프레임워크 |
+| [P07 · ST-GCN](#p07) | 관절의 공간·시간 그래프 | 후속 행동 분류 |
+| [P08 · 2s-AGCN](#p08) | 관절·뼈 두 흐름·적응형 그래프 | 후속 행동 분류 |
+| [P09 · PoseC3D](#p09) | 관절 히트맵 시계열·3D CNN | 후속 행동 분류 |
+| [P10 · TCN 비교 연구](#p10) | 인과적·팽창 1D 합성곱 | 일반 시계열 모델링 |
+| [P18 · 스켈레톤 낙상 탐지 리뷰](#p18) | 추정기·전처리·시간 모델·평가 | 리뷰 |
+| [P24 · Deep State-Space Model](#p24) | DSSM + 양방향 LSTM | 잡음·결측 후속 분석 |
 
 ## 관절 추출과 실행 프레임워크
 
 <a id="p05"></a>
-### P05. BlazePose: On-device Real-time Body Pose tracking
+### P05 · BlazePose
+
+**BlazePose: On-device Real-time Body Pose tracking**
 
 **저자·출처:** Valentin Bazarevsky 외. arXiv:2006.10204, 2020, 프리프린트.  
-**링크:** [논문](https://arxiv.org/abs/2006.10204)  
-**확인 범위:** 본문 확인 — arXiv:2006.10204의 §2.2–2.5, §3, Table 1, 결론.
+**링크:** [논문](https://arxiv.org/abs/2006.10204) · [확인한 본문 v1](https://arxiv.org/pdf/2006.10204v1)  
+**확인 범위:** 본문 확인 — arXiv:2006.10204v1의 §2.2–2.5, §3, Table 1, 결론.
 
 - **기술·흐름:** 얼굴 검출을 인체 위치의 단서로 삼는 검출기와, 인물 영역에서 33개 랜드마크를 추적하는 네트워크로 구성합니다. 추적이 실패하면 검출기를 다시 실행합니다. 학습 때 히트맵·오프셋과 좌표 회귀를 함께 쓰지만 추론 때 히트맵 분기를 제거해 비용을 줄입니다.
 - **자료·평가:** 일반 자세 약 60,000장과 운동 자세 약 25,000장으로 학습합니다. AR 1,000장·요가 1,000장 평가에서는 출력 33개 전체가 아니라 COCO와 공통인 17개 관절을 사용합니다. 몸통 크기로 정규화한 PCK@0.2를 계산합니다.
-- **결과:** Full 모델은 AR 84.1%, Yoga 84.5%를 보고합니다. 속도 표의 Full **10 FPS**·Lite **31 FPS**는 Pixel 2 단일 코어 조건입니다. OpenPose 행은 다른 장치이므로 단순한 동일 장치 속도 비교로 읽으면 안 됩니다.
-- **2026-10-25 정정:** 기존 문서의 102·312 FPS는 표의 각주를 숫자에 붙여 읽은 오류였습니다. [본문 Table 1](https://arxiv.org/html/2006.10204v1)을 대조해 수정했습니다.
-- **검증·보완:** **2020년 이 논문은 2D 자세 추정 연구**이며 결론에서 3D 확장을 향후 방향으로 제시합니다. 현재 MediaPipe의 3D 출력이나 GHUM 모델을 이 논문의 실험 결과로 소급하지 않습니다.
+- **결과:** Full 모델은 AR 84.1%, Yoga 84.5%를 보고합니다. Table 1과 각주에서 확인한 Full **10 FPS**·Lite **31 FPS**는 Pixel 2 단일 코어 조건입니다. OpenPose 행은 다른 장치이므로 단순한 동일 장치 속도 비교로 읽으면 안 됩니다.
+- **범위·해석:** **2020년 이 논문은 2D 자세 추정 연구**이며 결론에서 3D 확장을 향후 방향으로 제시합니다. 현재 MediaPipe의 3D 출력이나 GHUM 모델을 이 논문의 실험 결과로 소급하지 않습니다.
 - **한계·활용 제안:** 머리가 보인다는 검출 가정은 이불·옆누움에서 실패할 수 있습니다. 현재 배포 모델의 이름·버전을 고정하고 침대 영상에서 검출 실패율을 따로 측정합니다.
 
 
 <a id="p06"></a>
-### P06. RTMPose: Real-Time Multi-Person Pose Estimation based on MMPose
+### P06 · RTMPose
+
+**RTMPose: Real-Time Multi-Person Pose Estimation based on MMPose**
 
 **저자·출처:** Tao Jiang 외. arXiv:2303.07399, 2023, 프리프린트.  
-**링크:** [논문](https://arxiv.org/abs/2303.07399)  
-**확인 범위:** 본문 확인 — §3, §4.3, Tables 11–12.
+**링크:** [논문](https://arxiv.org/abs/2303.07399) · [확인한 본문 v2](https://arxiv.org/pdf/2303.07399v2)  
+**확인 범위:** 본문 확인 — arXiv:2303.07399v2, §3, §4.3, Tables 11–12.
 
 - **기술·흐름:** CSPNeXt 특징 추출기, SimCC 방식의 x/y 1차원 좌표 분류, GAU attention을 사용합니다. top-down 방식이므로 사람 영역을 먼저 얻어야 합니다. 논문의 전체 경로는 RTMDet-nano 검출기와 RTMPose를 연결합니다.
 - **시험 조건:** 관절 모델 입력 256×192와 검출기 입력 320×320을 구분합니다. CPU는 i7-11700 단일 스레드 ONNX Runtime, GPU는 GTX 1660 Ti의 TensorRT FP16 조건입니다. batch 1 추론 시간을 보고합니다.
@@ -75,15 +64,17 @@
 - **한계·활용 제안:** COCO 등 일반 자세 벤치마크이며 침대 이불 조건 검증이 아닙니다. MediaPipe와 비교할 때는 인물 검출·전처리·좌표 변환까지 포함한 지연과 동일 관절 정의를 사용합니다.
 
 
-- **학습·추적 보충:** COCO와 AI Challenger를 함께 사용하는 학습 설정을 비교합니다. 검출을 K프레임마다 수행하고 중간 프레임에는 이전 자세로 영역을 갱신하며, OneEuro 필터로 시간적 흔들림을 줄입니다. 평활화 전후의 좌표와 지연은 별도 평가 대상입니다([본문 §3.2–3.5](https://arxiv.org/html/2303.07399v2)).
+- **학습·추적:** COCO와 AI Challenger를 함께 사용하는 학습 설정을 비교합니다. 검출을 K프레임마다 수행하고 중간 프레임에는 이전 자세로 영역을 갱신하며, OneEuro 필터로 시간적 흔들림을 줄입니다. 평활화 전후의 좌표와 지연은 별도 평가 대상입니다([본문 §3.2–3.5](https://arxiv.org/html/2303.07399v2)).
 
 
 <a id="p26"></a>
-### P26. BlazePose GHUM Holistic: Real-time 3D Human Landmarks and Pose Estimation
+### P26 · BlazePose GHUM Holistic
+
+**BlazePose GHUM Holistic: Real-time 3D Human Landmarks and Pose Estimation**
 
 **저자·출처:** Ivan Grishchenko 외, 2022. [CVPR 2022 연계 CV4ARVR 워크숍 Extended Abstract](https://xr.cornell.edu/workshop/2022/papers) / arXiv:2206.11678.  
-**원문:** https://arxiv.org/html/2206.11678v1  
-**확인 범위:** 2026-10-25 본문 §2–4, Tables 1–4 확인. 코드 실행·재현은 수행하지 않았습니다.
+**원문:** [확인한 본문](https://arxiv.org/html/2206.11678v1)  
+**확인 범위:** 본문 §2–4, Tables 1–4 확인. 코드 실행·재현은 수행하지 않았습니다.
 
 - **방법·정답 생성:** 2D 관절·실루엣에 GHUM 인체 모델을 맞춰 3D 학습 정답을 구성합니다. 사람이 표시한 신체 부위 깊이 순서를 추가해 fitting 단계의 깊이 순서 오류를 25%에서 3%로 낮췄습니다. 이 수치는 최종 모델의 자세 분류 오류율이 아닙니다.
 - **출력:** 골반 중심 상대 3D 몸 좌표와 각 손 21개 랜드마크. 손은 영역 재크롭 후 별도 모델로 추정합니다. GHUM Lifter는 33+21+21개 좌표를 자세·형상 매개변수로 변환합니다.
@@ -100,11 +91,13 @@
 
 
 <a id="p27"></a>
-### P27. Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields
+### P27 · OpenPose / PAF
+
+**Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields**
 
 **저자·출처:** Zhe Cao, Tomas Simon, Shih-En Wei, Yaser Sheikh. CVPR 2017; arXiv 최초 공개 2016. OpenPose의 기반 논문.  
-**원문:** https://arxiv.org/html/1611.08050v2  
-**확인 범위:** 2026-10-25 본문 §2–3, Tables 1–4, Fig.9 실패 사례 확인.
+**원문:** [확인한 본문](https://arxiv.org/html/1611.08050v2)  
+**확인 범위:** 본문 §2–3, Tables 1–4, Fig.9 실패 사례 확인.
 
 - **방법:** 관절 confidence map과 신체 부위 방향 벡터장(PAF)을 공동 학습합니다. 후보 관절 사이의 선분에서 PAF와 방향 일치도를 계산하고, 연결 후보를 사람별 스켈레톤으로 조립하는 bottom-up 구조입니다.
 - **자료·평가:** MPII 다중 인물 및 COCO 2016을 평가합니다. MPII 전체 시험 mAP 75.6, COCO test-dev AP 61.8을 보고합니다. 서로 다른 데이터의 지표를 합치지 않습니다.
@@ -114,11 +107,13 @@
 
 
 <a id="p28"></a>
-### P28. Deep High-Resolution Representation Learning for Human Pose Estimation
+### P28 · HRNet
+
+**Deep High-Resolution Representation Learning for Human Pose Estimation**
 
 **저자·출처:** Ke Sun, Bin Xiao, Dong Liu, Jingdong Wang. CVPR 2019. HRNet.  
-**원문:** https://arxiv.org/html/1902.09212v1  
-**확인 범위:** 2026-10-25 본문 §3–4, Tables 1·6 및 평가 절차 확인.
+**원문:** [확인한 본문](https://arxiv.org/html/1902.09212v1)  
+**확인 범위:** 본문 §3–4, Tables 1·6 및 평가 절차 확인.
 
 - **방법:** 고해상도 경로를 계속 유지하며 저해상도 경로를 병렬 추가하고 정보를 반복 융합합니다. 마지막 고해상도 특징에서 Gaussian 정답 히트맵에 대한 MSE로 관절 위치를 학습합니다.
 - **평가:** COCO·MPII·PoseTrack. COCO는 사람 검출기를 사용하고 원본·좌우 반전 히트맵을 평균합니다. MPII는 제공된 인물 박스와 다중 스케일 평가를 사용합니다.
@@ -134,11 +129,13 @@
 
 
 <a id="p29"></a>
-### P29. MediaPipe: A Framework for Building Perception Pipelines
+### P29 · MediaPipe 프레임워크
+
+**MediaPipe: A Framework for Building Perception Pipelines**
 
 **저자·출처:** Camillo Lugaresi 외. arXiv:1906.08172, 2019.  
-**원문:** https://arxiv.org/html/1906.08172v1  
-**확인 범위:** 2026-10-25 본문 §3 구조, §4 실행·동기화, §5 도구, §6 적용 사례 확인.
+**원문:** [확인한 본문](https://arxiv.org/html/1906.08172v1)  
+**확인 범위:** 본문 §3 구조, §4 실행·동기화, §5 도구, §6 적용 사례 확인.
 
 - **역할:** 관절 모델 자체가 아니라 다양한 인식 모델과 처리를 연결하는 프레임워크 연구입니다.
 - **구조:** Packet은 타임스탬프와 데이터를, Stream은 시간 순 데이터 흐름을, Calculator는 처리 단위를 나타냅니다. Graph가 이를 연결합니다.
@@ -150,24 +147,28 @@
 ## 후속 시계열·행동 분석과 리뷰
 
 <a id="p07"></a>
-### P07. Spatial Temporal Graph Convolutional Networks for Skeleton-Based Action Recognition
+### P07 · ST-GCN
+
+**Spatial Temporal Graph Convolutional Networks for Skeleton-Based Action Recognition**
 
 **저자·출처:** Sijie Yan, Yuanjun Xiong, Dahua Lin. AAAI, 2018.  
-**링크:** [저자 공개 원문](https://arxiv.org/abs/1801.07455)  
+**링크:** [저자 공개 원문](https://arxiv.org/abs/1801.07455) · [확인한 본문 v2](https://arxiv.org/pdf/1801.07455v2)  
 **확인 범위:** 본문 확인 — 모델 구조, 실험 설정, Tables 2–3.
 
 - **기술·흐름:** 관절을 노드, 뼈 연결을 공간 간선, 같은 관절의 인접 프레임 연결을 시간 간선으로 구성합니다. 9개 ST-GCN 층(출력 채널 64·128·256 각 3층), 시간 커널 9, 학습 가능한 간선 가중치, 전역 pooling과 softmax로 행동을 분류합니다.
 - **입력·자료:** Kinetics는 **OpenPose의 18개 2D 관절(x, y, confidence)**을 사용합니다. NTU RGB+D는 **Kinect의 25개 3D 관절**을 사용합니다. 같은 ST-GCN이라도 입력의 측정 방식과 차원이 다릅니다.
 - **평가·결과:** NTU 60개 행동에서 사람을 나누는 cross-subject 81.5%, 시점을 나누는 cross-view 88.3%를 보고합니다. Kinetics 400개 행동의 top-1은 30.7%입니다. 이들은 관절 검출 정확도가 아니라 주어진 행동 클래스의 분류 정확도입니다.
-- **검증·한계:** 앞단의 관절 획득 기술을 기존 표에 추가했습니다. 일반 행동 자료 성능이며, 누운 자세·이탈 예측·장시간 오경보 평가가 아닙니다.
+- **검증·한계:** 일반 행동 자료 성능이며, 누운 자세·이탈 예측·장시간 오경보 평가가 아닙니다.
 - **활용 제안:** 좌표 시계열의 구조적 관계를 쓰는 후속 기준선입니다. 먼저 적은 데이터에서 규칙·MLP·TCN과 비교하고 실제 가림에 의한 연속 결측을 별도로 시험합니다.
 
 
 <a id="p08"></a>
-### P08. Two-Stream Adaptive Graph Convolutional Networks for Skeleton-Based Action Recognition
+### P08 · 2s-AGCN
+
+**Two-Stream Adaptive Graph Convolutional Networks for Skeleton-Based Action Recognition**
 
 **저자·출처:** Lei Shi, Yifan Zhang, Jian Cheng, Hanqing Lu. CVPR, 2019.  
-**링크:** [저자 공개 원문](https://arxiv.org/abs/1805.07694)  
+**링크:** [저자 공개 원문](https://arxiv.org/abs/1805.07694) · [확인한 본문 v3](https://arxiv.org/pdf/1805.07694v3)  
 **확인 범위:** 본문 확인 — §5.1–5.3, Tables 1–4.
 
 - **기술·흐름:** 관절 좌표와 뼈의 방향·길이 벡터를 서로 다른 흐름으로 처리한 뒤 결과를 결합합니다. 고정 인체 연결뿐 아니라 학습 가능한 공통 그래프와 입력 표본별 관계를 사용합니다.
@@ -178,10 +179,12 @@
 
 
 <a id="p09"></a>
-### P09. Revisiting Skeleton-based Action Recognition
+### P09 · PoseC3D
+
+**Revisiting Skeleton-based Action Recognition**
 
 **저자·출처:** Haodong Duan 외. CVPR, 2022(프리프린트 2021). 모델명 PoseC3D.  
-**링크:** [논문](https://arxiv.org/abs/2104.13586)  
+**링크:** [논문](https://arxiv.org/abs/2104.13586) · [확인한 본문 v2](https://arxiv.org/pdf/2104.13586v2)  
 **확인 범위:** 본문 확인 — §3·§4, Appendix D/Table 13. 코드에서 널리 쓰는 PoseC3D 명칭과 본문의 PoseConv3D 표현을 함께 확인했습니다.
 
 - **기술·흐름:** 기본 영상 경로는 **Faster R-CNN(ResNet-50) 인물 검출 → HRNet 관절 추정 → Gaussian 관절 히트맵 시계열 → SlowOnly 3D CNN**입니다. 여기서 3D는 시간·영상 높이·너비이며 실측 3차원 관절을 의미하지 않습니다.
@@ -191,10 +194,12 @@
 
 
 <a id="p10"></a>
-### P10. An Empirical Evaluation of Generic Convolutional and Recurrent Networks for Sequence Modeling
+### P10 · TCN 비교 연구
+
+**An Empirical Evaluation of Generic Convolutional and Recurrent Networks for Sequence Modeling**
 
 **저자·출처:** Shaojie Bai, J. Zico Kolter, Vladlen Koltun. arXiv:1803.01271, 2018, 프리프린트.  
-**링크:** [논문](https://arxiv.org/abs/1803.01271)  
+**링크:** [논문](https://arxiv.org/abs/1803.01271) · [확인한 본문 v2](https://arxiv.org/pdf/1803.01271v2)  
 **확인 범위:** 본문 확인 — §3–5, Table 1, Appendix A.
 
 - **기술·흐름:** 미래 값을 보지 않는 인과적 1D 합성곱, 팽창 합성곱, 잔차 연결, weight normalization과 dropout으로 TCN을 구성합니다. 팽창률·커널·층수로 과거를 보는 범위가 결정됩니다.
@@ -204,7 +209,9 @@
 
 
 <a id="p18"></a>
-### P18. Advances in Skeleton-Based Fall Detection in RGB Videos: From Handcrafted to Deep Learning Approaches
+### P18 · 스켈레톤 낙상 탐지 리뷰
+
+**Advances in Skeleton-Based Fall Detection in RGB Videos: From Handcrafted to Deep Learning Approaches**
 
 **저자·출처:** Van-Ha Hoang, Jong Weon Lee, Md. Jalil Piran, Chun-Su Park. *IEEE Access*, 11, 92322–92352, 2023.  
 **링크:** [DOI: 10.1109/ACCESS.2023.3307138](https://doi.org/10.1109/ACCESS.2023.3307138) · [공식 기관 초록](https://pure.skku.edu/en/publications/advances-in-skeleton-based-fall-detection-in-rgb-videos-from-hand/) · [저자 비교표 저장소](https://github.com/hahv/Advances-in-Skeleton-Based-Fall-Detection-in-RGB-Videos)  
@@ -217,7 +224,9 @@
 
 
 <a id="p24"></a>
-### P24. Deep State-Space Model for Noise Tolerant Skeleton-Based Action Recognition
+### P24 · Deep State-Space Model
+
+**Deep State-Space Model for Noise Tolerant Skeleton-Based Action Recognition**
 
 **저자·출처:** Kazuki Kawamura, Takashi Matsubara, Kuniaki Uehara. *IEICE Transactions on Information and Systems*, E103.D(6), 1217–1225, 2020.  
 **링크:** [DOI: 10.1587/transinf.2019MVP0012](https://doi.org/10.1587/transinf.2019MVP0012) · [J-STAGE](https://www.jstage.jst.go.jp/article/transinf/E103.D/6/E103.D_2019MVP0012/_article/-char/ja) · [저자 기관 PDF](https://da.lib.kobe-u.ac.jp/da/kernel/90007346/90007346.pdf)  
@@ -228,4 +237,3 @@
 - **결과·검증:** 정상 입력에서는 제안 모델이 67.45%·80.68%이고 비교 ST-GCN은 81.5%·88.3%입니다. 따라서 일반 정확도가 가장 높은 모델이라는 설명은 맞지 않습니다. 장점은 잡음·프레임 누락이 커질 때 상대적인 성능 저하가 작다는 점입니다.
 - **한계:** 무작위로 프레임을 지운 실험은 이불 때문에 같은 관절이 오래 가려지는 현상과 다릅니다. 양방향 모델의 전체 구간 평가는 미래 정보가 없는 실시간 경고 조건과 구별해야 합니다.
 - **활용 제안:** 단순 결측 마스크·시간 필터보다 실제로 이득이 있는지 비교합니다. 학습된 잠재 표현을 가려진 관절의 관측 정답으로 취급하지 않고, 오프라인과 실시간 지연을 별도로 평가합니다.
-

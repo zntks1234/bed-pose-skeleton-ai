@@ -146,20 +146,20 @@
 
 
 <a id="p37"></a>
-### P37 · OpenPose 2017 기반의 확장 연구(2021 TPAMI)
+### P37 · OpenPose 2017 기반 확장 연구(2021 TPAMI)
 
 **OpenPose: Realtime Multi-Person 2D Pose Estimation Using Part Affinity Fields**
 
-**저자·출처:** Zhe Cao, Gines Hidalgo, Tomas Simon, Shih-En Wei, Yaser Sheikh. *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 43(1), 172–186, 2021 (arXiv 초고 2018; DOI 등록 2019).  
-**링크:** [DOI: 10.1109/TPAMI.2019.2929257](https://doi.org/10.1109/TPAMI.2019.2929257) · [arXiv:1812.08008 공개 본문](https://arxiv.org/abs/1812.08008) · [PubMed 서지](https://pubmed.ncbi.nlm.nih.gov/31331883/)  
-**확인 범위:** **본문 확인 — arXiv 공개판의 서론·기술 변화 설명과 PubMed 정식 출판 서지를 대조.** 최종 IEEE 편집본의 전체 표를 다시 대조한 것은 아닙니다.
+**저자·출처:** Zhe Cao, Gines Hidalgo, Tomas Simon, Shih-En Wei, Yaser Sheikh. *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 43(1), 172–186, 2021.  
+**원문:** [DOI](https://doi.org/10.1109/TPAMI.2019.2929257) · [arXiv 전체 공개판 PDF](https://arxiv.org/pdf/1812.08008) · [PubMed](https://pubmed.ncbi.nlm.nih.gov/31331883/)  
+**재검증 범위 (2026-10-26):** **공개 논문 PDF 전체의 모델·실험·결과를 대조** — §3 PAF·추정 구조, §5.2 Table 5(구조 비교), §5.3 Table 6(속도) 및 Fig. 12(사람 수에 따른 지연), 한계. 최종 IEEE 조판본의 전표 수치 대조는 별도 확인 필요.
 
-- **기존 P27과의 관계:** [P27](#p27)은 *Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields*(CVPR 2017), **이 P37은 같은 연구진의 후속 확장 논문**입니다. 핵심 PAF 원리는 같지만 서지·내용이 완전히 동일한 문헌은 아닙니다. 편수에는 **별도 1편**으로 셉니다.
-- **본문 확인 — 개선 기술:** 기존처럼 PAF와 관절 위치 예측을 매 반복 단계에서 모두 정교화하는 대신, **PAF 쪽의 반복 정교화에 집중**해 계산 성능과 정확도를 높이는 구성을 보고합니다. 몸통과 **발 키포인트를 동시에 검출**하는 결합 모델과 공개 발 관절 주석 자료를 소개합니다.
-- **검증·결과:** 공개판은 몸·발 추정을 별도 수행하는 것보다 결합 검출의 추론 시간을 줄이면서 각각의 품질을 유지한다고 보고합니다. 특정 AP·FPS 값은 이번 대조 범위에서 동일 조건 표까지 검증하지 않았으므로 **미인용**합니다.
-- **한계·프로젝트 활용 제안:** 다인물 일반 2D 자세 인식의 네트워크 개선 자료입니다. **침대·이불 가림의 관절 정확도나 누움 분류를 검증한 논문은 아닙니다.** P27과 함께 OpenPose 파이프라인 버전·발 관절 사용 가능성을 살펴볼 때 읽습니다.
+- **P27과 관계:** P27은 [CVPR 2017 원형](#p27), P37은 **같은 연구진의 후속 확장 연구**. 기술군은 같아도 정식 게재 제목/저자/실험이 달라 **별도 한 편**으로 센다.
+- **본문 — 모델:** 기존 PAF와 confidence map 동시 다단계 정교화 대신 **PAF 정교화 중심으로 구조 개선**; 몸통·발 키포인트 **공동 검출 모델**을 제안. OpenPose 시스템은 신체·손·얼굴 관절 기능도 설명하지만, 모든 관절이 단일 동일 네트워크에서 항상 추출되는 것은 아님.
+- **본문 — 실험/성능:** Table 5의 COCO validation 상 5 PAF - 1 confidence map 구조 **AP 65.3**(논문 설정; COCO AP), 3 PAF - 1 confidence map **AP 64.6**, Table 6의 GTX 1080 Ti **원형 COCO 모델 74ms, 확장 Body+Foot 모델 36ms**(GPU/CUDA, 논문별 고정 입력 조건). 해당 CPU-only 수치는 장치·모델 구성에 따라 매우 다르므로 일반 PC 실시간 성능으로 단순 전용 금지.
+- **본문 — 계산 특성:** Fig. 12는 OpenPose CNN 계산이 인물 수 변화에 상대적으로 덜 민감하지만 관절 연결 계산 비용은 남는다고 비교. 논문의 다인물·보행/일반 포즈 성능을 **단일 침대 위 이불 가림이나 누운 자세 성능으로 가정 금지**.
+- **프로젝트 활용 제안:** 연구용 OpenPose의 모델 버전·발 관절 유무·전처리 전체 경로를 고정하여 다른 2D 관절 후보와 비교. 실제 침대 영상의 관절 누락/시간 비용은 독자적으로 측정.
 
----
 ## 후속 시계열·행동 분석과 리뷰
 
 <a id="p07"></a>

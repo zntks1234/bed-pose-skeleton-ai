@@ -35,7 +35,7 @@
 
 논문별로 다른 데이터·분할·장비의 점수를 단일 성능 순위로 합치지 않습니다. 논문의 보고 결과, 프로젝트 적용 제안, 실제 자체 실험 결과를 구분합니다.
 
-**현재 제한:** 신규 [P30](BED_POSTURE_PAPERS.md#p30)·[P31](BED_POSTURE_PAPERS.md#p31)·[P33](BED_POSTURE_PAPERS.md#p33)·[P34](BED_POSTURE_PAPERS.md#p34)·[P35](BED_POSTURE_PAPERS.md#p35)·[P36](BED_POSTURE_PAPERS.md#p36)은 초록·서지 중심이므로 원문 본문·성능표 추가 대조가 필요합니다. 특히 P35의 프리프린트와 학회 초록은 방법 설명이 달라 판본을 구분했습니다. 기존 **(BED_POSTURE_PAPERS.md#p11)·[P12](BED_POSTURE_PAPERS.md#p12)·[P19](BED_POSTURE_PAPERS.md#p19)는 본문을 확보하지 못했습니다. [P02](BED_POSTURE_PAPERS.md#p02)·[P03](BED_POSTURE_PAPERS.md#p03)·[P04](BED_POSTURE_PAPERS.md#p04)·[P20](BED_POSTURE_PAPERS.md#p20)·[P21](BED_POSTURE_PAPERS.md#p21)·[P23](BED_POSTURE_PAPERS.md#p23)의 수치·판본·지표 주의점은 해당 항목에서 확인합니다. 원자료 없이 불일치 값 중 하나를 정답으로 선택하지 않습니다.
+**현재 제한:** 신규 [P30](BED_POSTURE_PAPERS.md#p30)·[P31](BED_POSTURE_PAPERS.md#p31)·[P33](BED_POSTURE_PAPERS.md#p33)·[P34](BED_POSTURE_PAPERS.md#p34)·[P35](BED_POSTURE_PAPERS.md#p35)·[P36](BED_POSTURE_PAPERS.md#p36)은 초록·서지 중심이므로 원문 본문·성능표 추가 대조가 필요합니다. 특히 P35의 프리프린트와 학회 초록은 방법 설명이 달라 판본을 구분했습니다. 기존 [P11](BED_POSTURE_PAPERS.md#p11)·[P12](BED_POSTURE_PAPERS.md#p12)·[P19](BED_POSTURE_PAPERS.md#p19)는 본문을 확보하지 못했습니다. [P02](BED_POSTURE_PAPERS.md#p02)·[P03](BED_POSTURE_PAPERS.md#p03)·[P04](BED_POSTURE_PAPERS.md#p04)·[P20](BED_POSTURE_PAPERS.md#p20)·[P21](BED_POSTURE_PAPERS.md#p21)·[P23](BED_POSTURE_PAPERS.md#p23)의 수치·판본·지표 주의점은 해당 항목에서 확인합니다. 원자료 없이 불일치 값 중 하나를 정답으로 선택하지 않습니다.
 
 <a id="technology-comparison"></a>
 ## 전체 색인

@@ -103,7 +103,25 @@ docs/DECISIONS.md, docs/REQUIREMENTS.md, ROADMAP.md를 읽어라.
 정답이 없어 아직 계산할 수 없는 지표와 준비가 필요한 항목이 표시되어 있음.
 ```
 
-### 예시 2 · 정해진 범위의 최소 기능 구현
+### 예시 2 · 동일 영상 스켈레톤 비교 러너 구현 (다음 작업)
+
+```text
+작업 유형: 구현
+목표: docs/POSE_BENCHMARK_PLAN.md의 9장에 정의된 비교용 최소 러너 개발.
+선행: AGENTS.md, ROADMAP.md, docs/DATA_AND_VALIDATION.md,
+      docs/TECHNOLOGY_CANDIDATES.md, docs/POSE_BENCHMARK_PLAN.md 읽기.
+범위: 동일 저장 영상의 프레임·PTS 입력 → PoseEstimatorAdapter → 원본 관절 출력
+      → 공통 COCO17 매핑 → 미검출·건너뜀 포함 프레임별 기록 → 기초 통계.
+원칙: 측정 시 로컬 추론 기본. Ryzen 5 4500U/8GB 사양 때문에 모델 후보를
+      제한하지 말 것. 모듈 분리·불필요한 연산 회피·정확한 시간 기록은 필수.
+출력: 재현 가능한 실행 명령, 버전·가중치 기록, manifest/JSONL/보고서,
+      관절 순서/좌우/결측/PTS/실패 테스트.
+제외: 자세 분류·이탈 최종 모델, 외부 센서 연동, 모바일 UI, 실제 점수 날조.
+완료 기준: 동일 영상 재실행 결과가 프레임 ID와 함께 재현되고,
+      정답 데이터가 없으면 정확도 관련 지표를 '계산 불가'로 보고.
+```
+
+### 예시 3 · 정해진 범위의 최소 기능 구현
 
 ```text
 작업 유형: 구현
@@ -119,7 +137,7 @@ docs/DECISIONS.md, docs/REQUIREMENTS.md, ROADMAP.md를 읽어라.
 필수 기술이 미정이면 필요한 선택지를 좁히고, 영향을 받지 않는 작업부터 진행.
 ```
 
-### 예시 3 · 논문 근거 확인 및 기존 문서 반영
+### 예시 4 · 논문 근거 확인 및 기존 문서 반영
 
 ```text
 작업 유형: 검증 및 문서 정리

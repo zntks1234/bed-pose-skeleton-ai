@@ -12,7 +12,7 @@
 
 | 작업 | 추가로 읽을 문서 |
 |---|---|
-| 기술 후보 비교·선정 | [기술 후보 비교](docs/TECHNOLOGY_CANDIDATES.md), 관련 논문 항목 |
+| 기술 후보 비교·선정 | [기술 후보 비교](docs/TECHNOLOGY_CANDIDATES.md), [재현 실험 계획](docs/POSE_BENCHMARK_PLAN.md), 관련 논문 항목 |
 | 코드·구조 설계 | [시스템 구조](docs/ARCHITECTURE.md), [데이터·평가 기준](docs/DATA_AND_VALIDATION.md) |
 | 측정·녹화·운영 | [측정 절차](docs/MEASUREMENT_PROTOCOL.md), [데이터·평가 기준](docs/DATA_AND_VALIDATION.md) |
 | 논문 조사·검증 | [논문 안내](docs/LITERATURE_REVIEW.md), [침대 자세 논문](docs/BED_POSTURE_PAPERS.md), [스켈레톤 논문](docs/SKELETON_TECHNOLOGY_PAPERS.md)의 관련 항목 |
@@ -46,7 +46,7 @@
 - 최소 실증에서 수동 침대 영역 지정과 단순 조작부터 시작할 수 있습니다. 구현 순서를 뒤로 미룬 것을 합의된 목표의 삭제로 처리하지 않습니다.
 - 녹화를 꺼도 분석과 결과 기록은 계속되어야 합니다.
 - 스마트폰을 **카메라 입력**으로 쓰는 후보와 **웹 원격 조작** 보류 기능을 혼동하지 않습니다.
-- Windows 기준으로 논의 중이지만 PC 사양·개발 기술은 확정되지 않았습니다.
+- **2026-10-26 결정:** 실제 측정의 카메라 AI 추론은 로컬을 기본으로 합니다. Windows 기준 논의는 있었으나 최종 PC·OS는 미정입니다. 현재 Ryzen 5 4500U/RAM 8GB 사양으로 기술 후보를 제한하거나 경량 모델을 강제하지 않습니다. 코드 최적화·모듈 분리·성능 기록은 별개로 고려합니다.
 - MediaPipe Pose Landmarker·YOLO Pose·RTMPose의 우선 비교와 MoveNet 대안은 제안입니다. 실험 없이 채택 기술이나 성능 순위로 바꾸지 않습니다.
 
 ## 4. 자료와 검증 원칙

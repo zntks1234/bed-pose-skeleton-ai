@@ -32,7 +32,8 @@
 | 침대 자세·이탈 판단 | [P02](BED_POSTURE_PAPERS.md#p02) → [P03 BedEye](BED_POSTURE_PAPERS.md#p03) → [P25](BED_POSTURE_PAPERS.md#p25) |
 | 데이터와 가림 조건 | [P01 SLP](BED_POSTURE_PAPERS.md#p01) → [P14 BlanketSet](BED_POSTURE_PAPERS.md#p14) → [P21 HypnoPose](BED_POSTURE_PAPERS.md#p21) → [P36 IR 가림 증강](BED_POSTURE_PAPERS.md#p36) |
 | 관절 이후의 시간 분석 | [P10 TCN](SKELETON_TECHNOLOGY_PAPERS.md#p10) → [P07 ST-GCN](SKELETON_TECHNOLOGY_PAPERS.md#p07) → [P09 PoseC3D](SKELETON_TECHNOLOGY_PAPERS.md#p09) |
-| 자체 실험 설계 | [측정 절차](MEASUREMENT_PROTOCOL.md) · [데이터·검증 기준](DATA_AND_VALIDATION.md) |
+| 자체 실험 설계 | [스켈레톤 비교 실험 계획](POSE_BENCHMARK_PLAN.md) · [측정 절차](MEASUREMENT_PROTOCOL.md) · [데이터·검증 기준](DATA_AND_VALIDATION.md) |
+| 후보의 역할과 실행 부담 | [기술 후보 비교](TECHNOLOGY_CANDIDATES.md): 적용 방법·선택 조건 · [연산·실행 부담 비교](POSE_COMPUTE_AND_RESOURCE_COMPARISON.md): 공개 처리 시간·학습·결합 부담 |
 
 ## 결과를 읽는 기준
 
@@ -102,6 +103,6 @@ ID는 기존 링크와 연결되도록 유지합니다. 표의 짧은 이름을 
 
 ## 추가 자료와 갱신
 
-공식 API·라이브러리 문서와 후보 가이드의 추가 연구 S11·S12는 [기술 후보 비교의 출처](TECHNOLOGY_CANDIDATES.md#sources)에 모았습니다. 이 자료들은 위 P01–P29 목록에 포함하지 않습니다.
+공식 API·라이브러리 문서와 후보 가이드의 추가 연구 S11·S12는 [기술 후보 비교의 출처](TECHNOLOGY_CANDIDATES.md#sources)에 모았습니다. 이 자료들은 위 P01–P37 색인 37편에 포함하지 않습니다.
 
 새 논문은 우선 서지 후보로 등록하며 **본문 확인 전까지 사실 판단과 기술·모델 선정 근거에서 제외**합니다. 원문을 확보한 경우에만 판본·절·표, 입력 장비, 정답 출처, 자료 분할, 결과의 제한을 근거와 함께 기록합니다. 설치·모델 채택·성능 재현 여부는 [진행 현황](PROJECT_STATUS.md)에서 관리합니다.

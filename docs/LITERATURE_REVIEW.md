@@ -2,16 +2,16 @@
 
 [프로젝트 홈](../README.md) · [진행 현황](PROJECT_STATUS.md) · [기술 후보 비교](TECHNOLOGY_CANDIDATES.md)
 
-**기준일: 2026-10-26 · 총 37편 · 관련 본문 확인 28편 · 본문 미확보/초록·서지만 확인 9편**
+**기준일: 2026-10-26 · 총 37편 · 공개 본문/저자판 대조 33편 · 초록·서지만 확인 4편**
 
 논문 상세는 두 문서에서 관리합니다. 각 항목은 서지·원문 링크, 확인한 범위, 방법·자료·평가 결과, 한계와 프로젝트 활용 제안 순서로 구성합니다.
 
 | 상세 문서 | 범위 | 확인 상태 |
 |---|---|---|
-| [침대 위 자세 구분을 위한 논문](BED_POSTURE_PAPERS.md) | 24편: 자세·이탈·가림·데이터·리뷰 | 본문 15편, 초록·서지 중심 9편 |
+| [침대 위 자세 구분을 위한 논문](BED_POSTURE_PAPERS.md) | 24편: 자세·이탈·가림·데이터·리뷰 | 본문 20편(판본 제한 포함), 초록·서지 중심 4편 |
 | [스켈레톤 인식 기술](SKELETON_TECHNOLOGY_PAPERS.md) | 13편: 관절 추출·프레임워크 7편, 후속 분석·리뷰 6편 | 본문 13편 |
 
-‘본문 확인’은 관련 절·표에 적힌 방법과 결과를 대조했다는 뜻입니다. 모든 최종 출판본의 전체 검증, 코드 실행, 원자료 검사, 성능 재현을 뜻하지 않습니다. 수치가 일치하지 않는 논문도 본문 확인 28편에 포함됩니다. 새로 추가한 8편은 P30–P37이며, 서지상 완전 중복 3편은 추가하지 않았습니다.
+‘본문 확인’은 관련 절·표에 적힌 방법과 결과를 대조했다는 뜻입니다. 모든 최종 출판본의 전체 검증, 코드 실행, 원자료 검사, 성능 재현을 뜻하지 않습니다. 수치가 일치하지 않는 논문도 본문 확인 33편에 포함됩니다. P35는 2020 공개판을 확인했으나 2022 ACM 최종판 본문은 미확보입니다. 새로 추가한 8편은 P30–P37이며, 서지상 완전 중복 3편은 추가하지 않았습니다.
 
 ## 목적별 읽는 순서
 
@@ -35,7 +35,7 @@
 
 논문별로 다른 데이터·분할·장비의 점수를 단일 성능 순위로 합치지 않습니다. 논문의 보고 결과, 프로젝트 적용 제안, 실제 자체 실험 결과를 구분합니다.
 
-**현재 제한:** 신규 [P30](BED_POSTURE_PAPERS.md#p30)·[P31](BED_POSTURE_PAPERS.md#p31)·[P33](BED_POSTURE_PAPERS.md#p33)·[P34](BED_POSTURE_PAPERS.md#p34)·[P35](BED_POSTURE_PAPERS.md#p35)·[P36](BED_POSTURE_PAPERS.md#p36)은 초록·서지 중심이므로 원문 본문·성능표 추가 대조가 필요합니다. 특히 P35의 프리프린트와 학회 초록은 방법 설명이 달라 판본을 구분했습니다. 기존 [P11](BED_POSTURE_PAPERS.md#p11)·[P12](BED_POSTURE_PAPERS.md#p12)·[P19](BED_POSTURE_PAPERS.md#p19)는 본문을 확보하지 못했습니다. [P02](BED_POSTURE_PAPERS.md#p02)·[P03](BED_POSTURE_PAPERS.md#p03)·[P04](BED_POSTURE_PAPERS.md#p04)·[P20](BED_POSTURE_PAPERS.md#p20)·[P21](BED_POSTURE_PAPERS.md#p21)·[P23](BED_POSTURE_PAPERS.md#p23)의 수치·판본·지표 주의점은 해당 항목에서 확인합니다. 원자료 없이 불일치 값 중 하나를 정답으로 선택하지 않습니다.
+**현재 제한:** [P11](BED_POSTURE_PAPERS.md#p11)·[P12](BED_POSTURE_PAPERS.md#p12)·[P19](BED_POSTURE_PAPERS.md#p19)·[P34](BED_POSTURE_PAPERS.md#p34)는 **본문 미확보**입니다. 신규 P30·P31·P33·P36은 이번에 공개 본문 또는 저자 게재 승인본의 방법·자료·결과표를 대조했고, 기존 P32·P37도 다시 확인했습니다. [P35](BED_POSTURE_PAPERS.md#p35)는 **2020 arXiv 공개판의 본문·성능표를 확인**했지만 2022 ACM 최종판은 초록·서지만 확인했습니다. P35 공개 원고는 '가정환경 102명'과 '학습 85명 + 평가 22명'의 수치 불일치가 있으므로 임의 수정하지 않습니다. P31 저자 원고에도 시간·AUC 설명의 주의점이 있습니다. 기존 [P02](BED_POSTURE_PAPERS.md#p02)·[P03](BED_POSTURE_PAPERS.md#p03)·[P04](BED_POSTURE_PAPERS.md#p04)·[P20](BED_POSTURE_PAPERS.md#p20)·[P21](BED_POSTURE_PAPERS.md#p21)·[P23](BED_POSTURE_PAPERS.md#p23)의 제한도 각 항목에 유지했습니다. 논문의 성능 재현이나 데이터셋 자체 검증은 수행하지 않았습니다.
 
 <a id="technology-comparison"></a>
 ## 전체 색인

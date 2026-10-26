@@ -1,6 +1,6 @@
 # 스켈레톤 기술 비교 실험 계획 (1단계)
 
-[프로젝트 홈](../README.md) · [로드맵](../ROADMAP.md) · [기술 후보 비교](TECHNOLOGY_CANDIDATES.md) · [데이터·평가 기준](DATA_AND_VALIDATION.md)
+[프로젝트 홈](../README.md) · [로드맵](../ROADMAP.md) · [기술 후보 비교](TECHNOLOGY_CANDIDATES.md) · [연산·실행 부담 비교](POSE_COMPUTE_AND_RESOURCE_COMPARISON.md) · [데이터·평가 기준](DATA_AND_VALIDATION.md)
 
 > **작성: 2026-10-26 · 상태: 실험 설계 완료 / 코드 구현·실측 전**
 >

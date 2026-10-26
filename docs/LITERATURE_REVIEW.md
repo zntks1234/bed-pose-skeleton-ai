@@ -2,16 +2,16 @@
 
 [프로젝트 홈](../README.md) · [진행 현황](PROJECT_STATUS.md) · [기술 후보 비교](TECHNOLOGY_CANDIDATES.md)
 
-**기준일: 2026-10-25 · 총 29편 · 관련 본문 확인 26편 · 본문 미확보 3편**
+**기준일: 2026-10-26 · 총 37편 · 관련 본문 확인 28편 · 본문 미확보/초록·서지만 확인 9편**
 
 논문 상세는 두 문서에서 관리합니다. 각 항목은 서지·원문 링크, 확인한 범위, 방법·자료·평가 결과, 한계와 프로젝트 활용 제안 순서로 구성합니다.
 
 | 상세 문서 | 범위 | 확인 상태 |
 |---|---|---|
-| [침대 위 자세 구분을 위한 논문](BED_POSTURE_PAPERS.md) | 17편: 자세·이탈·가림·데이터·리뷰 | 본문 14편, 미확보 3편 |
-| [스켈레톤 인식 기술](SKELETON_TECHNOLOGY_PAPERS.md) | 12편: 관절 추출·프레임워크 6편, 후속 분석·리뷰 6편 | 본문 12편 |
+| [침대 위 자세 구분을 위한 논문](BED_POSTURE_PAPERS.md) | 24편: 자세·이탈·가림·데이터·리뷰 | 본문 15편, 초록·서지 중심 9편 |
+| [스켈레톤 인식 기술](SKELETON_TECHNOLOGY_PAPERS.md) | 13편: 관절 추출·프레임워크 7편, 후속 분석·리뷰 6편 | 본문 13편 |
 
-‘본문 확인’은 관련 절·표에 적힌 방법과 결과를 대조했다는 뜻입니다. 모든 최종 출판본의 전체 검증, 코드 실행, 원자료 검사, 성능 재현을 뜻하지 않습니다. 수치가 일치하지 않는 논문도 본문 확인 26편에 포함됩니다.
+‘본문 확인’은 관련 절·표에 적힌 방법과 결과를 대조했다는 뜻입니다. 모든 최종 출판본의 전체 검증, 코드 실행, 원자료 검사, 성능 재현을 뜻하지 않습니다. 수치가 일치하지 않는 논문도 본문 확인 28편에 포함됩니다. 새로 추가한 8편은 P30–P37이며, 서지상 완전 중복 3편은 추가하지 않았습니다.
 
 ## 목적별 읽는 순서
 
@@ -19,7 +19,7 @@
 |---|---|
 | 먼저 구현·비교할 후보 | [기술 후보 비교](TECHNOLOGY_CANDIDATES.md) → [관절 추출 논문](SKELETON_TECHNOLOGY_PAPERS.md#p05) |
 | 침대 자세·이탈 판단 | [P02](BED_POSTURE_PAPERS.md#p02) → [P03 BedEye](BED_POSTURE_PAPERS.md#p03) → [P25](BED_POSTURE_PAPERS.md#p25) |
-| 데이터와 가림 조건 | [P01 SLP](BED_POSTURE_PAPERS.md#p01) → [P14 BlanketSet](BED_POSTURE_PAPERS.md#p14) → [P21 HypnoPose](BED_POSTURE_PAPERS.md#p21) |
+| 데이터와 가림 조건 | [P01 SLP](BED_POSTURE_PAPERS.md#p01) → [P14 BlanketSet](BED_POSTURE_PAPERS.md#p14) → [P21 HypnoPose](BED_POSTURE_PAPERS.md#p21) → [P34 회전 동작](BED_POSTURE_PAPERS.md#p34) |
 | 관절 이후의 시간 분석 | [P10 TCN](SKELETON_TECHNOLOGY_PAPERS.md#p10) → [P07 ST-GCN](SKELETON_TECHNOLOGY_PAPERS.md#p07) → [P09 PoseC3D](SKELETON_TECHNOLOGY_PAPERS.md#p09) |
 | 자체 실험 설계 | [측정 절차](MEASUREMENT_PROTOCOL.md) · [데이터·검증 기준](DATA_AND_VALIDATION.md) |
 
@@ -35,14 +35,14 @@
 
 논문별로 다른 데이터·분할·장비의 점수를 단일 성능 순위로 합치지 않습니다. 논문의 보고 결과, 프로젝트 적용 제안, 실제 자체 실험 결과를 구분합니다.
 
-**현재 제한:** [P11](BED_POSTURE_PAPERS.md#p11)·[P12](BED_POSTURE_PAPERS.md#p12)·[P19](BED_POSTURE_PAPERS.md#p19)는 본문을 확보하지 못했습니다. [P02](BED_POSTURE_PAPERS.md#p02)·[P03](BED_POSTURE_PAPERS.md#p03)·[P04](BED_POSTURE_PAPERS.md#p04)·[P20](BED_POSTURE_PAPERS.md#p20)·[P21](BED_POSTURE_PAPERS.md#p21)·[P23](BED_POSTURE_PAPERS.md#p23)의 수치·판본·지표 주의점은 해당 항목에서 확인합니다. 원자료 없이 불일치 값 중 하나를 정답으로 선택하지 않습니다.
+**현재 제한:** 신규 [P30](BED_POSTURE_PAPERS.md#p30)·[P31](BED_POSTURE_PAPERS.md#p31)·[P33](BED_POSTURE_PAPERS.md#p33)·[P34](BED_POSTURE_PAPERS.md#p34)·[P35](BED_POSTURE_PAPERS.md#p35)·[P36](BED_POSTURE_PAPERS.md#p36)은 초록·서지 중심이므로 원문 본문·성능표 추가 대조가 필요합니다. 특히 P35의 프리프린트와 학회 초록은 방법 설명이 달라 판본을 구분했습니다. 기존 **(BED_POSTURE_PAPERS.md#p11)·[P12](BED_POSTURE_PAPERS.md#p12)·[P19](BED_POSTURE_PAPERS.md#p19)는 본문을 확보하지 못했습니다. [P02](BED_POSTURE_PAPERS.md#p02)·[P03](BED_POSTURE_PAPERS.md#p03)·[P04](BED_POSTURE_PAPERS.md#p04)·[P20](BED_POSTURE_PAPERS.md#p20)·[P21](BED_POSTURE_PAPERS.md#p21)·[P23](BED_POSTURE_PAPERS.md#p23)의 수치·판본·지표 주의점은 해당 항목에서 확인합니다. 원자료 없이 불일치 값 중 하나를 정답으로 선택하지 않습니다.
 
 <a id="technology-comparison"></a>
 ## 전체 색인
 
 ID는 기존 링크와 연결되도록 유지합니다. 표의 짧은 이름을 누르면 전체 제목과 세부 설명으로 이동합니다.
 
-### 침대 위 자세 구분 · 17편
+### 침대 위 자세 구분 · 24편
 
 | ID | 논문 | 역할 |
 |---|---|---|
@@ -63,8 +63,15 @@ ID는 기존 링크와 연결되도록 유지합니다. 표의 짧은 이름을 
 | <a id="p22"></a>P22 | [상체·머리 자세 분류](BED_POSTURE_PAPERS.md#p22) | SleePose-FRCNN-Net |
 | <a id="p23"></a>P23 | [U-Net + MobileNetV3](BED_POSTURE_PAPERS.md#p23) | 사람 분할 후 3자세 영상 분류 |
 | <a id="p25"></a>P25 | [물리 시뮬레이션 기반 낙상 위험](BED_POSTURE_PAPERS.md#p25) | 13관절 → MLP·합성/실제 평가 |
+| <a id="p30"></a>P30 | [단일 IR 카메라 전이학습](BED_POSTURE_PAPERS.md#p30) | 밤샘 4자세·빈 침대 판별 |
+| <a id="p31"></a>P31 | [RGB·열화상 앙상블](BED_POSTURE_PAPERS.md#p31) | 이불 조건 5자세 분류 |
+| <a id="p32"></a>P32 | [IRS·CPM·HOG](BED_POSTURE_PAPERS.md#p32) | 마네킹 관절·방향 보정 |
+| <a id="p33"></a>P33 | [Bodies at Rest](BED_POSTURE_PAPERS.md#p33) | 압력→3D·합성 PressurePose |
+| <a id="p34"></a>P34 | [전신 회전 동작 기반 가림 대응](BED_POSTURE_PAPERS.md#p34) | 이불 아래 방향 변화·3자세 |
+| <a id="p35"></a>P35 | [다중 센서 자세·형상 융합](BED_POSTURE_PAPERS.md#p35) | IR·깊이·압력·RGB / 판본 주의 |
+| <a id="p36"></a>P36 | [IR 이불 가림 증강](BED_POSTURE_PAPERS.md#p36) | 통계적 증강·전이학습·반지도 학습 |
 
-### 스켈레톤 인식 기술 · 12편
+### 스켈레톤 인식 기술 · 13편
 
 | ID | 논문 | 역할 |
 |---|---|---|
@@ -72,6 +79,7 @@ ID는 기존 링크와 연결되도록 유지합니다. 표의 짧은 이름을 
 | <a id="p06"></a>P06 | [RTMPose](SKELETON_TECHNOLOGY_PAPERS.md#p06) | CSPNeXt·SimCC·GAU |
 | <a id="p26"></a>P26 | [BlazePose GHUM Holistic](SKELETON_TECHNOLOGY_PAPERS.md#p26) | 몸·손 3D 추정·GHUM Lifter |
 | <a id="p27"></a>P27 | [OpenPose / PAF](SKELETON_TECHNOLOGY_PAPERS.md#p27) | 관절 히트맵·신체 연결 |
+| <a id="p37"></a>P37 | [OpenPose 2021 확장](SKELETON_TECHNOLOGY_PAPERS.md#p37) | PAF-only 반복 정교화·발 관절 |
 | <a id="p28"></a>P28 | [HRNet](SKELETON_TECHNOLOGY_PAPERS.md#p28) | 병렬 해상도·반복 융합 |
 | <a id="p29"></a>P29 | [MediaPipe 프레임워크](SKELETON_TECHNOLOGY_PAPERS.md#p29) | Packet·Stream·Calculator·Graph |
 | <a id="p07"></a>P07 | [ST-GCN](SKELETON_TECHNOLOGY_PAPERS.md#p07) | 관절의 공간·시간 그래프 |

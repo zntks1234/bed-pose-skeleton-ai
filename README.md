@@ -61,6 +61,7 @@ Codex 등 AI에게는 **공통 지침을 읽도록 요청한 뒤, 이번 작업�
 | [측정 절차](docs/MEASUREMENT_PROTOCOL.md) | 자유·단일·순차 측정과 실제 정답 확인 |
 | [데이터·평가 기준](docs/DATA_AND_VALIDATION.md) | 저장 항목, 시간 정렬, 분할, 지표 |
 | [스켈레톤 비교 실험 계획](docs/POSE_BENCHMARK_PLAN.md) | 실제 실행 전 공통 프레임·관절·GT·지연 측정·기록 방식 |
+| [기술별 연산·실행 부담 비교](docs/POSE_COMPUTE_AND_RESOURCE_COMPARISON.md) | 모델 구성·공개 처리 시간·학습 부담·결합 방식의 중립적 비교 |
 
 ### 논문과 기술 선택
 

@@ -8,7 +8,7 @@
 
 **문헌 근거 제한:** [전체 논문 색인](LITERATURE_REVIEW.md)의 **본문 미확인 P11·P12·P19·P34**는 기술·성능·실험 결과에 대한 사실 판단 및 후보 선정 근거에서 제외합니다. **P35는 2020년 확인 공개판에 한해** 근거를 사용하며, **2022 ACM 최종판은 본문 미확인**으로 취급합니다. 보고값에 본문 수치·조건 불일치가 있으면 해결 전 정량 비교에서 제외합니다. 아래 우선순위는 **비교 실험 제안**이며 침대 환경의 정확도 순위가 아닙니다.
 
-[후보 요약](#comparison) · [RGB 후보 상세](#rgb) · [3D·센서 확장](#extensions) · [선정 실험](#selection) · [재현 비교 계획](POSE_BENCHMARK_PLAN.md) · [출처](#sources)
+[후보 요약](#comparison) · [RGB 후보 상세](#rgb) · [3D·센서 확장](#extensions) · [선정 실험](#selection) · [재현 비교 계획](POSE_BENCHMARK_PLAN.md) · [연산·실행 부담 비교](POSE_COMPUTE_AND_RESOURCE_COMPARISON.md) · [출처](#sources)
 
 ## 선택할 때 우선 볼 조건
 

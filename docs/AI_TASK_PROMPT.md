@@ -112,7 +112,7 @@ docs/DECISIONS.md, docs/REQUIREMENTS.md, ROADMAP.md를 읽어라.
       docs/TECHNOLOGY_CANDIDATES.md, docs/POSE_BENCHMARK_PLAN.md 읽기.
 범위: 동일 저장 영상의 프레임·PTS 입력 → PoseEstimatorAdapter → 원본 관절 출력
       → 공통 COCO17 매핑 → 미검출·건너뜀 포함 프레임별 기록 → 기초 통계.
-원칙: 측정 시 로컬 추론 기본. 모델 선택은 같은 영상의 실험 결과를 근거로 할 것.
+원칙: 추론 실행 위치·방식은 확정하지 말 것. 모델 선택은 같은 영상의 실험 결과를 근거로 할 것.
       모듈 분리·불필요한 연산 회피·정확한 시간 기록은 필수.
 출력: 재현 가능한 실행 명령, 버전·가중치 기록, manifest/JSONL/보고서,
       관절 순서/좌우/결측/PTS/실패 테스트.

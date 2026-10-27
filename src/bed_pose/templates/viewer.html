@@ -11,6 +11,8 @@
 @media(max-width:1050px){.wrap{padding:0 22px}.workspace{grid-template-columns:minmax(0,1fr) 270px;gap:15px}.run-overview{gap:14px}.viewer-caption{flex-direction:column;gap:7px}.stage{aspect-ratio:4/3}.stat strong{font-size:26px}}
 @media(max-width:760px){.wrap{padding:0 16px}.topbar .wrap{min-height:66px}.brand small{display:none}.brand{font-size:17px}.badge{font-size:11px;padding:6px 9px}.heading{padding:24px 0 20px;display:block}h1{font-size:25px}.subtitle{font-size:14px}.run-overview{margin-top:18px;gap:26px}.workspace{grid-template-columns:1fr}.stage{min-height:220px;aspect-ratio:4/3}.info-content{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:18px}.status-block{grid-column:1/-1}.stats{padding:0 0 14px;grid-column:1/-1}.time-block{padding:0;border:0}.candidate-section{padding:0}.info-note{grid-column:1/-1}.timeline{padding:16px;margin-top:16px}.timeline-foot{flex-direction:column;gap:5px}.footer{flex-direction:column;gap:5px}.frame-button{flex-basis:82px}.viewer-head{padding:13px 16px}.viewer-caption{padding:12px 16px}.stage-label{top:12px;left:12px;font-size:11px}.empty-state strong{font-size:18px}.stage-status{bottom:12px;right:12px}}
 @media(prefers-reduced-motion:no-preference){button{transition:background .15s,border-color .15s}}
+.viewer-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.joint-inspector{grid-column:1/-1;border-bottom:1px solid var(--line);padding:16px 0}.joint-inspector h2{font-size:15px;margin:0 0 14px}.inspection-fields{display:grid;gap:12px}.inspection-fields label{font-size:13px;color:var(--muted);display:grid;gap:6px}.inspection-fields select{font:inherit;font-size:14px;min-height:40px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:white;color:var(--ink);width:100%;min-width:0}.inspection-fields select:focus-visible{outline:3px solid var(--blue);outline-offset:2px}.joint-scores{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0 10px}.joint-scores dt{font-size:12px;color:var(--muted)}.joint-scores dd{margin:5px 0 0;font-size:22px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.inspection-note{font-size:12px;line-height:1.6;color:var(--muted);margin:10px 0 0}.joint-location{font-size:12px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}.joint-point,.joint-label{cursor:pointer}.joint-point.is-selected{stroke:#fff;stroke-width:3px;vector-effect:non-scaling-stroke}.joint-table{margin-top:20px;padding:18px 20px}.joint-table summary{font-size:15px;font-weight:650;cursor:pointer;min-height:28px}.joint-table-scroll{overflow-x:auto;margin-top:14px}.joint-table table{width:100%;min-width:570px;border-collapse:collapse;font-size:14px}.joint-table th{text-align:left;color:var(--muted);font-size:12px;font-weight:600}.joint-table th,.joint-table td{padding:10px 12px;border-bottom:1px solid var(--line)}.joint-table tr[aria-selected=true]{background:#eff4ff}.joint-table button{background:none;border:0;padding:5px 0;font:inherit;color:var(--blue);text-align:left;min-height:36px}.joint-table td{font-variant-numeric:tabular-nums}.joint-table caption{text-align:left;font-size:12px;color:var(--muted);padding:0 0 10px}.joint-table-note{margin-top:10px;color:var(--muted);font-size:12px}
+@media(max-width:760px){.viewer-head{align-items:start;flex-wrap:wrap}.viewer-controls{gap:12px}.joint-inspector{padding:16px 0}.inspection-fields{grid-template-columns:1fr 1fr}.joint-table{padding:16px}.joint-scores{max-width:300px}}
 </style>
 </head>
 <body>
@@ -19,7 +21,7 @@
 <section class="heading"><div><h1>관절 분석 결과</h1><p class="subtitle">영상과 관절 출력을 프레임별로 확인합니다.</p></div><div class="run-overview"><div><span>실행 상태</span><strong id="run-status">—</strong></div><div><span>표시 / 전체 프레임</span><strong id="frame-total">—</strong></div><div><span>원본 해상도</span><strong id="source-size">—</strong></div></div></section>
 <div class="workspace">
 <div class="viewer-column"><section class="card" aria-label="영상과 프레임 선택">
-<div class="viewer-head"><div class="viewer-title"><span class="small-square"></span>프레임 뷰어</div><label class="switch"><input id="overlay-toggle" type="checkbox" checked>관절 표시</label></div>
+<div class="viewer-head"><div class="viewer-title"><span class="small-square"></span>프레임 뷰어</div><div class="viewer-controls"><label class="switch"><input id="overlay-toggle" type="checkbox" checked>관절 표시</label><label class="switch"><input id="joint-label-toggle" type="checkbox">관절 이름</label></div></div>
 <div class="stage"><div class="frame-picture" id="frame-picture"><img alt="첫 번째 저장 프레임" src="data:image/svg+xml;base64,__FIRST_FRAME__"></div><span class="stage-status" id="stage-status">프레임 01</span><div class="empty-state" id="empty-state"><strong id="empty-title"></strong><span id="empty-description"></span></div></div>
 <div class="viewer-caption"><div class="legend" id="legend"></div><span>연결선은 관절 출력의 시각화입니다.</span></div>
 </section>
@@ -27,13 +29,16 @@
 <aside class="card" aria-label="현재 프레임 정보"><div class="info-head">프레임 정보</div><div class="info-content">
 <div class="status-block"><p class="label">처리 상태</p><span class="status" id="frame-status">—</span></div>
 <div class="stats"><div class="stat"><p class="label">출력 후보</p><strong id="candidate-count">—</strong><span class="unit" id="candidate-unit">개</span><small>측정 대상 연결 전</small></div><div class="stat"><p class="label">표시 가능 관절</p><strong id="joint-count">—</strong><small>화면 내 좌표 · 전체 후보 합계<br>후보당 공통 17점 기준</small></div></div>
+<section class="joint-inspector" aria-labelledby="joint-inspector-title"><h2 id="joint-inspector-title">관절 살펴보기</h2><div class="inspection-fields"><label for="inspection-candidate">이 프레임의 후보<select id="inspection-candidate" disabled></select></label><label for="inspection-joint">확인할 관절<select id="inspection-joint" disabled></select></label></div><p class="inspection-note" id="inspection-state">JavaScript를 켜면 관절 상세를 확인할 수 있습니다.</p><dl class="joint-scores"><div><dt>visibility · 가시성</dt><dd id="joint-visibility">—</dd></div><div><dt>presence · 장면 내 존재</dt><dd id="joint-presence">—</dd></div></dl><div class="joint-location" id="joint-location">좌표 정보 없음</div><p class="inspection-note">모델의 원본 가시성·존재 점수이며 정확도나 실제 가림 정답이 아닙니다. 합격 기준은 적용하지 않았습니다. 흰 테두리는 선택한 점입니다. 이름은 선택 후보에 표시하며, 좌우는 신체 기준입니다.</p></section>
 <div class="time-block"><p class="label">원본 영상 시각</p><div class="time-value" id="source-time">—</div><div class="time-note">소수 셋째 자리 반올림 · 정확한 PTS는 상세에 표시</div></div>
 <div class="candidate-section"><p class="label">이 프레임의 후보</p><div class="candidates" id="candidates"></div></div>
 <p class="info-note" id="context-note">__CONTEXT_NOTE__</p></div>
+
 <details class="details"><summary>기록 상세</summary><dl><dt>프레임 ID</dt><dd id="record-frame">—</dd><dt>원본 PTS</dt><dd id="record-pts">—</dd><dt>Time base</dt><dd id="record-timebase">—</dd><dt>실패 코드</dt><dd id="record-failure">—</dd><dt>실행 ID</dt><dd id="record-run">—</dd></dl></details></aside>
 </div>
 
-<noscript><p>프레임 선택을 사용하려면 JavaScript를 켜세요. 위에는 첫 번째 저장 프레임이 표시됩니다.</p></noscript>
+<details class="joint-table card"><summary>전체 관절의 원본 점수 보기</summary><div class="joint-table-scroll" tabindex="0" role="region" aria-label="관절별 점수 표"><table><caption id="joint-table-caption">선택한 후보의 공통 17점 · image 블록 점수</caption><thead><tr><th scope="col">관절</th><th scope="col">좌표 상태</th><th scope="col">visibility</th><th scope="col">presence</th><th scope="col">원본 인덱스</th></tr></thead><tbody id="joint-table-body"></tbody></table></div><p class="joint-table-note">점수는 소수 셋째 자리로 표시합니다. 값에 마우스를 올리면 원본 숫자를 확인할 수 있습니다. 미제공·0·비유한값을 구분하며, world 블록 점수와 섞지 않습니다.</p></details>
+<noscript><p>프레임·관절 선택을 사용하려면 JavaScript를 켜세요. 위에는 첫 번째 저장 프레임이 표시됩니다.</p></noscript>
 <footer class="footer"><span id="footer-note">저장 결과를 불러오는 중입니다.</span><span>BedPose · 결과 검토</span></footer><p id="announcement" class="sr-only" aria-live="polite"></p>
 </main>
 <script id="frame-data" type="application/json">__VIEWER_DATA__</script>
@@ -45,6 +50,8 @@ const $ = id => document.getElementById(id);
 const frames = data.frames;
 const colors = ['#00ffb3','#ffbf00','#90b7ff','#ff81e3'];
 let selected = 0;
+let selectedCandidate = null;
+let selectedJoint = 13;
 const pad = value => String(value).padStart(2,'0');
 const synthetic = data.execution_kind === 'synthetic';
 function state(frame) {
@@ -83,6 +90,58 @@ $('frame-range').max=frames.length-1;$('frame-range').disabled=frames.length===1
 function setOverlay() {
  const layer=$('frame-picture').querySelector('#pose-layer');
  if (layer) layer.style.display=$('overlay-toggle').checked?'':'none';
+ $('frame-picture').querySelectorAll('.joint-label').forEach(label=>{
+  label.style.display=$('joint-label-toggle').checked && label.dataset.candidateId===selectedCandidate?'':'none';
+ });
+ $('frame-picture').querySelectorAll('.joint-point').forEach(point=>{
+  point.classList.toggle('is-selected',point.dataset.candidateId===selectedCandidate && Number(point.dataset.jointIndex)===selectedJoint);
+ });
+}
+function scoreText(score) {
+ if (score && score.status==='reported' && typeof score.value==='number') return score.value.toFixed(3);
+ return ({not_output:'미제공',non_finite:'비유한값',invalid:'형식 불일치',mapping_undefined:'매핑 없음'})[score && score.status] || '미제공';
+}
+function coordinateState(joint) {
+ if (!joint) return '관절 결과 없음';
+ if (joint.availability==='not_applicable') return '매핑 없음';
+ if (joint.availability!=='predicted') return '관절 좌표 누락';
+ return joint.flags.includes('outside_image')?'화면 밖 좌표':'좌표 출력 · 정확도 미확인';
+}
+function inspectionPerson() {
+ return (frames[selected].joint_inspection || []).find(person=>person.candidate_id===selectedCandidate);
+}
+function updateInspection() {
+ const person=inspectionPerson(), joints=person?person.joints:[];
+ const control=$('inspection-joint');control.replaceChildren();
+ joints.forEach(joint=>{const option=document.createElement('option');option.value=joint.joint_index;option.textContent=joint.label;control.append(option);});
+ control.disabled=!joints.length;
+ if (joints.length) control.value=selectedJoint;
+ const joint=joints.find(j=>j.joint_index===selectedJoint);
+ text('inspection-state',coordinateState(joint));
+ for (const name of ['visibility','presence']) {
+  const score=joint && joint[name];text('joint-'+name,scoreText(score));
+  $('joint-'+name).title=score && score.status==='reported'?'원본 값: '+String(score.value):scoreText(score);
+ }
+ text('joint-location',joint?'좌표(px·반올림): '+(joint.x_px===null?'없음':joint.x_px.toFixed(2)+', '+joint.y_px.toFixed(2))+' · 원본 인덱스: '+(joint.source_index===null?'없음':joint.source_index):'좌표 정보 없음');
+ text('joint-table-caption',person?'후보 '+person.candidate_id+' · 공통 17점 · '+person.score_source_block+' 블록 점수':'이 프레임에는 공통 관절 결과가 없습니다.');
+ const body=$('joint-table-body');body.replaceChildren();
+ joints.forEach(item=>{
+  const row=document.createElement('tr');row.setAttribute('aria-selected',String(item.joint_index===selectedJoint));
+  const nameCell=document.createElement('td'), button=document.createElement('button');button.textContent=item.label;
+  button.addEventListener('click',()=>{selectedJoint=item.joint_index;updateInspection();});nameCell.append(button);row.append(nameCell);
+  const stateCell=document.createElement('td');stateCell.textContent=coordinateState(item);row.append(stateCell);
+  for (const scoreName of ['visibility','presence']) {const cell=document.createElement('td');cell.textContent=scoreText(item[scoreName]);cell.title=item[scoreName].status==='reported'?'원본 값: '+String(item[scoreName].value):scoreText(item[scoreName]);row.append(cell);}
+  const sourceCell=document.createElement('td');sourceCell.textContent=item.source_index===null?'없음':item.source_index;row.append(sourceCell);body.append(row);
+ });
+ setOverlay();
+}
+function resetInspection() {
+ const people=frames[selected].joint_inspection || [];
+ selectedCandidate=people.length?people[0].candidate_id:null;
+ const control=$('inspection-candidate');control.replaceChildren();
+ people.forEach(person=>{const option=document.createElement('option');option.value=person.candidate_id;option.textContent=person.candidate_id;control.append(option);});
+ control.disabled=!people.length;
+ updateInspection();
 }
 function show(index) {
  selected=Math.max(0,Math.min(frames.length-1,index));
@@ -122,12 +181,22 @@ function show(index) {
   const span=document.createElement('span');span.className='no-candidate';span.textContent=frame.candidate_count===0?'출력 후보 없음':'확인 가능한 출력 없음';$('candidates').append(span);
  }
  const note=document.createElement('span');note.textContent='후보 색상 · 동일 인물 추적 아님';$('legend').append(note);
+ resetInspection();
  text('announcement','프레임 '+(selected+1)+', '+status.label);
 }
 $('previous').addEventListener('click',()=>show(selected-1));
 $('next').addEventListener('click',()=>show(selected+1));
 $('frame-range').addEventListener('input',event=>show(Number(event.target.value)));
 $('overlay-toggle').addEventListener('change',setOverlay);
+$('joint-label-toggle').addEventListener('change',setOverlay);
+$('inspection-candidate').addEventListener('change',event=>{selectedCandidate=event.target.value;updateInspection();});
+$('inspection-joint').addEventListener('change',event=>{selectedJoint=Number(event.target.value);updateInspection();});
+$('frame-picture').addEventListener('click',event=>{
+ const target=event.target.closest('[data-joint-index]');
+ if (!target) return;
+ selectedCandidate=target.dataset.candidateId;selectedJoint=Number(target.dataset.jointIndex);
+ $('inspection-candidate').value=selectedCandidate;updateInspection();
+});
 document.addEventListener('keydown',event=>{
  if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing || ['INPUT','TEXTAREA','SELECT','SUMMARY'].includes(event.target.tagName)) return;
  if (event.key==='ArrowLeft' || event.key==='ArrowRight') {event.preventDefault();show(selected+(event.key==='ArrowLeft'?-1:1));}

@@ -18,7 +18,7 @@ def read_lines(path):
         return [strict_loads(line) for line in stream]
 
 
-def read_run(directory, include_keypoints=False):
+def read_run(directory, include_keypoints=False, include_raw=False):
     directory = Path(directory).resolve()
     try:
         before = file_hash(directory / 'manifest.json')
@@ -50,6 +50,7 @@ def read_run(directory, include_keypoints=False):
                   'receipts': read_lines(directory / 'write_timings.jsonl'),
                   'input_frames': read_lines(directory / 'input_frames.jsonl'),
                   'keypoints': read_lines(directory / 'keypoints.jsonl') if include_keypoints else None,
+                  'raw_results': read_lines(directory / 'raw_results.jsonl') if include_raw else None,
                   'manifest_sha256': before}
         # Detect changes during the multi-file read; do not evaluate a mixed snapshot.
         if file_hash(directory / 'manifest.json') != before or any(

@@ -5,6 +5,7 @@ from pathlib import Path
 import struct
 import zlib
 from .contracts import SourceError
+from .joint_inspection import JOINT_LABELS_KO, inspect_joints
 from .evaluation import read_run
 from .io_utils import atomic_json, file_hash
 from .video import VideoSource
@@ -44,6 +45,7 @@ def frame_svg(packet, row, mapped, execution_kind, run_status):
     radius = min(width, height) / 120
     for index, person in enumerate(mapped['people'] if mapped else []):
         color = COLORS[index % len(COLORS)]
+        candidate_id = escape(person['candidate_id'], quote=True)
         points = {j: (joint['x_px'], joint['y_px'])
                   for j, joint in enumerate(person['joints'])
                   if joint['availability'] == 'predicted' and
@@ -54,7 +56,13 @@ def frame_svg(packet, row, mapped, execution_kind, run_status):
                 x2, y2 = points[b]
                 elements.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="2" vector-effect="non-scaling-stroke"/>')
         for j, (x, y) in points.items():
-            elements.append(f'<circle cx="{x}" cy="{y}" r="{radius}" fill="{color}" stroke="#0c1420" stroke-width="{radius / 4}"><title>{escape(person["candidate_id"])} joint={j}</title></circle>')
+            elements.append(f'<circle class="joint-point" data-candidate-id="{candidate_id}" data-joint-index="{j}" cx="{x}" cy="{y}" r="{radius}" fill="{color}" stroke="#0c1420" stroke-width="{radius / 4}"><title>{escape(person["candidate_id"])} · {JOINT_LABELS_KO[j]} (COCO {j})</title></circle>')
+        font = min(width, height) / 38
+        for j, (x, y) in points.items():
+            label_text = f"{person['candidate_id']} · {JOINT_LABELS_KO[j]}"
+            label_x = max(font / 2, min(x + radius * 2, width - len(label_text) * font))
+            label_y = max(font, min(y - radius * 2, height - font / 3))
+            elements.append(f'<text class="joint-label" data-candidate-id="{candidate_id}" data-joint-index="{j}" x="{label_x}" y="{label_y}" font-size="{font}" font-family="sans-serif" fill="white" stroke="#0c1420" stroke-width="{font / 5}" paint-order="stroke" style="display:none">{escape(label_text)}</text>')
     elements.append('</g>')
     font_size = min(width, height) / 32
     badge_width, badge_height = (len(label) * 0.65 + 2) * font_size, font_size * 1.8
@@ -66,7 +74,7 @@ def frame_svg(packet, row, mapped, execution_kind, run_status):
 def render_overlay(video_path, run_dir, output, max_frames=None):
     if max_frames is not None and (type(max_frames) is not int or max_frames < 1):
         raise ValueError('max_frames must be a positive integer')
-    bundle = read_run(run_dir, include_keypoints=True)
+    bundle = read_run(run_dir, include_keypoints=True, include_raw=True)
     manifest, source = bundle['manifest'], bundle['source']
     video_path, output = Path(video_path).resolve(), Path(output).resolve()
     if file_hash(video_path) != source['video_sha256']:
@@ -74,6 +82,7 @@ def render_overlay(video_path, run_dir, output, max_frames=None):
     output.mkdir(parents=True, exist_ok=False)
     atomic_json(output / 'manifest.json', {'complete': False, 'run_id': manifest['run_id']})
     mapped = {row['frame_id']: row for row in bundle['keypoints']}
+    raw = {row['frame_id']: row for row in bundle['raw_results']}
     decoder = VideoSource(source, bundle['input_frames'], video_path)
     hashes, catalog, svg_frames = {}, [], []
     limit = min(max_frames or len(bundle['frames']), len(bundle['frames']))
@@ -96,6 +105,8 @@ def render_overlay(video_path, run_dir, output, max_frames=None):
                 'time_base_den', 'source_duration_pts', 'timestamp_source',
                 'processing_status', 'candidate_count', 'failure_code')},
                 'candidate_ids': [person['candidate_id'] for person in people],
+                'joint_inspection': inspect_joints(mapped.get(row['frame_id']), raw.get(row['frame_id']),
+                    manifest['mapping_profile'].get('image_block_id', 'image')),
                 'drawable_joint_count': drawable_count if row['keypoints_ref'] is not None else None})
         if limit == len(bundle['frames']) and decoder.read_next() is not None:
             raise SourceError('Render source has unrecorded frames')

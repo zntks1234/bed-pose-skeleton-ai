@@ -26,3 +26,8 @@ checkpoints/
 *.onnx
 *.tflite
 *.log
+
+# Local Python build artifacts
+*.egg-info/
+build/
+dist/

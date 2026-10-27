@@ -38,7 +38,7 @@ def fifo_pairs(left, right, max_skew_ns):
                 b=advance(1)
 
 
-def references(directory, manifest):
+def references(directory, manifest, selected=None):
     origin=int(manifest['clock_origin_perf_counter_ns'])
     with (Path(directory)/'live_frames.jsonl').open(encoding='utf-8') as stream:
         for line in stream:
@@ -46,10 +46,15 @@ def references(directory, manifest):
             yield {'measurement_id':manifest['measurement_id'],'frame_id':row['frame_id'],
                    'stream_frame_id':row['stream_frame_id'],'clock_id':row['clock_id'],
                    'received_ns':row['received_ns'],'time_ns':origin+int(row['received_ns']),
-                   'processing_status':row['processing_status']}
+                   'processing_status':row['processing_status'],
+                   'target_association':{'status':('not_configured' if not selected else
+                        'observation_failed' if row['processing_status']!='ok' else
+                        'target_missing' if not row['mapped_people'] else
+                        'target_ambiguous' if len(row['mapped_people'])>1 else 'continuity_unverified'),
+                        'candidate_id':None}}
 
 
-def align_group(members, directory, max_skew_ns):
+def align_group(members, directory, max_skew_ns, targets=()):
     manifests=[load_json(Path(m['run_directory'])/'manifest.json') for m in members]
     if any(m['source_profile']['kind']=='video_file' for m in manifests):
         return {'status':'blocked_media_offset_required','reason':'File PTS needs a verified common-time offset; decode receive time is not media time.'}
@@ -59,7 +64,7 @@ def align_group(members, directory, max_skew_ns):
     counts={'matched':0,'unmatched_left':0,'unmatched_right':0}
     try:
         with temp.open('x',encoding='utf-8',newline='\n') as stream:
-            sources=[references(m['run_directory'],manifest) for m,manifest in zip(members,manifests)]
+            sources=[references(m['run_directory'],manifest,next((t for t in targets if t['input_id']==m['input_id']),None)) for m,manifest in zip(members,manifests)]
             for index,row in enumerate(fifo_pairs(*sources,max_skew_ns)):
                 if row['status']=='matched':counts['matched']+=1
                 else:counts['unmatched_left' if row['left'] else 'unmatched_right']+=1

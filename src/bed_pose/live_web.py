@@ -42,6 +42,7 @@ class WebWorkspace:
         self.factory = engine_factory
         self.sessions, self.assets = {}, {}
         self.groups = {}
+        self.target_tickets = {}
         self.lock = threading.RLock()
         self.stop_requested = threading.Event()
         self.monitor_stop = threading.Event()
@@ -111,6 +112,20 @@ class WebWorkspace:
                                          'scan': self.scan_state, 'closing': self.stop_requested.is_set(),
                                          'model': self.model.name, 'model_available': self.model.is_file()}))
 
+    def capture_target(self, session_id):
+        with self.lock:
+            session=self.sessions[session_id]
+            if session.state['closed'] or not session.view or not session.view['people']:
+                raise ValueError('선택할 관절 후보가 없습니다. 입력을 확인하세요.')
+            ticket=uuid.uuid4().hex
+            capture=json.loads(json.dumps(session.view))
+            capture.update(ticket=ticket,input_id=session_id,stream_id=session.worker.engine.stream_id)
+            # Retain bounded frozen selections; pictures stay in RAM only.
+            for old in [key for key,value in self.target_tickets.items() if value['input_id']==session_id][:-3]:
+                self.target_tickets.pop(old,None)
+            self.target_tickets[ticket]=capture
+            return capture
+
     def group_command(self, values):
         with self.lock:
             if self.stop_requested.is_set():raise ValueError('작업실 종료 중입니다.')
@@ -129,7 +144,25 @@ class WebWorkspace:
                 tolerance=values.get('max_skew_ms')
                 if tolerance is not None and (type(tolerance) not in (int,float) or not math.isfinite(tolerance) or tolerance<0 or not math.isfinite(tolerance*1_000_000)):
                     raise ValueError('허용 시간 차이에 0 이상의 유한한 ms 값을 입력하세요.')
-                group=MeasurementGroup(members,self.output_root,None if tolerance is None else int(tolerance*1_000_000))
+                selections=values.get('target_selections')
+                targets=[]
+                if selections is not None:
+                    if not isinstance(selections,list) or len(selections)!=2 or values.get('same_person_confirmed') is not True:
+                        raise ValueError('양쪽 대상을 지정하고 동일인 지정을 확인하세요.')
+                    for session,selection in zip(members,selections):
+                        if not isinstance(selection,dict):raise ValueError('대상 지정 형식을 확인하세요.')
+                        if not session.view or not session.view['people']:raise ValueError('대상이 검출되지 않습니다. 다시 지정하세요.')
+                        capture=self.target_tickets.get(selection.get('ticket'))
+                        if not capture or capture['input_id']!=session.id or capture['stream_id']!=session.worker.engine.stream_id:
+                            raise ValueError('입력에 맞춰 대상을 다시 지정하세요.')
+                        candidate=next((p for p in capture['people'] if p['candidate_id']==selection.get('candidate_id')),None)
+                        if candidate is None:raise ValueError('선택한 관절 후보를 확인하세요.')
+                        targets.append({'input_id':session.id,'stream_id':capture['stream_id'],
+                                        'selected_frame_id':capture['frame_id'],'candidate_id':candidate['candidate_id'],
+                                        'clock_id':capture['clock_id'],'received_ns':capture['received_ns'],
+                                        'width':capture['width'],'height':capture['height'],
+                                        'candidate_snapshot':candidate,'selection_method':'operator_frozen_preview'})
+                group=MeasurementGroup(members,self.output_root,None if tolerance is None else int(tolerance*1_000_000),targets=targets)
                 self.groups[group.id]=group
                 try:group.start()
                 except Exception:
@@ -159,6 +192,7 @@ class WebWorkspace:
                 session.remove = action == 'remove'
                 if session.remove and state['closed']:
                     del self.sessions[session_id]
+                    self.target_tickets={k:v for k,v in self.target_tickets.items() if v['input_id']!=session_id}
                 else:
                     state['phase'] = 'closing'
                     session.worker.request_close()
@@ -294,6 +328,7 @@ class WebWorkspace:
             state['elapsed'] = (int(row['received_ns'])-int(state['started_ns']))/1e9
         session.view = {'sequence': session.sequence, 'frame_id': row['stream_frame_id'],
                         'width': width, 'height': height, 'people': row['mapped_people'],
+                        'clock_id':row['clock_id'],'received_ns':row['received_ns'],
                         'candidate_count': row['candidate_count'],
                         'inference_ms': (int(row['inference_finished_ns'])-int(row['inference_started_ns']))/1e6,
                         'read_ms': (int(row['received_ns'])-int(row['read_started_ns']))/1e6,
@@ -311,6 +346,7 @@ class WebWorkspace:
                         session.worker.request_close()
                     if session.remove and session.state['closed']:
                         self.sessions.pop(session.id, None)
+                        self.target_tickets={k:v for k,v in self.target_tickets.items() if v['input_id']!=session.id}
 
                 for group in self.groups.values():
                     try:group.tick()
@@ -441,6 +477,8 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 raise ValueError('JSON object required')
             if url.path == '/api/inputs':
                 result = workspace.add(values)
+            elif url.path == '/api/target-capture':
+                result = workspace.capture_target(values['id'])
             elif url.path == '/api/group':
                 result = workspace.group_command(values)
             elif url.path == '/api/control':

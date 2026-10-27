@@ -272,3 +272,8 @@ PCK는 평가 가능한 GT 관절에서 예측 누락·대상 미해결을 분�
 ## HTML 작업실 기본 진입 · 2026-10-27
 
 `live`의 launcher는 이제 `live_web.launch_browser`를 엽니다. `live_factory.py`가 Tk 없이 기존 소스/SDK/매핑을 생성하고, `WebWorkspace`가 입력별 Worker 메시지/결과·제어를 관리합니다. `WorkspaceHTTPServer`는 loopback만 사용하며 토큰·Host/Origin 검사, 로컬 파일 전달과 상태/화면 API를 제공합니다. `templates/live_workspace.html`은 별도 CDN 없이 CSS/JS를 포함하며 원본 좌표와 letterbox 변환으로 영역을 지정합니다. JPEG와 관절/프레임 ID는 한 응답에 묶고 저장은 화면 전달보다 먼저 수행합니다. 기존 Tk 모듈은 호환용으로 남으며 기본 경로에서 창을 생성하지 않습니다.
+
+
+## 그룹 대상 선택 근거 · 2026-10-27
+
+WebWorkspace는 입력별 최대 4개 고정 미리보기 선택 티켓을 RAM에 유지합니다. 그룹 시작 때 입력/스트림/후보와 운영자 확인을 검사하고 이미지 없이 관절/시각 스냅샷을 그룹 manifest에 보존합니다. HTML 대상 선택 창과 그룹 관측 상태를 제공하며 time_alignment.references는 미검출/복수 후보/처리 실패/연속성 미확인을 구분합니다. 프레임 순번 기반 candidate_id를 인물 추적 ID로 사용하지 않고 후속 프레임의 대상 확정을 보류합니다.

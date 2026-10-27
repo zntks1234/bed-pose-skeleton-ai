@@ -7,7 +7,7 @@ from .live_recording import verify_live
 
 
 class MeasurementGroup:
-    def __init__(self, members, root, max_skew_ns=None):
+    def __init__(self, members, root, max_skew_ns=None, targets=()):
         self.members = list(members)
         self.id = uuid.uuid4().hex
         self.directory = Path(root)/'groups'/self.id
@@ -20,7 +20,9 @@ class MeasurementGroup:
                      'members':[{'input_id':s.id,'title':s.title,'run_directory':None,
                                  'started_ack_perf_counter_ns':None,'stopped_ack_perf_counter_ns':None} for s in members],
                      'errors':[], 'alignment_status':'pending_until_stop' if max_skew_ns is not None else 'not_implemented',
-                     'target_association_status':'not_configured',
+                     'target_association_status':'operator_initialized_continuity_unverified' if targets else 'not_configured',
+                     'target_selections':list(targets),
+                     'same_person_assertion':'operator_report_not_verified' if targets else None,
                      'posture_prediction':{'status':'not_implemented','label':None}}
         self.finished, self.failed = False, False
         self.save()
@@ -95,7 +97,7 @@ class MeasurementGroup:
         if not self.failed and self.data['alignment_max_skew_ns'] is not None:
             try:
                 from .time_alignment import align_group
-                self.data['alignment']=align_group(self.data['members'],self.directory,int(self.data['alignment_max_skew_ns']))
+                self.data['alignment']=align_group(self.data['members'],self.directory,int(self.data['alignment_max_skew_ns']),self.data['target_selections'])
                 self.data['alignment_status']=self.data['alignment']['status']
             except Exception as exc:
                 self.failed=True
@@ -108,4 +110,11 @@ class MeasurementGroup:
         self.finished=True
 
     def public(self):
-        return dict(self.data,directory=str(self.directory))
+        observations=[]
+        if self.data['target_selections']:
+            for member in self.members:
+                people=member.view['people'] if member.view else None
+                status=('input_unavailable' if member.state['closed'] or people is None else
+                        'target_missing' if not people else 'target_ambiguous' if len(people)>1 else 'continuity_unverified')
+                observations.append({'input_id':member.id,'status':status})
+        return dict(self.data,directory=str(self.directory),target_observations=observations)

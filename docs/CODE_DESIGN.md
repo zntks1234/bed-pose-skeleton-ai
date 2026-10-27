@@ -6,6 +6,8 @@
 
 > 기존 합의의 기준은 [결정 사항](DECISIONS.md)입니다. 이 문서는 첫 저장 영상 비교 러너의 패키지·입출력·오류 처리·검증 방법을 구체화합니다. 언어·라이브러리·스키마 선택은 구현 제안이며 최종 추론 플랫폼이나 모델 채택을 확정하지 않습니다.
 
+첫 구현의 정확한 필드·함수·상태·시각·기록·평가 공식은 [세부 설계](BENCHMARK_DETAIL_SPEC.md)를 따릅니다. 초기 draft 스키마와 가상 예시를 포함하며 실행 코드·SDK 지원 완료와 구분합니다.
+
 ## 1. 첫 구현의 범위와 기술 제안
 
 Python 패키지와 CLI로 시작하고, 저장 영상 한 개·모델 설정 한 개를 한 실행으로 처리합니다. 후보별 실행은 순차적으로 수행해 동시 자원 경쟁을 피합니다. 최종 자세 분류·이탈/복귀·실시간 운영은 후속 단계입니다. 스켈레톤 영상은 저장 결과를 읽는 후처리로 생성합니다.
@@ -176,9 +178,11 @@ runs/<run_id>/
   frame_results.jsonl           # 프레임당 1행, 실패·미처리 포함
   raw_results.jsonl             # 후보별 원본 수치·구조·메타데이터
   keypoints.jsonl               # 후보별 공통17점·원본 참조·변환
-  aggregate_metrics.json        # 평가 설정·분모·정답 유무·미계산 사유
+  write_timings.jsonl           # 프레임 쓰기 종료 후의 계측 기록
   failure_cases.csv             # 식별자·실패 단계·사유
-  report.md
+  evaluations/<evaluation_id>/
+    aggregate_metrics.json      # 평가 설정·분모·정답 유무·미계산 사유
+    report.md
   overlay.mp4                   # 선택적 후처리 산출물
 ```
 

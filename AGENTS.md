@@ -13,7 +13,7 @@
 | 작업 | 추가로 읽을 문서 |
 |---|---|
 | 기술 후보 비교·선정 | [기술 후보 비교](docs/TECHNOLOGY_CANDIDATES.md), [재현 실험 계획](docs/POSE_BENCHMARK_PLAN.md), 관련 논문 항목 |
-| 코드·구조 설계 | [시스템 구조](docs/ARCHITECTURE.md), [데이터·평가 기준](docs/DATA_AND_VALIDATION.md) |
+| 코드·구조 설계 | [시스템 구조](docs/ARCHITECTURE.md), [코드 구성](docs/CODE_DESIGN.md), [첫 러너 세부 설계](docs/BENCHMARK_DETAIL_SPEC.md), [데이터·평가 기준](docs/DATA_AND_VALIDATION.md) |
 | 측정·녹화·운영 | [측정 절차](docs/MEASUREMENT_PROTOCOL.md), [데이터·평가 기준](docs/DATA_AND_VALIDATION.md) |
 | 논문 조사·검증 | [논문 안내](docs/LITERATURE_REVIEW.md), [침대 자세 논문](docs/BED_POSTURE_PAPERS.md), [스켈레톤 논문](docs/SKELETON_TECHNOLOGY_PAPERS.md)의 관련 항목 |
 

@@ -31,6 +31,7 @@
 - [x] MediaPipe·YOLO Pose·RTMPose 비교 계획 작성, MoveNet 대안 유지 ([실험 계획](docs/POSE_BENCHMARK_PLAN.md))
 - [x] 공통 관절 매핑·원본 출력 저장 **설계안** 작성 ([실험 계획](docs/POSE_BENCHMARK_PLAN.md))
 - [x] 첫 비교 러너의 모듈·입출력·실패·평가·검사 범위 제안 작성 ([코드 구성 설계](docs/CODE_DESIGN.md)); 코드·설치 환경은 미구현
+- [x] 첫 비교 러너의 필드·함수·상태·기록·평가 공식과 draft 스키마·가상 예시 작성 ([세부 설계](docs/BENCHMARK_DETAIL_SPEC.md)); 구현·SDK 지원 검증과 구분
 - [ ] 동일 입력을 재생해 프레임별 원본·공통 관절·실패를 기록하는 비교 러너 구현 및 테스트
 - [ ] 누움·옆누움·걸터앉음·이탈·복귀의 관절 품질 비교
 - [ ] 사람 검출 실패, 관절 누락·흔들림·연속 실패를 분리 기록

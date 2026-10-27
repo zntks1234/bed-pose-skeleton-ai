@@ -64,8 +64,25 @@ def main(argv=None):
     render.add_argument('--video', type=Path, required=True)
     render.add_argument('--output', type=Path, required=True)
     render.add_argument('--max-frames', type=int, default=None, help='Render only the first N frames; inference records remain unchanged')
+    live = commands.add_parser('live', help='Local camera preview, manual bed region and measurement records')
+    live_source = live.add_mutually_exclusive_group(required=True)
+    live_source.add_argument('--model', type=Path)
+    live_source.add_argument('--demo', action='store_true', help='Explicit synthetic input; no camera or real inference')
+    live.add_argument('--camera', type=int, default=0)
+    live.add_argument('--output-root', type=Path, default=Path('recordings/live'))
+    live_inspect = commands.add_parser('live-inspect', help='Verify the separate live measurement record contract')
+    live_inspect.add_argument('--run', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == 'live':
+            if args.camera < 0 or (args.demo and args.camera != 0):
+                raise ValueError('카메라 번호를 확인하세요. 합성 모드는 카메라 번호를 사용하지 않습니다.')
+            from .live_gui import launch_live
+            return launch_live(args.model, args.camera, args.output_root, args.demo)
+        if args.command == 'live-inspect':
+            from .live_recording import verify_live
+            print(json.dumps(verify_live(args.run), ensure_ascii=False))
+            return 0
         if args.command in ('evaluate', 'compare'):
             from .evaluation import evaluate_run, compare_runs
             path, report = (evaluate_run(args.run, args.scope) if args.command == 'evaluate' else

@@ -10,15 +10,23 @@ from .live_recording import verify_live
 
 
 class MeasurementGroup:
-    def __init__(self, members, root, max_skew_ns=None, targets=()):
+    def __init__(self, members, root, max_skew_ns=None, targets=(), plan=None):
+        from .measurement_plan import validate_plan
+        plan=validate_plan(plan)
         self.members = list(members)
         self.id = uuid.uuid4().hex
         self.directory = Path(root)/'groups'/self.id
         self.directory.mkdir(parents=True, exist_ok=False)
+        created=str(time.perf_counter_ns())
         self.data = {'schema_version':'group-0.1-draft', 'group_id':self.id,
-                     'phase':'starting', 'ledger_complete':False,
+                     'measurement_mode':'planned_single' if plan else 'free',
+                     'phase':'preparing' if plan else 'starting', 'ledger_complete':False,
+                     'created_perf_counter_ns':created,
+                     'operator_initial_confirmation_perf_counter_ns':created,
+                     'measurement_plan':dict(plan,status='preparing',preparation_started_perf_counter_ns=created,
+                         ready_perf_counter_ns=None,measurement_started_perf_counter_ns=None,measurement_stopped_perf_counter_ns=None) if plan else None,
                      'alignment_max_skew_ns':str(max_skew_ns) if max_skew_ns is not None else None,
-                     'requested_start_perf_counter_ns':str(time.perf_counter_ns()),
+                     'requested_start_perf_counter_ns':None if plan else created,
                      'requested_stop_perf_counter_ns':None,
                      'members':[{'input_id':s.id,'title':s.title,'run_directory':None,
                                  'started_ack_perf_counter_ns':None,'stopped_ack_perf_counter_ns':None} for s in members],
@@ -36,15 +44,48 @@ class MeasurementGroup:
         atomic_json(self.directory/'manifest.json', self.data)
 
     def start(self):
+        if self.data['measurement_plan'] is None:self._begin()
+
+    def _begin(self):
+        if self.finished or self.data['phase'] not in ('preparing','starting'):return
+        if any(s.state['closed'] or s.worker.stop_requested.is_set() or s.state['recording'] or s.state['pending'] or not s.state['region'] for s in self.members):
+            self.fail('PLAN_START_INPUT_UNAVAILABLE')
+            return
+        self.data['phase']='starting'
+        self.data['requested_start_perf_counter_ns']=str(time.perf_counter_ns())
+        if self.data['measurement_plan']:
+            self.data['measurement_plan']['status']='starting'
+        self.save()
         for session in self.members:
             session.state['pending']='start'
             session.worker.submit('start')
 
+    def ready(self,trigger='operator_ready'):
+        if self.finished or self.data['phase']!='preparing':raise ValueError('준비 중인 계획 측정이 없습니다.')
+        self.data['measurement_plan']['ready_trigger']=trigger
+        self.data['measurement_plan']['ready_perf_counter_ns']=str(time.perf_counter_ns())
+        self._begin()
+
+    def cancel(self,reason='user_cancelled'):
+        self.data['phase']='failed' if self.failed else 'cancelled'
+        self.data['measurement_plan'].update(status='cancelled_before_start',cancel_reason=reason,
+            cancelled_perf_counter_ns=str(time.perf_counter_ns()))
+        self.save();self.finished=True
+
     def stop(self, close_inputs=False):
         if self.finished or self._finalize_job is not None:return
+        if self.data['phase']=='preparing':
+            self.cancel('input_closed' if close_inputs else 'user_cancelled')
+            if close_inputs:
+                for session in self.members:session.worker.request_close()
+            return
         self.data['phase']='stopping'
+        if self.data['measurement_plan']:
+            self.data['measurement_plan'].setdefault('stop_trigger','group_error' if self.failed else 'input_ended' if close_inputs else 'operator_stop')
         if self.data['requested_stop_perf_counter_ns'] is None:
             self.data['requested_stop_perf_counter_ns']=str(time.perf_counter_ns())
+            if self.data['measurement_plan']:
+                self.data['measurement_plan']['measurement_stopped_perf_counter_ns']=self.data['requested_stop_perf_counter_ns']
         self.save()
         for session in self.members:
             if close_inputs:
@@ -59,10 +100,18 @@ class MeasurementGroup:
         if member['stopped_ack_perf_counter_ns'] is not None and kind in ('error','command_rejected'):
             return  # Preview errors after this member's interval do not rewrite its recording outcome.
         if kind=='started':
+            member['measurement_started_perf_counter_ns']=str(session.worker.engine.origin+int(value['started_ns']))
             member['run_directory']=value['directory']
             member['started_ack_perf_counter_ns']=str(time.perf_counter_ns())
             if all(m['run_directory'] for m in self.data['members']) and self.data['phase']=='starting':
                 self.data['phase']='recording'
+                if self.data['measurement_plan']:
+                    self.data['measurement_plan'].update(status='recording',measurement_started_perf_counter_ns=str(max(int(m['measurement_started_perf_counter_ns']) for m in self.data['members'])))
+            if self.data['measurement_plan'] and all(m['run_directory'] for m in self.data['members']):
+                plan=self.data['measurement_plan']
+                plan['measurement_started_perf_counter_ns']=str(max(int(m['measurement_started_perf_counter_ns']) for m in self.data['members']))
+                plan['stop_before_both_started']=bool(self.data['requested_stop_perf_counter_ns'] and
+                    int(self.data['requested_stop_perf_counter_ns'])<int(plan['measurement_started_perf_counter_ns']))
             self.save()
         elif kind=='target_selected':
             self.data.setdefault('target_reselections',[]).append({'input_id':session.id,
@@ -76,7 +125,7 @@ class MeasurementGroup:
             self.save()
         elif kind in ('error','command_rejected') and value.get('action')!='target_select':
             self.fail('MEMBER_'+kind.upper(),session.id)
-        elif kind in ('eof','closed') and self.data['phase'] in ('starting','recording'):
+        elif kind in ('eof','closed') and self.data['phase'] in ('preparing','starting','recording'):
             # One input ending also ends the partner interval.
             self.stop(close_inputs=True)
 
@@ -87,6 +136,16 @@ class MeasurementGroup:
 
     def tick(self):
         if self.finished:return
+        plan=self.data['measurement_plan']
+        if self.data['phase']=='preparing':
+            if any(s.state['closed'] or s.state['phase']=='closing' for s in self.members):self.fail('PLAN_INPUT_CLOSED')
+            elif plan['preparation_mode']=='timer' and time.perf_counter_ns()-int(plan['preparation_started_perf_counter_ns'])>=plan['preparation_seconds']*1e9:self.ready('timer_elapsed')
+            return
+        if self.data['phase']=='recording' and plan and plan['duration_seconds'] is not None:
+            if time.perf_counter_ns()-int(plan['measurement_started_perf_counter_ns'])>=plan['duration_seconds']*1e9:
+                plan['stop_trigger']='duration_elapsed'
+                self.stop()
+
         if self._finalize_job is not None:
             try:self.data=self._finalize_job.get_nowait()
             except queue.Empty:return
@@ -147,6 +206,8 @@ class MeasurementGroup:
         self.data['phase']='failed' if self.failed else 'completed'
         self.data['ledger_complete']=not any(e['code'] in ('MEMBER_NOT_STARTED','MEMBER_VERIFICATION_FAILED','ALIGNMENT_FAILED','FUSION_INPUT_FAILED') for e in self.data['errors'])
         self.data['finished_perf_counter_ns']=str(time.perf_counter_ns())
+        if self.data['measurement_plan']:
+            self.data['measurement_plan']['status']=self.data['phase']
         self.save()
         self.finished=True
 
@@ -160,4 +221,13 @@ class MeasurementGroup:
                 tracking=member.worker.engine.target_tracker.current()
                 observations.append({'input_id':member.id,'status':status if status=='input_unavailable' else tracking['status'] if tracking['status']!='not_configured' else status,
                                      'reason':tracking.get('reason'),'track_id':tracking.get('track_id')})
-        return dict(self.data,directory=str(self.directory),target_observations=observations)
+        progress={}
+        plan=self.data['measurement_plan']
+        if plan:
+            now=time.perf_counter_ns()
+            if self.data['phase']=='preparing' and plan['preparation_seconds'] is not None:
+                progress['preparation_remaining_seconds']=max(0,plan['preparation_seconds']-(now-int(plan['preparation_started_perf_counter_ns']))/1e9)
+            if plan['measurement_started_perf_counter_ns']:
+                end=plan['measurement_stopped_perf_counter_ns'] or str(now)
+                progress['measurement_elapsed_seconds']=max(0,(int(end)-int(plan['measurement_started_perf_counter_ns']))/1e9)
+        return dict(self.data,directory=str(self.directory),target_observations=observations,plan_progress=progress)

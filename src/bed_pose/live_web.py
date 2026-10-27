@@ -132,7 +132,7 @@ class WebWorkspace:
             if not capture:raise ValueError('대상 선택 창을 다시 여세요.')
             session=self.sessions[capture['input_id']]
             group=self.active_group(session.id)
-            if group is not None and group.data['phase']!='recording':raise ValueError('그룹 시작/정리 완료 후 대상을 지정하세요.')
+            if group is not None and group.data['phase'] not in ('preparing','recording'):raise ValueError('그룹 시작/정리 완료 후 대상을 지정하세요.')
             candidate=next((p for p in capture['people'] if p['candidate_id']==values.get('candidate_id')),None)
             if session.state['closed'] or candidate is None:raise ValueError('선택할 후보를 확인하세요.')
             from .target_tracking import TrackingConfig
@@ -156,7 +156,7 @@ class WebWorkspace:
                 if len({s.kind for s in members})!=1:
                     raise ValueError('카메라끼리 또는 영상 파일끼리 묶으세요.')
                 for session in members:
-                    if (session.state['closed'] or session.state['phase']=='closing' or session.state['pending']
+                    if (session.state['closed'] or session.worker.stop_requested.is_set() or session.state['phase']=='closing' or session.state['pending']
                             or session.state['recording'] or session.state['frame_id'] is None or not session.state['region']
                             or self.active_group(session.id)):
                         raise ValueError('두 입력의 연결과 침대 영역을 준비하고 개별 측정을 종료하세요.')
@@ -188,16 +188,19 @@ class WebWorkspace:
                                         'tracking_at_group_start':session.worker.engine.target_tracker.current()})
                 if values.get('tracking_required') is True and any(s.worker.engine.target_tracker.current()['status']!='tracking_provisional' for s in members):
                     raise ValueError('양쪽 대상을 다시 지정해 잠정 추적을 준비하세요.')
-                group=MeasurementGroup(members,self.output_root,None if tolerance is None else int(tolerance*1_000_000),targets=targets)
+                group=MeasurementGroup(members,self.output_root,None if tolerance is None else int(tolerance*1_000_000),targets=targets,plan=values.get('measurement_plan'))
                 self.groups[group.id]=group
                 try:group.start()
                 except Exception:
                     group.fail('START_DISPATCH_FAILED')
                     raise
                 return {'group_id':group.id}
+            if values['action']=='ready':
+                self.groups[values['group_id']].ready()
+                return {'accepted':True}
             if values['action']=='confirm_targets':
                 group=self.groups[values['group_id']]
-                if group.finished or group.data['phase']!='recording' or values.get('same_person_confirmed') is not True:
+                if group.finished or group.data['phase'] not in ('preparing','recording') or values.get('same_person_confirmed') is not True:
                     raise ValueError('측정 중 양쪽 대상을 확인하고 동일인 지정을 체크하세요.')
                 states=[member.worker.engine.target_tracker.current() for member in group.members]
                 if any(state['status']!='tracking_provisional' for state in states):

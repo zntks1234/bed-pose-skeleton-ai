@@ -43,7 +43,7 @@ recordings/live/groups/<group_id>/
 | bed_region_revision / bed_region | 해당 프레임에서 적용된 수동 영역 버전/좌표 |
 | joints | 추적 후보의 COCO17 관절. 대상 대응이 없으면 null |
 | posture_prediction | status=not_implemented, label=null |
-| target_posture / verified_gt / sensor_results | 각각 null. 운영자 동일인 지정은 자세 정답이 아님 |
+| target_posture / verified_gt / sensor_results | 계획 측정의 target_posture는 지시 목표, 자유 측정은 null. 정답/센서 결과는 null |
 
 식별자·해시·파일명은 추적 메타데이터이며 분류 특징으로 사용하도록 정의한 값이 아닙니다.
 
@@ -91,3 +91,5 @@ left/right는 코드상 입력 슬롯이며 해부학적 좌우가 아닙니다.
 생성 기록으로 입력 분리·누락/0/범위 밖 좌표·영역 없음·정렬 참조 완결성·재지정 전후 시간별 보류·파생 값 변조·백그라운드 정리 중 미리보기 지속과 CLI/브라우저를 검사합니다. 실제 카메라 정확도 실험이나 모델 학습이 아닙니다.
 
 향후 실제 두 카메라의 수신/촬영 시점 오차·추적 오류·촬영 배치 차이를 확인해야 합니다. 학습 전에는 확인된 자세 정답, 참가자/세션 단위 분할, 시점 순서/일반화 조건과 실제 입력 품질 기준이 필요합니다. 현재 입력 후보를 정답 라벨이 붙은 학습 데이터라고 취급하지 않습니다.
+
+계획 측정은 target_label_source=operator_instruction_not_ground_truth로 목표 출처를 보존합니다. 목표는 특징 계산/게이트/예측에 넣지 않으며 계획 메타데이터와 파생 행의 일관성을 검사합니다. [단일 자세 계획 측정](SINGLE_POSTURE_PLAN.md).

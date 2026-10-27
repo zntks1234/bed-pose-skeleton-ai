@@ -26,7 +26,7 @@ def confirmations(group):
     initial={t['input_id']:t.get('tracking_at_group_start',{}).get('track_id') for t in group.get('target_selections',[])}
     result=[]
     if group.get('same_person_assertion')=='operator_report_not_verified' and all(initial.get(i) for i in ids):
-        result.append((int(group['requested_start_perf_counter_ns']),initial))
+        result.append((int(group.get('operator_initial_confirmation_perf_counter_ns') or group['requested_start_perf_counter_ns']),initial))
     for event in group.get('target_pair_confirmations',[]):
         if event['assertion']!='operator_report_not_verified':raise IntegrityError('Unsupported identity assertion')
         tracks={m['input_id']:m['track_id'] for m in event['members']}
@@ -85,6 +85,13 @@ def iter_inputs(group,directory):
     if alignment['path']!='alignment.jsonl' or file_hash(directory/'alignment.jsonl')!=alignment['sha256']:
         raise IntegrityError('Alignment checksum mismatch')
     if len(group['members'])!=2:raise IntegrityError('Exactly two views required')
+    plan=group.get('measurement_plan')
+    if plan:
+        from .measurement_plan import validate_plan
+        validated=validate_plan({'goal_posture':plan['goal_posture'],'preparation_mode':plan['preparation_mode'],
+            'preparation_seconds':plan['preparation_seconds'] if plan['preparation_mode']=='timer' else 0,
+            'duration_seconds':plan['duration_seconds']})
+        if any(plan.get(key)!=value for key,value in validated.items()):raise IntegrityError('Plan instruction metadata mismatch')
     timeline=confirmations(group)
     with ExitStack() as stack:
         manifests=[];regions=[];streams=[];consumed=[0,0]
@@ -124,12 +131,15 @@ def iter_inputs(group,directory):
             elif aligned['status']=='unmatched' and sum(v is not None for v in views)==1:
                 reasons.append('unmatched_time')
             else:raise IntegrityError('Invalid alignment status/shape')
-            yield {'schema_version':SCHEMA,'group_id':group['group_id'],'alignment_id':index,
+            result={'schema_version':SCHEMA,'group_id':group['group_id'],'alignment_id':index,
                    'status':'held' if reasons else 'candidate_input','hold_reasons':reasons,
                    'views':views,'delta_ns':aligned['delta_ns'],'time_basis':'receive_time_approximation',
                    'exposure_synchronized':False,'identity_verified':False,'input_quality_status':'not_assessed',
                    'posture_prediction':{'status':'not_implemented','label':None},
-                   'target_posture':None,'verified_gt':None,'sensor_results':None}
+                   'target_posture':group.get('measurement_plan',{}).get('goal_posture') if group.get('measurement_plan') else None,
+                   'verified_gt':None,'sensor_results':None}
+            if group.get('measurement_plan'):result['target_label_source']='operator_instruction_not_ground_truth'
+            yield result
         if any(consumed[i]!=manifests[i]['recorded_frames'] or next(streams[i],None) is not None for i in range(2)):
             raise IntegrityError('Fusion input coverage mismatch')
 

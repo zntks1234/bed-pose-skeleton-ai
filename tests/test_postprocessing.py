@@ -96,7 +96,7 @@ class PostprocessingTests(unittest.TestCase):
 
     def test_corruption_invalidates_every_metric_and_cli_exit(self):
         run = self.execute()
-        with (run / 'keypoints.jsonl').open('a') as stream:
+        with (run / 'keypoints.jsonl').open('a', encoding='utf-8') as stream:
             stream.write('{}\n')
         report = build_evaluation(run)
         self.assertEqual(report['integrity'], 'invalid')
@@ -136,7 +136,7 @@ class PostprocessingTests(unittest.TestCase):
         self.assertEqual(report['runs'][2]['integrity'], 'invalid')
         self.assertFalse(report['runs'][1]['eligible_for_comparison'])
         self.assertNotEqual(report['runs'][0]['comparison_group'], report['runs'][3]['comparison_group'])
-        self.assertIn(str(missing), (out / 'report.md').read_text())
+        self.assertIn(str(missing), (out / 'report.md').read_text(encoding='utf-8'))
         self.assertFalse(missing.exists())
         with self.assertRaises(FileExistsError):
             compare_runs([good], out)
@@ -163,7 +163,7 @@ class PostprocessingTests(unittest.TestCase):
         for i in (1, 3, 4, 5):
             xml = ET.parse(output / catalog[i]['file'])
             self.assertEqual(xml.findall('.//s:circle', ns), [])
-            self.assertIn('SYNTHETIC', (output / catalog[i]['file']).read_text())
+            self.assertIn('SYNTHETIC', (output / catalog[i]['file']).read_text(encoding='utf-8'))
         with self.assertRaises(FileExistsError):
             render_overlay(self.video, run, output)
 

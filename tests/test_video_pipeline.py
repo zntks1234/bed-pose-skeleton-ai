@@ -38,7 +38,7 @@ class PipelineTests(unittest.TestCase):
         return run_benchmark(validate_run(self.config, options), adapter=adapter)
 
     def lines(self, path):
-        return [json.loads(line) for line in path.read_text().splitlines()]
+        return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()]
 
     def update_config(self, **changes):
         config = load_json(self.config)
@@ -168,7 +168,7 @@ class PipelineTests(unittest.TestCase):
             validate_run(self.config)
         atomic_json(self.config, original)
         frames = self.input.parent / 'frames.jsonl'
-        frames.write_text(frames.read_text() + '\n')
+        frames.write_text(frames.read_text(encoding='utf-8') + '\n', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'checksum'):
             validate_run(self.config)
 
@@ -189,13 +189,13 @@ class PipelineTests(unittest.TestCase):
     def test_tampered_reference_and_extra_raw_record_are_detected(self):
         path, _ = self.execute()
         raw_path = path / 'raw_results.jsonl'
-        original = raw_path.read_text()
-        raw_path.write_text(original + original.splitlines()[0] + '\n')
+        original = raw_path.read_text(encoding='utf-8')
+        raw_path.write_text(original + original.splitlines()[0] + '\n', encoding='utf-8')
         with self.assertRaises(IntegrityError):
             verify_records(path)
         with self.assertRaises(IntegrityError):
             verify_records(path, check_hashes=False)
-        raw_path.write_text(original)
+        raw_path.write_text(original, encoding='utf-8')
         frames_path = path / 'frame_results.jsonl'
         rows = self.lines(frames_path)
         rows[0]['raw_ref']['record_id'] = 'frame:999'
@@ -265,7 +265,7 @@ class PipelineTests(unittest.TestCase):
     def test_configuration_rejects_nonfinite_and_prediction_label_fields(self):
         bad = self.root / 'invalid.json'
         for text in ('{"value":1e999}', '{"value":NaN}'):
-            bad.write_text(text)
+            bad.write_text(text, encoding='utf-8')
             with self.assertRaises(ValueError):
                 load_json(bad)
         from jsonschema import ValidationError

@@ -166,7 +166,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(manifest['run_status'], 'succeeded')
         self.assertEqual(verify_records(directory), {'ok': 6, 'failed': 0, 'not_processed': 0})
         self.assertIsNone(manifest['testing_options'])
-        rows = (directory / 'frame_results.jsonl').read_text().splitlines()
+        rows = (directory / 'frame_results.jsonl').read_text(encoding='utf-8').splitlines()
         import json
         self.assertTrue(all(json.loads(row)['sdk_call_started'] for row in rows))
         self.assertEqual(self.tasks[-1].calls, [0, 40, 100, 140, 220, 260])
@@ -184,7 +184,7 @@ class AdapterTests(unittest.TestCase):
             directory, manifest = run_benchmark(validate_run(self.config))
         self.assertEqual(manifest['run_status'], 'failed')
         import json
-        row = json.loads((directory / 'frame_results.jsonl').read_text().splitlines()[0])
+        row = json.loads((directory / 'frame_results.jsonl').read_text(encoding='utf-8').splitlines()[0])
         self.assertTrue(row['sdk_call_started'])
         self.assertIsNotNone(row['raw_ref'])
         self.assertEqual(verify_records(directory), {'ok': 0, 'failed': 1, 'not_processed': 5})

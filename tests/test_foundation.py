@@ -14,7 +14,7 @@ class FoundationTests(unittest.TestCase):
     def test_duplicate_json(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'config.json'
-            path.write_text('{"x":1,"x":2}')
+            path.write_text('{"x":1,"x":2}', encoding='utf-8')
             with self.assertRaises(ValueError):
                 load_json(path)
 
@@ -27,7 +27,7 @@ class FoundationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 ledger.finalize('succeeded')
             ledger.finalize('failed')
-            state = json.loads((ledger.directory / 'manifest.json').read_text())
+            state = json.loads((ledger.directory / 'manifest.json').read_text(encoding='utf-8'))
             self.assertTrue(state['ledger_complete'])
             self.assertEqual(state['run_status'], 'failed')
 
@@ -38,5 +38,5 @@ class FoundationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 ledger.append(0, 'ok')
             ledger.close()
-            state = json.loads((ledger.directory / 'manifest.json').read_text())
+            state = json.loads((ledger.directory / 'manifest.json').read_text(encoding='utf-8'))
             self.assertFalse(state['ledger_complete'])

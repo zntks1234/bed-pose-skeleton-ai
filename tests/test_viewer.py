@@ -80,7 +80,7 @@ class ViewerTests(unittest.TestCase):
             image = svg.find('{http://www.w3.org/2000/svg}image')
             self.assertEqual(image.attrib['y'], '0')
             parser = PayloadParser()
-            parser.feed((output / 'index.html').read_text())
+            parser.feed((output / 'index.html').read_text(encoding='utf-8'))
             payload = json.loads(parser.payload)
             self.assertEqual(len(payload['frames']), 6)
             self.assertEqual(payload['frames'][2]['source_pts'], '100')

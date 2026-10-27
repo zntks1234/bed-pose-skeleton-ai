@@ -1,5 +1,8 @@
 """Two-input lifecycle, durable references and post-recording receive-time alignment."""
 from pathlib import Path
+import copy
+import queue
+import threading
 import time
 import uuid
 from .io_utils import atomic_json, file_hash, load_json
@@ -26,6 +29,7 @@ class MeasurementGroup:
                      'same_person_assertion':'operator_report_not_verified' if targets else None,
                      'posture_prediction':{'status':'not_implemented','label':None}}
         self.finished, self.failed = False, False
+        self._finalize_job=None
         self.save()
 
     def save(self):
@@ -37,7 +41,7 @@ class MeasurementGroup:
             session.worker.submit('start')
 
     def stop(self, close_inputs=False):
-        if self.finished:return
+        if self.finished or self._finalize_job is not None:return
         self.data['phase']='stopping'
         if self.data['requested_stop_perf_counter_ns'] is None:
             self.data['requested_stop_perf_counter_ns']=str(time.perf_counter_ns())
@@ -50,8 +54,10 @@ class MeasurementGroup:
                 session.worker.submit('stop')
 
     def message(self, session, kind, value):
-        if self.finished:return
+        if self.finished or self._finalize_job is not None:return
         member=next(m for m in self.data['members'] if m['input_id']==session.id)
+        if member['stopped_ack_perf_counter_ns'] is not None and kind in ('error','command_rejected'):
+            return  # Preview errors after this member's interval do not rewrite its recording outcome.
         if kind=='started':
             member['run_directory']=value['directory']
             member['started_ack_perf_counter_ns']=str(time.perf_counter_ns())
@@ -81,9 +87,31 @@ class MeasurementGroup:
 
     def tick(self):
         if self.finished:return
-        done=all(m['stopped_ack_perf_counter_ns'] is not None or s.state['closed']
-                 for s,m in zip(self.members,self.data['members']))
+        if self._finalize_job is not None:
+            try:self.data=self._finalize_job.get_nowait()
+            except queue.Empty:return
+            self.finished=True
+            self.failed=self.data['phase']=='failed'
+            return
+        done=all(m['stopped_ack_perf_counter_ns'] is not None or member.state['closed']
+                 for member,m in zip(self.members,self.data['members']))
         if not done:return
+        self.data['phase']='finalizing'
+        self.save()
+        self._finalize_job=queue.Queue(maxsize=1)
+        work=copy.copy(self)
+        work.data=copy.deepcopy(self.data)
+        def finalize():
+            try:work._finish_record()
+            except Exception as exc:
+                work.data.update(phase='failed',ledger_complete=False)
+                work.data['errors'].append({'code':'GROUP_FINALIZATION_FAILED','exception_type':type(exc).__name__})
+                try:work.save()
+                except Exception:pass
+            self._finalize_job.put(work.data)
+        threading.Thread(target=finalize,daemon=True).start()
+
+    def _finish_record(self):
         for session,member in zip(self.members,self.data['members']):
             directory=member['run_directory']
             if directory is None:
@@ -109,8 +137,15 @@ class MeasurementGroup:
                 self.failed=True
                 self.data['alignment_status']='failed'
                 self.data['errors'].append({'code':'ALIGNMENT_FAILED','exception_type':type(exc).__name__})
+        if not self.failed:
+            try:
+                from .fusion_inputs import build_inputs
+                self.data['fusion_inputs']=build_inputs(self.data,self.directory)
+            except Exception as exc:
+                self.failed=True
+                self.data['errors'].append({'code':'FUSION_INPUT_FAILED','exception_type':type(exc).__name__})
         self.data['phase']='failed' if self.failed else 'completed'
-        self.data['ledger_complete']=not any(e['code'] in ('MEMBER_NOT_STARTED','MEMBER_VERIFICATION_FAILED','ALIGNMENT_FAILED') for e in self.data['errors'])
+        self.data['ledger_complete']=not any(e['code'] in ('MEMBER_NOT_STARTED','MEMBER_VERIFICATION_FAILED','ALIGNMENT_FAILED','FUSION_INPUT_FAILED') for e in self.data['errors'])
         self.data['finished_perf_counter_ns']=str(time.perf_counter_ns())
         self.save()
         self.finished=True

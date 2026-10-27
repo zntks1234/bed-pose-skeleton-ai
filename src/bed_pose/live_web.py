@@ -131,6 +131,8 @@ class WebWorkspace:
             capture=self.target_tickets.get(values.get('ticket'))
             if not capture:raise ValueError('대상 선택 창을 다시 여세요.')
             session=self.sessions[capture['input_id']]
+            group=self.active_group(session.id)
+            if group is not None and group.data['phase']!='recording':raise ValueError('그룹 시작/정리 완료 후 대상을 지정하세요.')
             candidate=next((p for p in capture['people'] if p['candidate_id']==values.get('candidate_id')),None)
             if session.state['closed'] or candidate is None:raise ValueError('선택할 후보를 확인하세요.')
             from .target_tracking import TrackingConfig
@@ -395,15 +397,18 @@ class WebWorkspace:
                         self.sessions.pop(session.id, None)
                         self.target_tickets={k:v for k,v in self.target_tickets.items() if v['input_id']!=session.id}
 
-                for group in self.groups.values():
-                    try:group.tick()
-                    except Exception:
-                        group.failed=True
-                        group.data["phase"]="failed"
-                        group.data["ledger_complete"]=False
-                        group.data["errors"].append({"code":"GROUP_WRITE_FAILED"})
-                        group.finished=True
-                        for member in group.members:member.worker.request_close()
+                self._tick_groups()
+
+    def _tick_groups(self):
+        for group in self.groups.values():
+            try:group.tick()
+            except Exception:
+                group.failed=True
+                group.data["phase"]="failed"
+                group.data["ledger_complete"]=False
+                group.data["errors"].append({"code":"GROUP_WRITE_FAILED"})
+                group.finished=True
+                for member in group.members:member.worker.request_close()
 
     def view(self, session_id):
         with self.lock:
@@ -421,7 +426,11 @@ class WebWorkspace:
                 session.worker.join(timeout=.1)
         with self.lock:
             for session in sessions:self._refresh(session)
-            for group in self.groups.values():group.tick()
+            self._tick_groups()
+        while any(not group.finished for group in self.groups.values()):
+            with self.lock:
+                self._tick_groups()
+            time.sleep(.03)
         self.monitor_stop.set()
         self.monitor.join(timeout=2)
         self.temp.cleanup()

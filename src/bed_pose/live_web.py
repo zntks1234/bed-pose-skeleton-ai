@@ -243,11 +243,13 @@ class WebWorkspace:
         session.view = {'sequence': session.sequence, 'frame_id': row['stream_frame_id'],
                         'width': width, 'height': height, 'people': row['mapped_people'],
                         'candidate_count': row['candidate_count'],
+                        'inference_ms': (int(row['inference_finished_ns'])-int(row['inference_started_ns']))/1e6,
+                        'read_ms': (int(row['received_ns'])-int(row['read_started_ns']))/1e6,
                         'media_seconds': int(media['relative_time_ns'])/1e9 if media else None,
                         'image': 'data:image/jpeg;base64,'+base64.b64encode(encoded).decode('ascii')}
 
     def _monitor(self):
-        while not self.monitor_stop.wait(.04):
+        while not self.monitor_stop.wait(.015):
             with self.lock:
                 for session in list(self.sessions.values()):
                     try:

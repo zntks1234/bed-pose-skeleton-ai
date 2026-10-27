@@ -64,7 +64,7 @@ def main(argv=None):
     render.add_argument('--video', type=Path, required=True)
     render.add_argument('--output', type=Path, required=True)
     render.add_argument('--max-frames', type=int, default=None, help='Render only the first N frames; inference records remain unchanged')
-    live = commands.add_parser('live', help='Local camera preview, manual bed region and measurement records')
+    live = commands.add_parser('live', help='Browser workspace for cameras, videos and measurements')
     live_source = live.add_mutually_exclusive_group()
     live.add_argument('--model', type=Path)
     live_source.add_argument('--demo', action='store_true', help='Explicit synthetic input; no camera or real inference')

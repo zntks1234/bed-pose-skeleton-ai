@@ -1,4 +1,4 @@
-"""Native Tk preview and manual bed region controls; all inference stays in a worker."""
+"""Legacy Tk panel helpers. The public launcher now opens the HTML workspace."""
 import base64
 from pathlib import Path
 import queue
@@ -344,5 +344,5 @@ class LiveWindow:
 
 
 def launch_live(model=None, camera=None, output_root=Path('recordings/live'), demo=False, video=None):
-    from .live_app import launch_workspace
-    return launch_workspace(model, camera, output_root, demo, video)
+    from .live_web import launch_browser
+    return launch_browser(model, camera, output_root, demo, video)

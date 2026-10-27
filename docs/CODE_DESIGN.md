@@ -267,3 +267,8 @@ PCK는 평가 가능한 GT 관절에서 예측 누락·대상 미해결을 분�
 ## 입력 작업실 확장 · 2026-10-27
 
 `live_app.py`는 입력 선택·모델 파일 선택·탭/종료 관리를 맡습니다. `live_gui.py`는 각 입력의 영상·침대 영역·상태 카드·측정 조작을 맡고, 기존 엔진/어댑터를 입력마다 새로 생성합니다. `VideoFileSource`는 기존 PyAV 회전 정책과 PTS를 재사용하고 EOF와 오류를 분리합니다. 원본 미디어 시각·SDK 시각과 UI/처리 단조시계를 섞지 않습니다. 입력 간 대상/결과 결합은 없으며 [현재 구현 범위](LIVE_MEASUREMENT.md)를 참조합니다.
+
+
+## HTML 작업실 기본 진입 · 2026-10-27
+
+`live`의 launcher는 이제 `live_web.launch_browser`를 엽니다. `live_factory.py`가 Tk 없이 기존 소스/SDK/매핑을 생성하고, `WebWorkspace`가 입력별 Worker 메시지/결과·제어를 관리합니다. `WorkspaceHTTPServer`는 loopback만 사용하며 토큰·Host/Origin 검사, 로컬 파일 전달과 상태/화면 API를 제공합니다. `templates/live_workspace.html`은 별도 CDN 없이 CSS/JS를 포함하며 원본 좌표와 letterbox 변환으로 영역을 지정합니다. JPEG와 관절/프레임 ID는 한 응답에 묶고 저장은 화면 전달보다 먼저 수행합니다. 기존 Tk 모듈은 호환용으로 남으며 기본 경로에서 창을 생성하지 않습니다.

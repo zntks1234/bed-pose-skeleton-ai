@@ -1,4 +1,4 @@
-"""Synchronous, synthetic-only video benchmark orchestration."""
+"""Synchronous video benchmark orchestration with explicit adapter selection."""
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from time import perf_counter_ns
@@ -37,10 +37,16 @@ def validate_run(config_path, fake_options=None):
     if file_hash(config_path) != before:
         raise ValueError('Configuration changed while loading')
     requested.setdefault('warmup_frames', 0)
-    if config['adapter_id'] != 'fake':
-        raise ValueError('Only the synthetic fake adapter is implemented; no AI model is connected')
-    if config['assets'] or config['adapter_options_path'] is not None:
-        raise ValueError('Fake adapter does not load assets or external SDK options')
+    if config['adapter_id'] == 'fake':
+        if config['assets'] or config['adapter_options_path'] is not None:
+            raise ValueError('Fake adapter does not load assets or external SDK options')
+    elif config['adapter_id'] == 'mediapipe_pose':
+        from .pose.mediapipe import validated_options
+        validated_options(config)
+        if fake_options is not None and fake_options != FakeOptions():
+            raise ValueError('Fake test options cannot be applied to a real model')
+    else:
+        raise ValueError('This model adapter is not implemented')
     manifest, rows, video_path = validate_input(
         config['input_manifest_path'], config['input_manifest_sha256'])
     if config['warmup_frames'] > len(rows):
@@ -92,16 +98,23 @@ def _frame_row(spec, run_id, clock_id):
 
 
 def run_benchmark(run, adapter=None, source_factory=VideoSource):
-    adapter = adapter or FakeAdapter(run.fake_options)
+    if run.config['adapter_id'] == 'mediapipe_pose':
+        from .pose.mediapipe import MediaPipeAdapter, mapping_profile
+        adapter = adapter or MediaPipeAdapter()
+        profile = mapping_profile()
+        execution_kind = 'model_inference'
+    else:
+        adapter = adapter or FakeAdapter(run.fake_options)
+        profile = MappingProfile()
+        execution_kind = 'synthetic'
     run_id = uuid.uuid4().hex
     origin = perf_counter_ns()
     clock = lambda: perf_counter_ns() - origin
     clock_id = f'{run_id}:{os.getpid()}'
-    profile = MappingProfile()
     mapping_hash = object_hash(asdict(profile))
     directory = Path(run.config['output_root']) / run_id
     manifest = {'run_id': run_id, 'video_id': run.input_manifest['video_id'],
-                'execution_kind': 'synthetic', 'clock_id': clock_id,
+                'execution_kind': execution_kind, 'clock_id': clock_id,
                 'clock_origin_ns': str(origin), 'clock_function': 'perf_counter_ns',
                 'expected_frames': len(run.rows),
                 'width': run.input_manifest['canonical_width'],
@@ -109,7 +122,7 @@ def run_benchmark(run, adapter=None, source_factory=VideoSource):
                 'input_manifest_sha256': run.config['input_manifest_sha256'],
                 'requested_config': run.requested_config, 'resolved_config': run.config,
                 'config_sha256': object_hash(run.requested_config),
-                'testing_options': run.fake_options.as_dict(),
+                'testing_options': run.fake_options.as_dict() if execution_kind == 'synthetic' else None,
                 'mapping_profile': asdict(profile), 'mapping_profile_sha256': mapping_hash,
                 'adapter_profile': {}, 'adapter_profile_sha256': object_hash({}),
                 'code': _code_version(), 'environment': {
@@ -128,8 +141,9 @@ def run_benchmark(run, adapter=None, source_factory=VideoSource):
     try:
         init_start = clock()
         metadata = adapter.open(run.config)
-        if metadata.get('adapter_id') != 'fake' or metadata.get('execution_kind') != 'synthetic':
-            raise ValueError('Only a declared synthetic adapter can be used in this implementation')
+        if (metadata.get('adapter_id') != run.config['adapter_id'] or
+                metadata.get('execution_kind') != execution_kind):
+            raise ValueError('Adapter metadata does not match the requested execution')
         metadata = dict(metadata, execution_mode=run.config['execution_mode'])
         adapter_hash = object_hash(metadata)
         recorder.manifest.update(adapter_profile=metadata, adapter_profile_sha256=adapter_hash)
@@ -146,7 +160,9 @@ def run_benchmark(run, adapter=None, source_factory=VideoSource):
             finally:
                 warm_source.close()
             adapter.close()
-            adapter.open(run.config)
+            reopened_metadata = dict(adapter.open(run.config), execution_mode=run.config['execution_mode'])
+            if reopened_metadata != metadata:
+                raise ValueError('Adapter configuration changed after warm-up')
         warmup_end = clock()
         reset_start = clock()
         reset = adapter.reset_for_video()
@@ -173,6 +189,7 @@ def run_benchmark(run, adapter=None, source_factory=VideoSource):
                 row['model_timestamp_ms'] = str(timestamp) if timestamp is not None else None
                 row['timing']['adapter_start_ns'] = str(clock())
                 output = adapter.estimate(ModelInput(packet, timestamp))
+                row['sdk_call_started'] = output.sdk_call_started
                 if output.model_timestamp_ms != timestamp:
                     raise AdapterCallError('Adapter returned an inconsistent timestamp')
                 row['timing']['adapter_end_ns'] = str(clock())
@@ -202,7 +219,7 @@ def run_benchmark(run, adapter=None, source_factory=VideoSource):
                                'decode': 'DECODE_ERROR', 'inference': 'INFERENCE_ERROR',
                                'mapping': 'MAPPING_ERROR'}[stage],
                            error_message=type(exc).__name__,
-                           sdk_call_started=bool(getattr(exc, 'sdk_call_started', False)))
+                           sdk_call_started=row['sdk_call_started'] or bool(getattr(exc, 'sdk_call_started', False)))
                 outcome = 'cancelled' if cancelled else 'failed'
                 errors.append({'code': row['failure_code'], 'frame_id': row['frame_id'],
                                'exception_type': type(exc).__name__})

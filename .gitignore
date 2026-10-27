@@ -25,6 +25,7 @@ checkpoints/
 *.pth
 *.onnx
 *.tflite
+*.task
 *.log
 
 # Local Python build artifacts

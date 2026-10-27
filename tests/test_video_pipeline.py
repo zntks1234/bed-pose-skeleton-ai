@@ -237,7 +237,7 @@ class PipelineTests(unittest.TestCase):
                       assets=[{'role': 'weights', 'path': 'missing.task', 'sha256': '0' * 64}],
                       adapter_options_path='not-present.json', adapter_options_sha256='0' * 64)
         atomic_json(self.config, config)
-        with self.assertRaisesRegex(ValueError, 'Only the synthetic'):
+        with self.assertRaisesRegex(ValueError, 'pose_landmarker_task'):
             validate_run(self.config)
 
     def test_inspect_reports_missing_artifact_as_integrity_error(self):

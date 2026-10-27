@@ -12,6 +12,7 @@ class MappingProfile:
     expected_source_count: int = 17
     source_indices: tuple = tuple(range(17))
     image_block_id: str = 'image'
+    expected_source_names: tuple | None = None
 
     def __post_init__(self):
         if len(self.source_indices) != 17 or any(
@@ -72,6 +73,8 @@ def map_keypoints(output, width, height, profile=None):
             raise MappingError('Unexpected source joint definition/shape')
         if profile.source_joint_definition_id == 'coco17' and block['source_joint_names'] != list(COCO17):
             raise MappingError('Source joint order does not match COCO17')
+        if profile.expected_source_names is not None and block['source_joint_names'] != list(profile.expected_source_names):
+            raise MappingError('Source joint names do not match the mapping profile')
         matrix = _matrix(block, width, height)
         joints = []
         summary = {'finite_joint_count': 0, 'missing_joint_count': 0,

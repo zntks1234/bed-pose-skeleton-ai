@@ -1,4 +1,4 @@
-"""Commands for prepared video input and a synthetic-only benchmark."""
+"""Commands for prepared input, explicit adapters and result integrity."""
 import argparse
 import json
 from pathlib import Path
@@ -32,13 +32,13 @@ def _summary(path, manifest):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Video pipeline checks. Only a synthetic fake adapter is implemented.')
+    parser = argparse.ArgumentParser(description='Prepared-video pose benchmark and synthetic pipeline checks.')
     commands = parser.add_subparsers(dest='command', required=True)
     prepare = commands.add_parser('prepare', help='Decode a video and fix its frame/PTS manifest')
     prepare.add_argument('--video', type=Path, required=True)
     prepare.add_argument('--output', type=Path, required=True)
     prepare.add_argument('--run-output-root', type=Path, default=None)
-    run = commands.add_parser('run', help='Run the synthetic adapter on prepared video frames')
+    run = commands.add_parser('run', help='Run the configured adapter on prepared video frames')
     run.add_argument('--config', type=Path, required=True)
     _testing_args(run)
     demo = commands.add_parser('demo', help='Generate a nonhuman test video and run the synthetic adapter')
@@ -46,8 +46,20 @@ def main(argv=None):
     _testing_args(demo)
     inspect = commands.add_parser('inspect', help='Verify result hashes, frame identities and record references')
     inspect.add_argument('--run', type=Path, required=True)
+    configure = commands.add_parser('configure-mediapipe', help='Create a hashed MediaPipe config; does not download models')
+    configure.add_argument('--config', type=Path, required=True)
+    configure.add_argument('--model', type=Path, required=True)
+    configure.add_argument('--output', type=Path, required=True)
+    configure.add_argument('--num-poses', type=int, default=1)
+    configure.add_argument('--execution-mode', choices=('independent_frames', 'ordered_sequence'), default='independent_frames')
     args = parser.parse_args(argv)
     try:
+        if args.command == 'configure-mediapipe':
+            from .pose.mediapipe import prepare_configuration
+            path = prepare_configuration(args.config, args.model, args.output,
+                        execution_mode=args.execution_mode, num_poses=args.num_poses)
+            print(json.dumps({'config': str(path)}, ensure_ascii=False))
+            return 0
         if args.command == 'prepare':
             path = prepare_input(args.video, args.output, args.run_output_root)
             print(json.dumps({'input_manifest': str(path), 'sha256': file_hash(path),

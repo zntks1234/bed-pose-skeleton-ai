@@ -1,4 +1,4 @@
-"""Two-input lifecycle and durable references; no alignment or posture fusion yet."""
+"""Two-input lifecycle, durable references and post-recording receive-time alignment."""
 from pathlib import Path
 import time
 import uuid
@@ -7,18 +7,19 @@ from .live_recording import verify_live
 
 
 class MeasurementGroup:
-    def __init__(self, members, root):
+    def __init__(self, members, root, max_skew_ns=None):
         self.members = list(members)
         self.id = uuid.uuid4().hex
         self.directory = Path(root)/'groups'/self.id
         self.directory.mkdir(parents=True, exist_ok=False)
         self.data = {'schema_version':'group-0.1-draft', 'group_id':self.id,
                      'phase':'starting', 'ledger_complete':False,
+                     'alignment_max_skew_ns':str(max_skew_ns) if max_skew_ns is not None else None,
                      'requested_start_perf_counter_ns':str(time.perf_counter_ns()),
                      'requested_stop_perf_counter_ns':None,
                      'members':[{'input_id':s.id,'title':s.title,'run_directory':None,
                                  'started_ack_perf_counter_ns':None,'stopped_ack_perf_counter_ns':None} for s in members],
-                     'errors':[], 'alignment_status':'not_implemented',
+                     'errors':[], 'alignment_status':'pending_until_stop' if max_skew_ns is not None else 'not_implemented',
                      'target_association_status':'not_configured',
                      'posture_prediction':{'status':'not_implemented','label':None}}
         self.finished, self.failed = False, False
@@ -91,8 +92,17 @@ class MeasurementGroup:
             except Exception as exc:
                 self.failed=True
                 self.data['errors'].append({'code':'MEMBER_VERIFICATION_FAILED','input_id':session.id,'exception_type':type(exc).__name__})
+        if not self.failed and self.data['alignment_max_skew_ns'] is not None:
+            try:
+                from .time_alignment import align_group
+                self.data['alignment']=align_group(self.data['members'],self.directory,int(self.data['alignment_max_skew_ns']))
+                self.data['alignment_status']=self.data['alignment']['status']
+            except Exception as exc:
+                self.failed=True
+                self.data['alignment_status']='failed'
+                self.data['errors'].append({'code':'ALIGNMENT_FAILED','exception_type':type(exc).__name__})
         self.data['phase']='failed' if self.failed else 'completed'
-        self.data['ledger_complete']=not any(e['code'] in ('MEMBER_NOT_STARTED','MEMBER_VERIFICATION_FAILED') for e in self.data['errors'])
+        self.data['ledger_complete']=not any(e['code'] in ('MEMBER_NOT_STARTED','MEMBER_VERIFICATION_FAILED','ALIGNMENT_FAILED') for e in self.data['errors'])
         self.data['finished_perf_counter_ns']=str(time.perf_counter_ns())
         self.save()
         self.finished=True

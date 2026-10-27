@@ -56,3 +56,33 @@ class GroupTests(unittest.TestCase):
         self.assertEqual(len(state['sessions']),1)
         self.assertTrue(state['sessions'][0]['closed'])
         self.assertTrue(state['groups'][0]['ledger_complete'])
+
+    def test_group_alignment_full_record_coverage(self):
+        ids=self.prepare_pair()
+        status,value=self.request('/api/group',{'action':'start','inputs':ids,'max_skew_ms':30})
+        self.assertEqual(status,200)
+        self.wait(lambda x:x['groups'][0]['phase']=='recording' and all(s['recorded_frames']>=3 for s in x['sessions']))
+        self.request('/api/group',{'action':'stop','group_id':value['group_id']})
+        group=self.wait(lambda x:x['groups'][0]['phase']=='completed')['groups'][0]
+        result=group['alignment']
+        self.assertEqual(result['status'],'receive_time_approximation')
+        self.assertFalse(result['exposure_synchronized'])
+        rows=[__import__('json').loads(line) for line in (Path(group['directory'])/'alignment.jsonl').read_text(encoding='utf-8').splitlines()]
+        for side,member in zip(('left','right'),group['members']):
+            references=[row[side]['frame_id'] for row in rows if row[side] is not None]
+            count=load_json(Path(member['run_directory'])/'manifest.json')['recorded_frames']
+            self.assertEqual(sorted(references),list(range(count)))
+        self.assertEqual(group['posture_prediction']['status'],'not_implemented')
+
+    def test_file_group_requires_verified_media_offset(self):
+        from test_input_workspace import make_video
+        video=self.root/'pair.mkv';make_video(video)
+        asset=self.workspace.register_asset(video,'video',video.name)
+        ids=[self.workspace.add({'kind':'video_file','video_asset':asset['asset_id']})['id'] for _ in range(2)]
+        self.wait(lambda x:all(s['frame_id'] is not None for s in x['sessions']))
+        for sid in ids:self.control(sid,'region',box=[1,1,150,100],selected_frame_id=0)
+        self.wait(lambda x:all(s['region'] is not None for s in x['sessions']))
+        self.request('/api/group',{'action':'start','inputs':ids,'max_skew_ms':30})
+        group=self.wait(lambda x:x['groups'][0]['phase']=='completed')['groups'][0]
+        self.assertEqual(group['alignment_status'],'blocked_media_offset_required')
+        self.assertFalse((Path(group['directory'])/'alignment.jsonl').exists())

@@ -126,7 +126,10 @@ class WebWorkspace:
                             or session.state['recording'] or session.state['frame_id'] is None or not session.state['region']
                             or self.active_group(session.id)):
                         raise ValueError('두 입력의 연결과 침대 영역을 준비하고 개별 측정을 종료하세요.')
-                group=MeasurementGroup(members,self.output_root)
+                tolerance=values.get('max_skew_ms')
+                if tolerance is not None and (type(tolerance) not in (int,float) or not math.isfinite(tolerance) or tolerance<0 or not math.isfinite(tolerance*1_000_000)):
+                    raise ValueError('허용 시간 차이에 0 이상의 유한한 ms 값을 입력하세요.')
+                group=MeasurementGroup(members,self.output_root,None if tolerance is None else int(tolerance*1_000_000))
                 self.groups[group.id]=group
                 try:group.start()
                 except Exception:

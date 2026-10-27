@@ -132,3 +132,69 @@ class FusionTests(unittest.TestCase):
             finally:release.set()
             group=self.wait(lambda x:x['groups'][0]['phase']=='completed')['groups'][0]
         self.assertEqual(inspect_group(group['directory'])['integrity'],'verified')
+
+    def test_remove_during_finalization_closes_inputs_and_preserves_artifacts(self):
+        import threading
+        from unittest.mock import patch
+        ids,gid=self.start_pair()
+        entered=threading.Event();release=threading.Event()
+        def delayed(group,root):
+            entered.set();release.wait(timeout=5)
+            return build_inputs(group,root)
+        with patch('bed_pose.fusion_inputs.build_inputs',side_effect=delayed):
+            self.request('/api/group',{'action':'stop','group_id':gid})
+            try:
+                self.assertTrue(entered.wait(timeout=3))
+                self.assertEqual(self.control(ids[0],'remove')[0],200)
+                state=self.wait(lambda x:len(x['sessions'])==1 and x['sessions'][0]['closed'])
+                self.assertEqual(state['groups'][0]['phase'],'finalizing')
+            finally:release.set()
+            group=self.wait(lambda x:x['groups'][0]['phase']=='completed')['groups'][0]
+        self.assertEqual(inspect_group(group['directory'])['integrity'],'verified')
+
+    def test_group_region_change_clear_and_restore_recorded(self):
+        ids,gid=self.start_pair();sid=ids[0]
+        def change(box):
+            selected=self.workspace.sessions[sid].state['frame_id']
+            self.assertEqual(self.control(sid,'region',box=box,selected_frame_id=selected)[0],200)
+            self.wait(lambda x:x['sessions'][0]['pending'] is None)
+            count=self.workspace.sessions[sid].state['recorded_frames']
+            self.wait(lambda x:x['sessions'][0]['recorded_frames']>=count+2)
+        change([10,10,150,150]);change(None);change([20,20,180,180])
+        root,group,rows=self.finish(gid)
+        self.assertTrue(any('left:bed_region_missing' in r['hold_reasons'] for r in rows))
+        revisions={r['views'][0]['bed_region_revision'] for r in rows if r['views'][0]}
+        self.assertGreaterEqual(len(revisions),3)
+        self.assertEqual(inspect_group(root)['integrity'],'verified')
+
+    def test_bed_coordinate_availability_and_membership_are_independent(self):
+        _,gid=self.start_pair();_,group,_=self.finish(gid)
+        source=Path(group['members'][0]['run_directory']);manifest=load_json(source/'manifest.json')
+        row=json.loads((source/'live_frames.jsonl').read_text(encoding='utf-8').splitlines()[0])
+        person=next(p for p in row['mapped_people'] if p['candidate_id']==row['target_tracking']['candidate_id'])
+        points=[(50,50),(250,250),(10,10),(100,100),(-5,50)]
+        for joint,(x,y) in zip(person['joints'],points):joint.update(availability='predicted',x_px=x,y_px=y,flags=[])
+        person['joints'][5].update(availability='missing',x_px=None,y_px=None,reason='not_output')
+        region={'x1':10,'y1':10,'x2':100,'y2':100}
+        joints=view_features(row,manifest,{row['bed_region_revision']:region},'test')['joints']
+        self.assertEqual([j['inside_bed'] for j in joints[:6]],[True,False,True,True,False,None])
+        self.assertTrue(joints[1]['bed_mask']);self.assertGreater(joints[1]['bed_xy'][0],1)
+        self.assertFalse(joints[4]['bed_mask'])
+        missing=view_features(row,manifest,{row['bed_region_revision']:None},'test')['joints']
+        self.assertTrue(all(j['inside_bed'] is None and not j['bed_mask'] for j in missing))
+
+    def test_legacy_two_view_records_still_verify(self):
+        from bed_pose.fusion_inputs import LEGACY_SCHEMA,LEGACY_POLICY
+        from bed_pose.io_utils import object_hash
+        _,gid=self.start_pair();root,group,rows=self.finish(gid)
+        for row in rows:
+            row['schema_version']=LEGACY_SCHEMA
+            for view in row['views']:
+                if view and view['joints']:
+                    for joint in view['joints']:joint.pop('inside_bed')
+        path=root/'fusion_inputs.jsonl';path.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
+        manifest=load_json(root/'manifest.json')
+        manifest['fusion_inputs'].update(schema_version=LEGACY_SCHEMA,policy=LEGACY_POLICY,
+            policy_sha256=object_hash(LEGACY_POLICY),sha256=file_hash(path))
+        atomic_json(root/'manifest.json',manifest)
+        self.assertEqual(inspect_group(root)['integrity'],'verified')

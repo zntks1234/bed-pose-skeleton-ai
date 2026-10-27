@@ -77,3 +77,12 @@ class PlanTests(unittest.TestCase):
         self.assertTrue(group.finished)
         self.assertEqual(group.data['phase'],'cancelled')
         self.assertTrue(all(m['run_directory'] is None for m in group.data['members']))
+
+    def test_region_edit_during_preparation_and_missing_region_blocks_start(self):
+        ids,gid=self.start_plan()
+        sid=ids[0];frame=self.workspace.sessions[sid].state['frame_id']
+        self.assertEqual(self.control(sid,'region',box=None,selected_frame_id=frame)[0],200)
+        self.wait(lambda x:x['sessions'][0]['pending'] is None and x['sessions'][0]['region'] is None)
+        self.request('/api/group',{'action':'ready','group_id':gid})
+        self.wait(lambda x:x['groups'][0]['phase']=='failed')
+        self.assertTrue(all(m['run_directory'] is None for m in self.workspace.groups[gid].data['members']))

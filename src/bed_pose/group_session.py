@@ -73,7 +73,12 @@ class MeasurementGroup:
         self.save();self.finished=True
 
     def stop(self, close_inputs=False):
-        if self.finished or self._finalize_job is not None:return
+        if self.finished:return
+        if self._finalize_job is not None:
+            # Closing devices must remain possible while immutable records finalize.
+            if close_inputs:
+                for session in self.members:session.worker.request_close()
+            return
         if self.data['phase']=='preparing':
             self.cancel('input_closed' if close_inputs else 'user_cancelled')
             if close_inputs:

@@ -8,13 +8,17 @@ from .io_utils import load_json, strict_loads, json_text, file_hash, object_hash
 from .joint_inspection import inspect_joints
 from .live_recording import verify_live
 
-SCHEMA='two-view-input-0.1-draft'
-POLICY={'method':'separate_view_features_v1','identity_verified':False,
+LEGACY_SCHEMA='two-view-input-0.1-draft'
+SCHEMA='two-view-input-0.2-draft'
+LEGACY_POLICY={'method':'separate_view_features_v1','identity_verified':False,
         'normalization':'image_dimensions_and_manual_bed_rectangle',
         'missing_value_policy':'null_with_masks','joint_definition':'coco17',
         'bed_coordinate_units':'dimensionless_image_rectangle_not_metric_or_perspective_rectified','body_normalization':'not_configured',
         'coordinate_fusion':'none','view_order':'group_member_order_not_anatomical_left_right','posture_classifier':'not_implemented'}
 
+POLICY=dict(LEGACY_POLICY,method='separate_view_features_v2',
+            bed_mask_meaning='in_image_coordinate_and_reference_rectangle_available',
+            inside_bed_meaning='rectangle_membership_including_boundary_null_if_unavailable')
 
 def next_json(stream):
     try:return strict_loads(next(stream))
@@ -65,7 +69,9 @@ def view_features(row,manifest,regions,input_id):
                 image_mask=bool(inside),
                 bed_xy=[(joint['x_px']-region['x1'])/(region['x2']-region['x1']),
                         (joint['y_px']-region['y1'])/(region['y2']-region['y1'])] if numeric and region else [None,None],
-                bed_mask=bool(inside and region)))
+                bed_mask=bool(inside and region),
+                inside_bed=bool(region['x1']<=joint['x_px']<=region['x2'] and
+                                region['y1']<=joint['y_px']<=region['y2']) if numeric and region else None))
         if not any(j['image_mask'] for j in features):reasons.append('no_in_image_joints')
     elif tracking['status']=='tracking_provisional':reasons.append('tracked_candidate_missing')
     return {'input_id':input_id,'measurement_id':manifest['measurement_id'],'frame_id':row['frame_id'],
@@ -78,7 +84,7 @@ def view_features(row,manifest,regions,input_id):
             'identity_verified':False,'input_quality_status':'not_assessed'}
 
 
-def iter_inputs(group,directory):
+def iter_inputs(group,directory,*,legacy=False):
     directory=Path(directory)
     alignment=group['alignment']
     if alignment['status']!='receive_time_approximation':raise IntegrityError('Unsupported alignment time basis')
@@ -118,6 +124,8 @@ def iter_inputs(group,directory):
                     raise IntegrityError('Alignment source reference mismatch')
                 consumed[side]+=1
                 view=view_features(row,manifest,regions[side],group['members'][side]['input_id'])
+                if legacy and view['joints'] is not None:
+                    for joint in view['joints']:joint.pop('inside_bed')
                 views.append(view);reasons.extend(key+':'+r for r in view['hold_reasons'])
             if aligned['status']=='matched':
                 if any(v is None for v in views):raise IntegrityError('Matched row missing a view')
@@ -131,7 +139,7 @@ def iter_inputs(group,directory):
             elif aligned['status']=='unmatched' and sum(v is not None for v in views)==1:
                 reasons.append('unmatched_time')
             else:raise IntegrityError('Invalid alignment status/shape')
-            result={'schema_version':SCHEMA,'group_id':group['group_id'],'alignment_id':index,
+            result={'schema_version':LEGACY_SCHEMA if legacy else SCHEMA,'group_id':group['group_id'],'alignment_id':index,
                    'status':'held' if reasons else 'candidate_input','hold_reasons':reasons,
                    'views':views,'delta_ns':aligned['delta_ns'],'time_basis':'receive_time_approximation',
                    'exposure_synchronized':False,'identity_verified':False,'input_quality_status':'not_assessed',
@@ -170,12 +178,15 @@ def _inspect_group(directory):
     result=group.get('fusion_inputs',{})
     if result.get('status')!='generated':
         raise IntegrityError('No generated two-view input artifact')
+    legacy=result.get('schema_version')==LEGACY_SCHEMA
+    if result.get('schema_version') not in (LEGACY_SCHEMA,SCHEMA):raise IntegrityError('Unsupported fusion schema')
+    policy=LEGACY_POLICY if legacy else POLICY
     if (result['path']!='fusion_inputs.jsonl' or file_hash(directory/result['path'])!=result['sha256']
-            or result['policy']!=POLICY or object_hash(result['policy'])!=result['policy_sha256']):
+            or result['policy']!=policy or object_hash(result['policy'])!=result['policy_sha256']):
         raise IntegrityError('Fusion input artifact/policy checksum mismatch')
     counts=Counter(candidate_input=0,held=0);reasons=Counter()
     with (directory/result['path']).open(encoding='utf-8') as stream:
-        for expected in iter_inputs(group,directory):
+        for expected in iter_inputs(group,directory,legacy=legacy):
             actual=next_json(stream)
             if actual!=expected:raise IntegrityError('Two-view feature/reference mismatch')
             counts[actual['status']]+=1;reasons.update(actual['hold_reasons'])

@@ -230,7 +230,8 @@ class WebWorkspace:
                     session.remove=action=='remove'
                     group.stop(close_inputs=True)
                     return
-                raise ValueError('그룹 측정 중입니다. 그룹 종료 버튼을 사용하세요.')
+                if action!='region' or group.data['phase'] not in ('preparing','recording'):
+                    raise ValueError('그룹 측정 중입니다. 그룹 종료 버튼을 사용하세요.')
             if action in ('close', 'remove'):
                 session.remove = action == 'remove'
                 if session.remove and state['closed']:

@@ -254,3 +254,5 @@ PCK는 평가 가능한 GT 관절에서 예측 누락·대상 미해결을 분�
 현재 `pose/mediapipe.py`는 선택 의존성 어댑터로 구현했습니다. SDK 경계 검사와 유효 모델 추론 등록 게이트는 별개이며, [구현 범위·공식 자료·미검증 조건](MEDIAPIPE_ADAPTER.md)을 따릅니다.
 
 `evaluation.py`의 현재 함수는 `evaluate_run(run_dir, scope)`와 `compare_runs(run_dirs, output, scope)`이며 GT 입력은 아직 지원하지 않습니다. `rendering.py`는 원본 영상 재검증 후 프레임별 SVG/HTML을 생성합니다. 설계의 전체 GT·연속 누락·떨림 평가와 동영상 출력까지 구현한 것은 아닙니다. [현재 범위](POSTPROCESSING.md).
+
+화면 템플릿은 `templates/viewer.html`, 안전한 단일 HTML 조립은 `viewer.py`에서 담당합니다. SVG는 원본 이미지 기하를 유지하고 표시 정보는 별도 패널에 둡니다. 템플릿도 패키지와 실행 코드 내용 해시에 포함합니다.

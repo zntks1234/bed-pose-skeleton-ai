@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bed-pose-benchmark"
-version = "0.4.0"
+version = "0.4.1"
 description = "Foundations for reproducible bed pose benchmarks"
 requires-python = ">=3.11"
 dependencies = ["jsonschema>=4.18,<5", "numpy>=1.26,<3", "av==18.1.0"]
@@ -16,4 +16,4 @@ mediapipe = ["mediapipe==0.10.35"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-bed_pose = ["schemas/*.json"]
+bed_pose = ["schemas/*.json", "templates/*.html"]

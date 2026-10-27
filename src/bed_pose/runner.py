@@ -63,7 +63,7 @@ def _code_version():
     package = Path(__file__).resolve().parent
     source_files = {str(path.relative_to(package)): file_hash(path)
                     for path in sorted(package.rglob('*'))
-                    if path.is_file() and path.suffix in ('.py', '.json')}
+                    if path.is_file() and path.suffix in ('.py', '.json', '.html')}
     result = {'revision': None, 'dirty': None,
               'source_sha256': object_hash(source_files), 'source_files': source_files}
     try:

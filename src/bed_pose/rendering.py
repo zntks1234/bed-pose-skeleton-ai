@@ -14,7 +14,7 @@ EDGES = ((0, 1), (0, 2), (1, 3), (2, 4), (5, 6), (5, 7), (7, 9),
          (6, 8), (8, 10), (5, 11), (6, 12), (11, 12), (11, 13),
          (13, 15), (12, 14), (14, 16))
 COLORS = ('#00ffb3', '#ffbf00', '#90b7ff', '#ff81e3')
-BANNER = 88
+BANNER = 0  # Compatibility constant; metadata no longer occupies the image geometry.
 
 
 def png_bytes(rgb):
@@ -31,21 +31,20 @@ def png_bytes(rgb):
 
 def frame_svg(packet, row, mapped, execution_kind, run_status):
     width, height = packet.width, packet.height
-    canvas_width = max(width, 640)
-    stamp = f"{row['source_pts']} x {row['time_base_num']}/{row['time_base_den']} s" if row['source_pts'] is not None else 'unavailable'
     synthetic = execution_kind == 'synthetic'
-    label = 'SYNTHETIC - NOT AI INFERENCE' if synthetic else 'MODEL PREDICTIONS - NOT VERIFIED GT'
-    text = [label,
-            f"run={run_status} frame={row['frame_id']} status={row['processing_status']} candidates={row['candidate_count']} PTS={stamp}",
-            f"target=not_configured failure={row['failure_code']} | IDs are frame-local; lines do not certify quality"]
-    elements = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{canvas_width}" height="{height + BANNER}" viewBox="0 0 {canvas_width} {height + BANNER}">',
-                f'<rect width="100%" height="100%" fill="#151515"/>',
-                f'<image x="0" y="{BANNER}" width="{width}" height="{height}" href="data:image/png;base64,{base64.b64encode(png_bytes(packet.rgb)).decode()}"/>']
-    for index, value in enumerate(text):
-        elements.append(f'<text x="8" y="{20 + index * 24}" fill="{("#ffb0b0" if synthetic else "white")}" font-size="14" font-family="sans-serif">{escape(value)}</text>')
+    label = 'SYNTHETIC' if synthetic else 'MODEL OUTPUT'
+    description = (f"{execution_kind}; run={run_status}; frame={row['frame_id']}; "
+                   f"status={row['processing_status']}; candidates={row['candidate_count']}; "
+                   f"PTS={row['source_pts']} x {row['time_base_num']}/{row['time_base_den']}; "
+                   f"failure={row['failure_code']}; target=not_configured; not verified GT")
+    elements = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" preserveAspectRatio="xMidYMid meet">',
+                f'<title>{escape(description)}</title>',
+                f'<image x="0" y="0" width="{width}" height="{height}" href="data:image/png;base64,{base64.b64encode(png_bytes(packet.rgb)).decode()}"/>',
+                '<g id="pose-layer">']
+    radius = min(width, height) / 120
     for index, person in enumerate(mapped['people'] if mapped else []):
         color = COLORS[index % len(COLORS)]
-        points = {j: (joint['x_px'], joint['y_px'] + BANNER)
+        points = {j: (joint['x_px'], joint['y_px'])
                   for j, joint in enumerate(person['joints'])
                   if joint['availability'] == 'predicted' and
                   0 <= joint['x_px'] < width and 0 <= joint['y_px'] < height}
@@ -53,9 +52,14 @@ def frame_svg(packet, row, mapped, execution_kind, run_status):
             if a in points and b in points:
                 x1, y1 = points[a]
                 x2, y2 = points[b]
-                elements.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="2"/>')
+                elements.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="2" vector-effect="non-scaling-stroke"/>')
         for j, (x, y) in points.items():
-            elements.append(f'<circle cx="{x}" cy="{y}" r="3" fill="{color}"><title>{escape(person["candidate_id"])} joint={j}</title></circle>')
+            elements.append(f'<circle cx="{x}" cy="{y}" r="{radius}" fill="{color}" stroke="#0c1420" stroke-width="{radius / 4}"><title>{escape(person["candidate_id"])} joint={j}</title></circle>')
+    elements.append('</g>')
+    font_size = min(width, height) / 32
+    badge_width, badge_height = (len(label) * 0.65 + 2) * font_size, font_size * 1.8
+    x, y = width - badge_width - font_size, font_size
+    elements.append(f'<g id="source-kind"><rect x="{x}" y="{y}" width="{badge_width}" height="{badge_height}" rx="{font_size / 3}" fill="#101c2e" opacity="0.9"/><text x="{x + font_size}" y="{y + font_size * 1.25}" fill="white" font-size="{font_size}" font-family="sans-serif">{label}</text></g>')
     return '\n'.join(elements) + '\n</svg>\n'
 
 
@@ -69,7 +73,7 @@ def render_overlay(video_path, run_dir, output):
     atomic_json(output / 'manifest.json', {'complete': False, 'run_id': manifest['run_id']})
     mapped = {row['frame_id']: row for row in bundle['keypoints']}
     decoder = VideoSource(source, bundle['input_frames'], video_path)
-    hashes, catalog = {}, []
+    hashes, catalog, svg_frames = {}, [], []
     try:
         decoder.open()
         for row in bundle['frames']:
@@ -77,24 +81,27 @@ def render_overlay(video_path, run_dir, output):
             if packet is None:
                 raise SourceError('Render source ended before recorded frames')
             name = f"frame_{row['frame_id']:08d}.svg"
-            (output / name).write_text(frame_svg(packet, row, mapped.get(row['frame_id']),
-                                                manifest['execution_kind'], manifest['run_status']), encoding='utf-8')
+            svg = frame_svg(packet, row, mapped.get(row['frame_id']), manifest['execution_kind'], manifest['run_status'])
+            (output / name).write_text(svg, encoding='utf-8')
+            svg_frames.append(svg)
+            people = mapped.get(row['frame_id'], {}).get('people', [])
+            drawable_count = sum(j['availability'] == 'predicted' and
+                                 0 <= j['x_px'] < packet.width and 0 <= j['y_px'] < packet.height
+                                 for person in people for j in person['joints'])
             hashes[name] = file_hash(output / name)
             catalog.append({'file': name, **{k: row[k] for k in ('frame_id', 'source_pts', 'time_base_num',
                 'time_base_den', 'source_duration_pts', 'timestamp_source',
-                'processing_status', 'candidate_count', 'failure_code')}})
+                'processing_status', 'candidate_count', 'failure_code')},
+                'candidate_ids': [person['candidate_id'] for person in people],
+                'drawable_joint_count': drawable_count if row['keypoints_ref'] is not None else None})
         if decoder.read_next() is not None:
             raise SourceError('Render source has unrecorded frames')
     finally:
         decoder.close()
     if file_hash(video_path) != source['video_sha256'] or file_hash(Path(run_dir) / 'manifest.json') != bundle['manifest_sha256']:
         raise SourceError('Render inputs changed during rendering')
-    links = ''.join(f'<li><a target="preview" href="{r["file"]}">frame {r["frame_id"]}: {escape(r["processing_status"])}; PTS={escape(str(r["source_pts"]))}</a></li>' for r in catalog)
-    html = ('<!doctype html><html lang="en"><meta charset="utf-8"><title>Pose overlays</title>'
-            '<body><h1>Frame overlays</h1><p>' + escape(manifest['execution_kind']) + '; run=' + escape(manifest['run_status']) +
-            '; no GT or posture/event decisions. Frame selection is manual; no synthetic playback timing.</p>'
-            f'<iframe title="Selected frame" name="preview" src="{catalog[0]["file"]}" style="width:95vw;height:70vh;border:0"></iframe>'
-            f'<ol>{links}</ol></body></html>')
+    from .viewer import viewer_html
+    html = viewer_html(manifest, source, catalog, svg_frames)
     (output / 'index.html').write_text(html, encoding='utf-8')
     atomic_json(output / 'frames.json', catalog)
     for name in ('index.html', 'frames.json'):

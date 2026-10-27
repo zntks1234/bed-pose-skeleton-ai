@@ -16,7 +16,7 @@ import uuid
 import webbrowser
 from .live_engine import LiveWorker
 from .live_factory import make_engine
-from .live_sources import CameraSource, SyntheticSource, VideoFileSource, probe_cameras
+from .live_sources import CameraSource, SyntheticSource, VideoFileSource, probe_cameras, named_cameras
 from .io_utils import strict_loads
 
 
@@ -75,7 +75,8 @@ class WebWorkspace:
                 if any(s.kind == 'camera' and not s.state['closed'] and s.worker.engine.source.index == index
                        for s in self.sessions.values()):
                     raise ValueError('이미 연결한 카메라입니다. 기존 입력을 선택하세요.')
-                source, title = CameraSource(index), f'카메라 {index}'
+                source = CameraSource(index)
+                title = next((d['name'] for d in self.scan_state.get('devices', []) if d['index'] == index), f'카메라 {index} · 이름 미확인')
             elif kind == 'video_file':
                 if values.get('video_asset') not in self.assets:
                     raise ValueError('촬영 영상 파일을 먼저 선택하세요.')
@@ -159,11 +160,13 @@ class WebWorkspace:
             self.scan_state = {'busy': True, 'indices': sorted(excluded), 'error': None}
         def run():
             try:
-                indices, error = sorted(set(probe_cameras(excluded=excluded)) | excluded), None
+                devices = named_cameras()
+                indices, error = sorted({d['index'] for d in devices} | excluded), None
             except Exception as exc:
-                indices, error = sorted(excluded), str(exc)
+                devices = []
+                indices, error = sorted(excluded), '장치 이름을 읽지 못했습니다. 설치/장치 연결을 확인하세요: '+str(exc)
             with self.lock:
-                self.scan_state = {'busy': False, 'indices': indices, 'error': error}
+                self.scan_state = {'busy': False, 'indices': indices, 'devices': devices, 'error': error}
         threading.Thread(target=run, daemon=True).start()
 
     def _message(self, session, kind, value):

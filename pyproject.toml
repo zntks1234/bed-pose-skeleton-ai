@@ -11,7 +11,7 @@ dependencies = ["jsonschema>=4.18,<5", "numpy>=1.26,<3", "av==18.1.0"]
 
 [project.optional-dependencies]
 mediapipe = ["mediapipe==0.10.35"]
-live = ["mediapipe==0.10.35"]
+live = ["mediapipe==0.10.35", "cv2-enumerate-cameras>=1.1,<2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

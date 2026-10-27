@@ -131,3 +131,16 @@ def probe_cameras(indices=range(6), excluded=()):
         finally:
             capture.release()
     return found
+
+
+def named_cameras():
+    """Use backend-qualified OpenCV indices from the OS device enumerator."""
+    from cv2_enumerate_cameras import enumerate_cameras
+    devices, seen = [], set()
+    for camera in enumerate_cameras():
+        identity = camera.path or (camera.name, camera.index)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        devices.append({'index': int(camera.index), 'name': camera.name or '이름을 제공하지 않는 카메라'})
+    return devices

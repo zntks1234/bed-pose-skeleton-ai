@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlsplit
 import uuid
 import webbrowser
 from .live_engine import LiveWorker
+from .group_session import MeasurementGroup
 from .live_factory import make_engine
 from .live_sources import CameraSource, SyntheticSource, VideoFileSource, probe_cameras, named_cameras
 from .io_utils import strict_loads
@@ -40,6 +41,7 @@ class WebWorkspace:
         self.temp_root = Path(self.temp.name)
         self.factory = engine_factory
         self.sessions, self.assets = {}, {}
+        self.groups = {}
         self.lock = threading.RLock()
         self.stop_requested = threading.Event()
         self.monitor_stop = threading.Event()
@@ -105,13 +107,51 @@ class WebWorkspace:
         with self.lock:
             # Detach mutable nested dictionaries before handing them to HTTP serialization.
             return json.loads(json.dumps({'sessions': [s.state for s in self.sessions.values()],
+                                         'groups': [g.public() for g in self.groups.values()],
                                          'scan': self.scan_state, 'closing': self.stop_requested.is_set(),
                                          'model': self.model.name, 'model_available': self.model.is_file()}))
+
+    def group_command(self, values):
+        with self.lock:
+            if self.stop_requested.is_set():raise ValueError('작업실 종료 중입니다.')
+            if values['action']=='start':
+                ids=values.get('inputs')
+                if not isinstance(ids,list) or len(ids)!=2 or len(set(ids))!=2:
+                    raise ValueError('서로 다른 입력 두 개를 선택하세요.')
+                members=[self.sessions[sid] for sid in ids]
+                if len({s.kind for s in members})!=1:
+                    raise ValueError('카메라끼리 또는 영상 파일끼리 묶으세요.')
+                for session in members:
+                    if (session.state['closed'] or session.state['phase']=='closing' or session.state['pending']
+                            or session.state['recording'] or session.state['frame_id'] is None or not session.state['region']
+                            or self.active_group(session.id)):
+                        raise ValueError('두 입력의 연결과 침대 영역을 준비하고 개별 측정을 종료하세요.')
+                group=MeasurementGroup(members,self.output_root)
+                self.groups[group.id]=group
+                try:group.start()
+                except Exception:
+                    group.fail('START_DISPATCH_FAILED')
+                    raise
+                return {'group_id':group.id}
+            if values['action']=='stop':
+                self.groups[values['group_id']].stop()
+                return {'accepted':True}
+            raise ValueError('지원하지 않는 그룹 조작입니다.')
+
+    def active_group(self, session_id):
+        return next((g for g in self.groups.values() if not g.finished and any(s.id==session_id for s in g.members)),None)
 
     def command(self, session_id, action, values):
         with self.lock:
             session = self.sessions[session_id]
             state = session.state
+            group=self.active_group(session_id)
+            if group is not None:
+                if action in ('remove','close'):
+                    session.remove=action=='remove'
+                    group.stop(close_inputs=True)
+                    return
+                raise ValueError('그룹 측정 중입니다. 그룹 종료 버튼을 사용하세요.')
             if action in ('close', 'remove'):
                 session.remove = action == 'remove'
                 if session.remove and state['closed']:
@@ -211,6 +251,15 @@ class WebWorkspace:
             state.update(closed=True, pending=None, recording=False)
             state['phase'] = 'error' if state['error'] else ('ended' if state.get('eof') else 'closed')
 
+        group=self.active_group(session.id)
+        if group is not None:
+            try:group.message(session,kind,value)
+            except Exception:
+                group.failed=group.finished=True
+                group.data.update(phase='failed',ledger_complete=False)
+                group.data['errors'].append({'code':'GROUP_WRITE_FAILED'})
+                for member in group.members:member.worker.request_close()
+
     def _refresh(self, session):
         while True:
             try:
@@ -260,6 +309,16 @@ class WebWorkspace:
                     if session.remove and session.state['closed']:
                         self.sessions.pop(session.id, None)
 
+                for group in self.groups.values():
+                    try:group.tick()
+                    except Exception:
+                        group.failed=True
+                        group.data["phase"]="failed"
+                        group.data["ledger_complete"]=False
+                        group.data["errors"].append({"code":"GROUP_WRITE_FAILED"})
+                        group.finished=True
+                        for member in group.members:member.worker.request_close()
+
     def view(self, session_id):
         with self.lock:
             return self.sessions[session_id].view
@@ -274,6 +333,9 @@ class WebWorkspace:
         while any(s.worker.is_alive() for s in sessions):
             for session in sessions:
                 session.worker.join(timeout=.1)
+        with self.lock:
+            for session in sessions:self._refresh(session)
+            for group in self.groups.values():group.tick()
         self.monitor_stop.set()
         self.monitor.join(timeout=2)
         self.temp.cleanup()
@@ -376,6 +438,8 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 raise ValueError('JSON object required')
             if url.path == '/api/inputs':
                 result = workspace.add(values)
+            elif url.path == '/api/group':
+                result = workspace.group_command(values)
             elif url.path == '/api/control':
                 workspace.command(values['id'], values['action'], values)
                 result = {'accepted': True}

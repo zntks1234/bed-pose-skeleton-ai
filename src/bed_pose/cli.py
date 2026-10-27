@@ -52,8 +52,32 @@ def main(argv=None):
     configure.add_argument('--output', type=Path, required=True)
     configure.add_argument('--num-poses', type=int, default=1)
     configure.add_argument('--execution-mode', choices=('independent_frames', 'ordered_sequence'), default='independent_frames')
+    evaluate = commands.add_parser('evaluate', help='Evaluate verified records; no GT-based accuracy yet')
+    evaluate.add_argument('--run', type=Path, required=True)
+    evaluate.add_argument('--scope', choices=('full', 'diagnostic_partial'), default='full')
+    compare = commands.add_parser('compare', help='Report all requested runs, including missing or failed runs')
+    compare.add_argument('--runs', type=Path, nargs='+', required=True)
+    compare.add_argument('--output', type=Path, required=True)
+    compare.add_argument('--scope', choices=('full', 'diagnostic_partial'), default='full')
+    render = commands.add_parser('render', help='Render verified frame overlays to SVG images and an HTML index')
+    render.add_argument('--run', type=Path, required=True)
+    render.add_argument('--video', type=Path, required=True)
+    render.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command in ('evaluate', 'compare'):
+            from .evaluation import evaluate_run, compare_runs
+            path, report = (evaluate_run(args.run, args.scope) if args.command == 'evaluate' else
+                            compare_runs(args.runs, args.output, args.scope))
+            print(json.dumps({'report_directory': str(path), 'integrity': report['integrity'],
+                              'evaluation_status': report['evaluation_status']}, ensure_ascii=False))
+            return 0 if report['evaluation_status'] == 'completed' else 4
+        if args.command == 'render':
+            from .rendering import render_overlay
+            path, report = render_overlay(args.video, args.run, args.output)
+            print(json.dumps({'render_directory': str(path), 'frame_count': report['frame_count'],
+                              'execution_kind': report['execution_kind']}, ensure_ascii=False))
+            return 0
         if args.command == 'configure-mediapipe':
             from .pose.mediapipe import prepare_configuration
             path = prepare_configuration(args.config, args.model, args.output,

@@ -272,7 +272,7 @@ failed/cancelled/interrupted 실행은 정상 성능 집계에 섞지 않습니�
 
 ## 10. 모델 어댑터별 연결 규칙과 검증 게이트
 
-다음은 2026-10-27 공식 문서 대조를 바탕으로 한 연결 설계이며 패키지 설치·모델 실행 검증은 아직 하지 않았습니다.
+다음 표는 연결 설계입니다. MediaPipe 패키지 설치·SDK 경계 검사는 수행했지만 유효 모델 추론 검증은 미완료이며, 다른 후보의 SDK 연결은 아직 수행하지 않았습니다. 최신 근거는 [어댑터 기록](MEDIAPIPE_ADAPTER.md)을 따릅니다.
 
 | 어댑터 | 계약 연결·확인할 점 |
 |---|---|
@@ -288,7 +288,7 @@ failed/cancelled/interrupted 실행은 정상 성능 집계에 섞지 않습니�
 
 ## 11. 명령·종료 코드·완료 기준
 
-현재 `python -m bed_pose prepare --video PATH --output DIR`, `run --config PATH`, `demo --output DIR`, `inspect --run PATH`를 구현·실행 확인했습니다. run은 합성 어댑터와 실험용 MediaPipe 어댑터 코드를 지원합니다. MediaPipe는 유효 자산 추론 등록 게이트 전이며 다른 실제 모델 이름은 거부합니다. configure-mediapipe는 해시가 있는 설정을 생성합니다. evaluate/compare/render는 아직 미구현입니다. demo/inspect는 합성 실행 확인·무결성 점검을 위한 추가 명령이며 정답 평가 지표를 제공하지 않습니다.
+현재 `python -m bed_pose prepare --video PATH --output DIR`, `run --config PATH`, `demo --output DIR`, `inspect --run PATH`를 구현·실행 확인했습니다. run은 합성 어댑터와 실험용 MediaPipe 어댑터 코드를 지원합니다. MediaPipe는 유효 자산 추론 등록 게이트 전이며 다른 실제 모델 이름은 거부합니다. configure-mediapipe는 해시가 있는 설정을 생성합니다. evaluate/compare는 정답 없는 진단·비교를, render는 SVG 프레임·HTML 선택 화면을 구현했습니다. GT 기반 평가는 미구현입니다. demo/inspect는 합성 실행 확인·무결성 점검을 위한 추가 명령이며 정답 평가 지표를 제공하지 않습니다.
 
 종료 코드는 `0=작업 성공`, `2=설정·입력 부적합`, `3=SDK 초기화/실행/변환 실패`, `4=저장/무결성 실패`, `130=사용자 중단`으로 제안합니다. 후보 0명·GT 없는 지표의 unavailable은 프로그램 실패가 아닙니다. 단, GT가 없는 지표를 computed로 만드는 오류는 검사 실패입니다. compare는 비교 불가능한 실행을 표에 남기고 무결성 실패가 있으면 정상 성공 코드로 끝내지 않습니다.
 
@@ -328,3 +328,5 @@ failed/cancelled/interrupted 실행은 정상 성능 집계에 섞지 않습니�
 디렉터리 fsync에 의한 전원 장애 내구성은 아직 검증하지 않았습니다. JSONL flush·파일 fsync와 최종 매니페스트 교체, 중단 기록의 실패 처리·해시/참조 검증을 구현했습니다. FrameLedger는 이전 호환용 프로토타입이며 새 CLI 경로에서는 사용하지 않습니다.
 
 MediaPipe 어댑터의 추가 메타데이터·원본 SDK landmark 필드와 등록 게이트의 현재 상태는 [상세 구현 기록](MEDIAPIPE_ADAPTER.md)을 따릅니다. `PoseOutput.sdk_call_started`로 성공한 SDK 호출도 기록하며 매핑 실패가 이를 지우지 않습니다.
+
+현재 no-GT 평가와 비교는 [후처리 범위](POSTPROCESSING.md)를 따릅니다. GT/연결 입력은 아직 받지 않으며 해당 지표는 미계산합니다. 오버레이는 원본 PTS와 RGB를 보존하는 SVG 프레임·수동 HTML 선택으로 구현했습니다. 설계의 동영상 출력·자동 재생은 후속입니다.

@@ -54,6 +54,7 @@
 |---|---|
 | [기능 요구사항](docs/REQUIREMENTS.md) | 핵심 기능, 운영 기능, 추가 검토 기능 |
 | [시스템 구조](docs/ARCHITECTURE.md) | 입력·분석·기록·비교의 역할과 데이터 흐름 |
+| [초기 코드 구성 설계](docs/CODE_DESIGN.md) | 첫 비교 러너의 패키지·입출력·실패 처리·검사·확장 지점 제안 |
 | [측정 절차](docs/MEASUREMENT_PROTOCOL.md) | 자유·단일·순차 측정과 실제 정답 확인 |
 | [데이터·평가 기준](docs/DATA_AND_VALIDATION.md) | 저장 항목, 시간 정렬, 분할, 지표 |
 | [스켈레톤 비교 실험 계획](docs/POSE_BENCHMARK_PLAN.md) | 실제 실행 전 공통 프레임·관절·GT·지연 측정·기록 방식 |

@@ -157,14 +157,21 @@ class WebWorkspace:
                 return
             excluded = {s.worker.engine.source.index for s in self.sessions.values()
                         if s.kind == 'camera' and not s.state['closed']}
-            self.scan_state = {'busy': True, 'indices': sorted(excluded), 'error': None}
+            self.scan_state = dict(self.scan_state, busy=True, error=None)
         def run():
             try:
                 devices = named_cameras()
-                indices, error = sorted({d['index'] for d in devices} | excluded), None
+                indices = sorted({d['index'] for d in devices} | excluded)
+                if not devices:
+                    indices = sorted(set(probe_cameras(excluded=excluded)) | excluded)
+                error = None
             except Exception as exc:
                 devices = []
-                indices, error = sorted(excluded), '장치 이름을 읽지 못했습니다. 설치/장치 연결을 확인하세요: '+str(exc)
+                try:
+                    indices = sorted(set(probe_cameras(excluded=excluded)) | excluded)
+                except Exception:
+                    indices = sorted(excluded)
+                error = '장치 이름을 읽지 못해 번호로 표시합니다. 선택 의존성 재설치 후 작업실을 다시 실행하세요.'
             with self.lock:
                 self.scan_state = {'busy': False, 'indices': indices, 'devices': devices, 'error': error}
         threading.Thread(target=run, daemon=True).start()

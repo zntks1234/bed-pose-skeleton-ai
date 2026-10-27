@@ -22,6 +22,7 @@ class MeasurementGroup:
                      'errors':[], 'alignment_status':'pending_until_stop' if max_skew_ns is not None else 'not_implemented',
                      'target_association_status':'operator_initialized_continuity_unverified' if targets else 'not_configured',
                      'target_selections':list(targets),
+                     'target_pair_status':'operator_initialized_not_verified' if targets else 'not_configured',
                      'same_person_assertion':'operator_report_not_verified' if targets else None,
                      'posture_prediction':{'status':'not_implemented','label':None}}
         self.finished, self.failed = False, False
@@ -57,12 +58,17 @@ class MeasurementGroup:
             if all(m['run_directory'] for m in self.data['members']) and self.data['phase']=='starting':
                 self.data['phase']='recording'
             self.save()
+        elif kind=='target_selected':
+            self.data.setdefault('target_reselections',[]).append({'input_id':session.id,
+                'tracking':value['tracking'],'received_ack_perf_counter_ns':str(time.perf_counter_ns())})
+            self.data['target_pair_status']='reconfirmation_required'
+            self.save()
         elif kind=='stopped':
             member['stopped_ack_perf_counter_ns']=str(time.perf_counter_ns())
             if value['manifest']['run_status']!='succeeded':
                 self.fail('MEMBER_RECORDING_FAILED',session.id)
             self.save()
-        elif kind in ('error','command_rejected'):
+        elif kind in ('error','command_rejected') and value.get('action')!='target_select':
             self.fail('MEMBER_'+kind.upper(),session.id)
         elif kind in ('eof','closed') and self.data['phase'] in ('starting','recording'):
             # One input ending also ends the partner interval.
@@ -116,5 +122,7 @@ class MeasurementGroup:
                 people=member.view['people'] if member.view else None
                 status=('input_unavailable' if member.state['closed'] or people is None else
                         'target_missing' if not people else 'target_ambiguous' if len(people)>1 else 'continuity_unverified')
-                observations.append({'input_id':member.id,'status':status})
+                tracking=member.worker.engine.target_tracker.current()
+                observations.append({'input_id':member.id,'status':status if status=='input_unavailable' else tracking['status'] if tracking['status']!='not_configured' else status,
+                                     'reason':tracking.get('reason'),'track_id':tracking.get('track_id')})
         return dict(self.data,directory=str(self.directory),target_observations=observations)

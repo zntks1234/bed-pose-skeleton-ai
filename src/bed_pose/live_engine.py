@@ -10,6 +10,7 @@ import numpy as np
 from .contracts import FramePacket, ModelInput, IntegrityError
 from .mapping import MappingProfile, map_keypoints, raw_json_value
 from .live_recording import LiveRecorder, make_region
+from .target_tracking import TargetTracker
 from .io_utils import object_hash
 
 
@@ -39,6 +40,7 @@ class LiveEngine:
         self.opened = False
         self.ever_opened = False
         self.source_profile, self.adapter_profile = {}, {}
+        self.target_tracker=TargetTracker()
 
     def clock(self):
         return self.clock_function() - self.origin
@@ -103,6 +105,7 @@ class LiveEngine:
                     'environment': {'python': platform.python_version(), 'platform': platform.platform(), 'numpy': np.__version__},
                     'video_recording': False, 'tracking_scope': 'input_stream',
                     'preview_tracking_history_retained': True, 'hardware_dropped_frames': None, 'start_request': request,
+                    'target_tracking_initial':self.target_tracker.current(),
                     'target_policy': 'none', 'posture_classifier': 'not_implemented', 'event_analyzer': 'not_implemented'}
         self.recorder = LiveRecorder(self.output_root/measurement_id, manifest, self.clock)
         self.recorder.event('measurement_started', effective_stream_frame_id=self.next_frame_id, request=request)
@@ -191,6 +194,7 @@ class LiveEngine:
             row.update(processing_status='failed', error={'code': code, 'exception_type': type(exc).__name__},
                        sdk_call_started=row['sdk_call_started'] or bool(getattr(exc, 'sdk_call_started', False)))
             failure = LiveFailure(code, str(exc))
+        row['target_tracking']=self.target_tracker.observe(row,*geometry)
         if self.recorder:
             self.recorder.frame(row)
         if failure:
@@ -199,6 +203,7 @@ class LiveEngine:
                 'recorded_frames': self.recorder.manifest['recorded_frames'] if self.recorder else 0}
 
     def close(self, outcome='succeeded', error=None, request=None, reason='stream_closed'):
+        self.target_tracker.hold('input_closed')
         errors = [error] if error else []
         for resource in (self.source, self.adapter):
             try:
@@ -249,6 +254,12 @@ class LiveWorker(threading.Thread):
                         if action == 'region':
                             self.engine.set_region(**values, request=request)
                             self.messages.put(('region', {'region': self.engine.region, 'revision': self.engine.region_revision}))
+                        elif action == 'target_select':
+                            tracking=self.engine.target_tracker.select(values['frame_id'],values['candidate_id'],values.get('config'))
+                            if self.engine.recorder:
+                                self.engine.recorder.event('target_reselected',effective_stream_frame_id=self.engine.next_frame_id,
+                                    request=request,selection=values,tracking=tracking)
+                            self.messages.put(('target_selected',{'tracking':tracking,'selection_id':values.get('selection_id')}))
                         elif action == 'start':
                             path = self.engine.start_measurement(request=request)
                             if getattr(self.engine.source, 'is_file', False):
@@ -271,7 +282,7 @@ class LiveWorker(threading.Thread):
                     except ValueError as exc:
                         if isinstance(exc, IntegrityError):
                             raise
-                        self.messages.put(('command_rejected', {'message': str(exc)}))
+                        self.messages.put(('command_rejected', {'message': str(exc),'action':action}))
                 if self.stop_requested.is_set():
                     break
                 if self.paused and self.engine.next_frame_id > 0:

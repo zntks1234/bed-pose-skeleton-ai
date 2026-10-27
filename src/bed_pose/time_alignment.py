@@ -43,15 +43,19 @@ def references(directory, manifest, selected=None):
     with (Path(directory)/'live_frames.jsonl').open(encoding='utf-8') as stream:
         for line in stream:
             row=strict_loads(line)
+            tracking=row.get('target_tracking',{'status':'not_configured','candidate_id':None})
             yield {'measurement_id':manifest['measurement_id'],'frame_id':row['frame_id'],
                    'stream_frame_id':row['stream_frame_id'],'clock_id':row['clock_id'],
                    'received_ns':row['received_ns'],'time_ns':origin+int(row['received_ns']),
                    'processing_status':row['processing_status'],
+                   'target_tracking':tracking,
                    'target_association':{'status':('not_configured' if not selected else
+                        tracking['status'] if tracking['status'] in ('tracking_provisional','held') else
                         'observation_failed' if row['processing_status']!='ok' else
                         'target_missing' if not row['mapped_people'] else
                         'target_ambiguous' if len(row['mapped_people'])>1 else 'continuity_unverified'),
-                        'candidate_id':None}}
+                        'candidate_id':tracking.get('candidate_id') if selected and tracking['status']=='tracking_provisional' else None,
+                        'track_id':tracking.get('track_id') if selected else None,'identity_verified':False}}
 
 
 def align_group(members, directory, max_skew_ns, targets=()):

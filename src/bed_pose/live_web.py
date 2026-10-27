@@ -126,6 +126,23 @@ class WebWorkspace:
             self.target_tickets[ticket]=capture
             return capture
 
+    def select_target(self, values):
+        with self.lock:
+            capture=self.target_tickets.get(values.get('ticket'))
+            if not capture:raise ValueError('대상 선택 창을 다시 여세요.')
+            session=self.sessions[capture['input_id']]
+            candidate=next((p for p in capture['people'] if p['candidate_id']==values.get('candidate_id')),None)
+            if session.state['closed'] or candidate is None:raise ValueError('선택할 후보를 확인하세요.')
+            from .target_tracking import TrackingConfig
+            from dataclasses import asdict
+            config=asdict(TrackingConfig.load(values.get('tracking_config')))
+            selection_id=uuid.uuid4().hex
+            session.state['target_selection_pending']=selection_id
+            session.state['target_selection_error']=None
+            session.state['error']=None
+            session.worker.submit('target_select',frame_id=capture['frame_id'],candidate_id=candidate['candidate_id'],config=config,selection_id=selection_id)
+            return {'accepted':True,'selection_id':selection_id}
+
     def group_command(self, values):
         with self.lock:
             if self.stop_requested.is_set():raise ValueError('작업실 종료 중입니다.')
@@ -157,11 +174,18 @@ class WebWorkspace:
                             raise ValueError('입력에 맞춰 대상을 다시 지정하세요.')
                         candidate=next((p for p in capture['people'] if p['candidate_id']==selection.get('candidate_id')),None)
                         if candidate is None:raise ValueError('선택한 관절 후보를 확인하세요.')
+                        tracking=session.worker.engine.target_tracker.current()
+                        if values.get('tracking_required') is True and (tracking.get('segment_start_frame_id')!=capture['frame_id']
+                                or tracking.get('seed_candidate_id')!=candidate['candidate_id']):
+                            raise ValueError('선택한 후보에 맞춰 추적 대상을 다시 적용하세요.')
                         targets.append({'input_id':session.id,'stream_id':capture['stream_id'],
                                         'selected_frame_id':capture['frame_id'],'candidate_id':candidate['candidate_id'],
                                         'clock_id':capture['clock_id'],'received_ns':capture['received_ns'],
                                         'width':capture['width'],'height':capture['height'],
-                                        'candidate_snapshot':candidate,'selection_method':'operator_frozen_preview'})
+                                        'candidate_snapshot':candidate,'selection_method':'operator_frozen_preview',
+                                        'tracking_at_group_start':session.worker.engine.target_tracker.current()})
+                if values.get('tracking_required') is True and any(s.worker.engine.target_tracker.current()['status']!='tracking_provisional' for s in members):
+                    raise ValueError('양쪽 대상을 다시 지정해 잠정 추적을 준비하세요.')
                 group=MeasurementGroup(members,self.output_root,None if tolerance is None else int(tolerance*1_000_000),targets=targets)
                 self.groups[group.id]=group
                 try:group.start()
@@ -169,6 +193,20 @@ class WebWorkspace:
                     group.fail('START_DISPATCH_FAILED')
                     raise
                 return {'group_id':group.id}
+            if values['action']=='confirm_targets':
+                group=self.groups[values['group_id']]
+                if group.finished or group.data['phase']!='recording' or values.get('same_person_confirmed') is not True:
+                    raise ValueError('측정 중 양쪽 대상을 확인하고 동일인 지정을 체크하세요.')
+                states=[member.worker.engine.target_tracker.current() for member in group.members]
+                if any(state['status']!='tracking_provisional' for state in states):
+                    raise ValueError('양쪽 대상을 다시 지정해 잠정 추적을 준비하세요.')
+                group.data.setdefault('target_pair_confirmations',[]).append({
+                    'requested_perf_counter_ns':str(time.perf_counter_ns()),
+                    'assertion':'operator_report_not_verified',
+                    'members':[{'input_id':member.id,'track_id':state['track_id'],'frame_id':state['frame_id']} for member,state in zip(group.members,states)]})
+                group.data['target_pair_status']='operator_reconfirmed_not_verified'
+                group.save()
+                return {'accepted':True}
             if values['action']=='stop':
                 self.groups[values['group_id']].stop()
                 return {'accepted':True}
@@ -272,12 +310,19 @@ class WebWorkspace:
                          phase='error' if manifest['run_status'] == 'failed' else 'preview')
             if manifest['run_status'] == 'failed' and not state['error']:
                 state['error'] = '오류로 측정을 종료했습니다. 기록을 확인하세요.'
+        elif kind == 'target_selected':
+            state['target_tracking']=value['tracking']
+            state['target_selection_applied']=value.get('selection_id')
+            state['target_selection_pending']=None
         elif kind == 'playback':
             state['paused'] = value['paused']
             if state['pending'] == 'playback':
                 state['pending'] = None
         elif kind in ('error', 'command_rejected'):
             state.update(error=value['message'], pending=None)
+            if value.get('action')=='target_select':
+                state['target_selection_pending']=None
+                state['target_selection_error']=value['message']
             if kind == 'error':
                 state['phase'] = 'error'
                 state['candidate_count'] = None
@@ -326,9 +371,11 @@ class WebWorkspace:
         if state['recording'] and int(row['received_ns']) >= int(state['started_ns']):
             state['recorded_frames'] = frame['recorded_frames']
             state['elapsed'] = (int(row['received_ns'])-int(state['started_ns']))/1e9
+        state['target_tracking']=row['target_tracking']
         session.view = {'sequence': session.sequence, 'frame_id': row['stream_frame_id'],
                         'width': width, 'height': height, 'people': row['mapped_people'],
                         'clock_id':row['clock_id'],'received_ns':row['received_ns'],
+                        'target_tracking':row['target_tracking'],
                         'candidate_count': row['candidate_count'],
                         'inference_ms': (int(row['inference_finished_ns'])-int(row['inference_started_ns']))/1e6,
                         'read_ms': (int(row['received_ns'])-int(row['read_started_ns']))/1e6,
@@ -477,6 +524,8 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 raise ValueError('JSON object required')
             if url.path == '/api/inputs':
                 result = workspace.add(values)
+            elif url.path == '/api/target-select':
+                result = workspace.select_target(values)
             elif url.path == '/api/target-capture':
                 result = workspace.capture_target(values['id'])
             elif url.path == '/api/group':

@@ -102,6 +102,9 @@ def _verify(directory, manifest, hashes=True):
             if type(effective_id) is not int or not previous_effective_id <= effective_id <= manifest['first_stream_frame_id']+manifest['recorded_frames']:
                 raise IntegrityError('Invalid event frame boundary')
             previous_effective_id = effective_id
+            if event['type']=='target_reselected':
+                if event['tracking']['identity_verified'] is not False or not event['tracking']['track_id']:
+                    raise IntegrityError('Invalid provisional target selection')
             if event['type'] == 'playback_changed':
                 if manifest['source_profile']['kind'] != 'video_file' or type(event['paused']) is not bool:
                     raise IntegrityError('Invalid playback control')
@@ -117,7 +120,7 @@ def _verify(directory, manifest, hashes=True):
     if (not event_types or event_types[0] != 'measurement_started' or event_types[-1] != 'measurement_stopped'
             or event_types.count('measurement_started') != 1 or event_types.count('measurement_stopped') != 1
             or len(event_types) != manifest['recorded_events']
-            or any(kind not in ('measurement_started', 'measurement_stopped', 'bed_region_changed', 'playback_changed') for kind in event_types)):
+            or any(kind not in ('measurement_started', 'measurement_stopped', 'bed_region_changed', 'playback_changed', 'target_reselected') for kind in event_types)):
         raise IntegrityError('Live measurement control events are incomplete')
     last_event_time = previous_time
     counts = Counter(ok=0, failed=0)
@@ -178,6 +181,16 @@ def _verify(directory, manifest, hashes=True):
                     or row['target_resolution'] != {'status': 'not_configured', 'candidate_id': None}
                     or any(row[k] is not None for k in ('target_posture', 'verified_gt', 'sensor_results'))):
                 raise IntegrityError('Unsupported live prediction or label injection')
+            tracking=row.get('target_tracking')
+            if tracking is not None and tracking != {'status':'not_configured','candidate_id':None}:
+                from .target_tracking import TrackingConfig
+                TrackingConfig.load(tracking['config'])
+                if (tracking['status'] not in ('tracking_provisional','held') or tracking['identity_verified'] is not False
+                        or tracking['frame_id']!=row['stream_frame_id'] or not tracking['track_id']
+                        or tracking['status']=='held' and tracking['candidate_id'] is not None
+                        or tracking['status']=='tracking_provisional' and tracking['candidate_id'] not in
+                            [p['candidate_id'] for p in row['mapped_people'] or []]):
+                    raise IntegrityError('Invalid provisional tracking result')
             status = row['processing_status']
             if status not in counts:
                 raise IntegrityError('Unknown live frame status')

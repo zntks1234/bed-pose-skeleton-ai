@@ -53,8 +53,8 @@ class LiveEngine:
                 raise ValueError('Live adapter execution kind mismatch')
             self.reset_profile = self.adapter.reset_for_video()
             self.source_profile = self.source.open()
-            expected = 'synthetic' if self.execution_kind == 'synthetic' else 'camera'
-            if self.source_profile['kind'] != expected:
+            allowed = ('synthetic',) if self.execution_kind == 'synthetic' else ('camera', 'video_file')
+            if self.source_profile['kind'] not in allowed:
                 raise ValueError('Live input cannot silently switch to synthetic data')
             self.opened = True
         except Exception:
@@ -101,7 +101,7 @@ class LiveEngine:
                     'requested_settings': self.settings, 'requested_settings_sha256': object_hash(self.settings),
                     'execution_mode': self.settings['execution_mode'], 'stream_reset': self.reset_profile,
                     'environment': {'python': platform.python_version(), 'platform': platform.platform(), 'numpy': np.__version__},
-                    'video_recording': False, 'tracking_scope': 'camera_stream',
+                    'video_recording': False, 'tracking_scope': 'input_stream',
                     'preview_tracking_history_retained': True, 'hardware_dropped_frames': None, 'start_request': request,
                     'target_policy': 'none', 'posture_classifier': 'not_implemented', 'event_analyzer': 'not_implemented'}
         self.recorder = LiveRecorder(self.output_root/measurement_id, manifest, self.clock)
@@ -131,6 +131,10 @@ class LiveEngine:
         read_started = self.clock()
         try:
             rgb = self.source.read()
+        except StopIteration:
+            if getattr(self.source, 'is_file', False):
+                raise
+            raise LiveFailure('SOURCE_READ_FAILED', '카메라 입력이 종료되었습니다.')
         except Exception as exc:
             raise LiveFailure('SOURCE_READ_FAILED', str(exc)) from exc
         received, utc = self.clock(), self.utc_clock()
@@ -144,7 +148,8 @@ class LiveEngine:
         rgb.setflags(write=False)
         frame_id = self.next_frame_id
         self.next_frame_id += 1
-        timestamp = received // 1_000_000
+        media = getattr(self.source, 'media', None)
+        timestamp = int(media['relative_time_ns']) // 1_000_000 if media else received // 1_000_000
         row = {'stream_id': self.stream_id, 'stream_frame_id': frame_id, 'clock_id': self.clock_id,
                'read_started_ns': str(read_started), 'received_ns': str(received), 'received_utc_ns': str(utc),
                'timestamp_source': 'received_after_read', 'camera_exposure_ns': None,
@@ -158,6 +163,8 @@ class LiveEngine:
                'bed_occupancy_status': 'not_implemented',
                'target_resolution': {'status': 'not_configured', 'candidate_id': None}, 'target_posture': None,
                'verified_gt': None, 'sensor_results': None}
+        if media is not None:
+            row['source_media'] = dict(media)
         failure = None
         stage = 'inference'
         try:
@@ -191,7 +198,7 @@ class LiveEngine:
         return {'rgb': rgb, 'row': row, 'bed_region': self.region, 'bed_revision': self.region_revision,
                 'recorded_frames': self.recorder.manifest['recorded_frames'] if self.recorder else 0}
 
-    def close(self, outcome='succeeded', error=None, request=None):
+    def close(self, outcome='succeeded', error=None, request=None, reason='stream_closed'):
         errors = [error] if error else []
         for resource in (self.source, self.adapter):
             try:
@@ -201,7 +208,7 @@ class LiveEngine:
         self.opened = False
         if self.recorder:
             return self.stop_measurement('failed' if errors or outcome == 'failed' else 'succeeded',
-                                         errors, reason='stream_closed', request=request)
+                                         errors, reason=reason, request=request)
         if errors:
             return None, {'run_status': 'failed', 'errors': errors}
         return None
@@ -218,6 +225,7 @@ class LiveWorker(threading.Thread):
         self.stop_requested = threading.Event()
         self.display_replaced = 0
         self.close_request = None
+        self.paused = bool(getattr(engine.source, 'is_file', False))
 
     def submit(self, action, **values):
         request = {'requested_time_ns': str(self.engine.clock()), 'requested_utc_ns': str(self.engine.utc_clock())}
@@ -230,6 +238,7 @@ class LiveWorker(threading.Thread):
 
     def run(self):
         outcome, error = 'succeeded', None
+        close_reason = 'stream_closed'
         try:
             self.engine.open()
             self.messages.put(('ready', {}))
@@ -242,10 +251,21 @@ class LiveWorker(threading.Thread):
                             self.messages.put(('region', {'region': self.engine.region, 'revision': self.engine.region_revision}))
                         elif action == 'start':
                             path = self.engine.start_measurement(request=request)
+                            if getattr(self.engine.source, 'is_file', False):
+                                self.paused = False
+                                self.messages.put(('playback', {'paused': False}))
                             self.messages.put(('started', {'directory': str(path), 'started_ns': self.engine.recorder.manifest['started_ns']}))
                         elif action == 'stop':
                             path, manifest = self.engine.stop_measurement(request=request)
                             self.messages.put(('stopped', {'directory': str(path), 'manifest': manifest}))
+                            if getattr(self.engine.source, 'is_file', False):
+                                self.paused = True
+                                self.messages.put(('playback', {'paused': True}))
+                        elif action == 'playback' and getattr(self.engine.source, 'is_file', False):
+                            self.paused = bool(values['paused'])
+                            if self.engine.recorder:
+                                self.engine.recorder.event('playback_changed', paused=self.paused, effective_stream_frame_id=self.engine.next_frame_id, request=request)
+                            self.messages.put(('playback', {'paused': self.paused}))
                         else:
                             raise ValueError('Unknown live command')
                     except ValueError as exc:
@@ -254,7 +274,15 @@ class LiveWorker(threading.Thread):
                         self.messages.put(('command_rejected', {'message': str(exc)}))
                 if self.stop_requested.is_set():
                     break
-                frame = self.engine.step()
+                if self.paused and self.engine.next_frame_id > 0:
+                    self.stop_requested.wait(0.03)
+                    continue
+                try:
+                    frame = self.engine.step()
+                except StopIteration:
+                    close_reason = 'video_eof'
+                    self.messages.put(('eof', {}))
+                    break
                 if self.frames.full():
                     try:
                         self.frames.get_nowait()
@@ -269,7 +297,7 @@ class LiveWorker(threading.Thread):
             self.messages.put(('error', {'message': str(exc), **error}))
         finally:
             try:
-                result = self.engine.close(outcome, error, request=self.close_request)
+                result = self.engine.close(outcome, error, request=self.close_request, reason=close_reason)
                 if result:
                     if result[0] is not None:
                         self.messages.put(('stopped', {'directory': str(result[0]), 'manifest': result[1]}))

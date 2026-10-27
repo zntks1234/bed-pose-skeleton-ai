@@ -191,7 +191,7 @@ class LiveTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(main(['live-inspect','--run',str(directory)]),0)
         with contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(main(['live','--demo','--camera','-1']),2)
+            self.assertEqual(main(['live','--camera','-1']),2)
 
     def test_camera_open_failure_does_not_switch_to_fake(self):
         class Capture:

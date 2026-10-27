@@ -1,12 +1,14 @@
 """Live recording contract: received timestamps, explicit unknowns, no video data."""
 from collections import Counter
+from fractions import Fraction
 from pathlib import Path
 import math
 import os
 from .contracts import IntegrityError
 from .io_utils import atomic_json, file_hash, json_text, load_json, strict_loads, object_hash
 
-LIVE_SCHEMA = 'live-0.1-draft'
+LIVE_SCHEMA = 'live-0.2-draft'
+SUPPORTED_SCHEMAS = ('live-0.1-draft', LIVE_SCHEMA)
 FILES = ('live_frames.jsonl', 'control_events.jsonl')
 
 
@@ -59,7 +61,7 @@ def _verify(directory, manifest, hashes=True):
             or type(manifest['recorded_events']) is not int or manifest['recorded_events'] < 2
             or any(type(manifest['counts'][k]) is not int or manifest['counts'][k] < 0 for k in ('ok','failed'))):
         raise IntegrityError('Invalid live manifest counters or geometry')
-    if manifest['schema_version'] != LIVE_SCHEMA:
+    if manifest['schema_version'] not in SUPPORTED_SCHEMAS:
         raise IntegrityError('Unknown live schema')
     for key in ('adapter_profile','source_profile','mapping_profile','requested_settings'):
         if object_hash(manifest[key]) != manifest[key+'_sha256']:
@@ -100,6 +102,9 @@ def _verify(directory, manifest, hashes=True):
             if type(effective_id) is not int or not previous_effective_id <= effective_id <= manifest['first_stream_frame_id']+manifest['recorded_frames']:
                 raise IntegrityError('Invalid event frame boundary')
             previous_effective_id = effective_id
+            if event['type'] == 'playback_changed':
+                if manifest['source_profile']['kind'] != 'video_file' or type(event['paused']) is not bool:
+                    raise IntegrityError('Invalid playback control')
             if event['type'] == 'bed_region_changed':
                 if validate_selection(event['selection'], effective_id) > previous_time:
                     raise IntegrityError('Bed selection metadata occurs after the control event')
@@ -112,15 +117,16 @@ def _verify(directory, manifest, hashes=True):
     if (not event_types or event_types[0] != 'measurement_started' or event_types[-1] != 'measurement_stopped'
             or event_types.count('measurement_started') != 1 or event_types.count('measurement_stopped') != 1
             or len(event_types) != manifest['recorded_events']
-            or any(kind not in ('measurement_started', 'measurement_stopped', 'bed_region_changed') for kind in event_types)):
+            or any(kind not in ('measurement_started', 'measurement_stopped', 'bed_region_changed', 'playback_changed') for kind in event_types)):
         raise IntegrityError('Live measurement control events are incomplete')
     last_event_time = previous_time
     counts = Counter(ok=0, failed=0)
     previous_id, previous_time, previous_model_ms = -1, 0, None
+    previous_media_id, media_origin = None, None
     with (directory/'live_frames.jsonl').open(encoding='utf-8') as stream:
         for index, line in enumerate(stream):
             row = strict_loads(line)
-            if (row['schema_version'] != LIVE_SCHEMA or row['measurement_id'] != manifest['measurement_id']
+            if (row['schema_version'] != manifest['schema_version'] or row['measurement_id'] != manifest['measurement_id']
                     or row['frame_id'] != index or row['stream_id'] != manifest['stream_id']
                     or row['clock_id'] != manifest['clock_id']
                     or row['stream_frame_id'] != manifest['first_stream_frame_id'] + index):
@@ -143,7 +149,22 @@ def _verify(directory, manifest, hashes=True):
             if row['camera_exposure_ns'] is not None or row['timestamp_source'] != 'received_after_read':
                 raise IntegrityError('Unverified camera exposure timestamp')
             model_ms = unsigned_ns(row['model_timestamp_ms'])
-            if model_ms != unsigned_ns(row['received_ns']) // 1_000_000:
+            if manifest['source_profile']['kind'] == 'video_file':
+                media = row['source_media']
+                media_ns = unsigned_ns(media['relative_time_ns'])
+                if (type(media['source_frame_id']) is not int or media['source_frame_id'] != row['stream_frame_id']
+                        or previous_media_id is not None and media['source_frame_id'] != previous_media_id+1
+                        or type(media['time_base_num']) is not int or media['time_base_num'] <= 0
+                        or type(media['time_base_den']) is not int or media['time_base_den'] <= 0):
+                    raise IntegrityError('Invalid video source identity/time base')
+                absolute = Fraction(int(media['source_pts'])*media['time_base_num'], media['time_base_den'])
+                if media_origin is None:
+                    # Floor to ns permits less than 1 ns rounding uncertainty.
+                    media_origin = absolute-Fraction(media_ns, 1_000_000_000)
+                if abs((absolute-media_origin)*1_000_000_000-media_ns) >= 1 or model_ms != media_ns//1_000_000:
+                    raise IntegrityError('Video model time differs from source PTS')
+                previous_media_id = media['source_frame_id']
+            elif 'source_media' in row or model_ms != unsigned_ns(row['received_ns']) // 1_000_000:
                 raise IntegrityError('Live SDK time differs from the recorded receive time')
             collision = (row['processing_status'] == 'failed' and row['error'] is not None
                          and row['error']['code'] == 'MODEL_TIMESTAMP_COLLISION' and not row['sdk_call_started'])

@@ -2,11 +2,7 @@
 import base64
 from pathlib import Path
 import queue
-import tempfile
 import time
-from .io_utils import atomic_json, file_hash
-from .live_engine import LiveEngine, LiveWorker
-from .live_sources import CameraSource, SyntheticSource
 from .rendering import COLORS, EDGES, png_bytes
 
 
@@ -26,10 +22,13 @@ def source_point(x, y, width, height, image_width, image_height, clamp=False):
 
 
 class LiveWindow:
-    def __init__(self, root, worker):
+    def __init__(self, root, worker, parent=None, title='입력'):
         import tkinter as tk
         from tkinter import ttk, font
         self.tk, self.ttk, self.root, self.worker = tk, ttk, root, worker
+        self.owns_window = parent is None
+        self.is_file = bool(getattr(worker.engine.source, 'is_file', False))
+        self.playback_paused = self.is_file
         families = {name.casefold(): name for name in font.families(root)}
         choices = ('Malgun Gothic','맑은 고딕','Noto Sans CJK KR','Noto Sans CJK SC','Unifont')
         self.font_family = next((families[name.casefold()] for name in choices if name.casefold() in families),
@@ -40,72 +39,124 @@ class LiveWindow:
         self.pending, self.recording, self.closed, self.closing, self.had_error = False, False, False, False, False
         self.close_started = None
         self.last_error = None
+        self.ended = False
         self.record_count = 0
         self.measure_started_ns = None
         self.measure_elapsed = 0.0
-        root.title('BedPose · 실시간 측정')
-        screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f'{min(1200,max(820,screen_w-80))}x{min(850,max(600,screen_h-80))}')
-        root.minsize(min(900,screen_w-60), min(640,screen_h-60))
-        root.configure(background='#f3f6fa')
+        if self.owns_window:
+            root.title('BedPose · 측정 작업실')
+            root.geometry('1220x820')
+            root.minsize(980, 700)
         style = ttk.Style(root)
-        style.configure('TFrame', background='#f3f6fa')
-        style.configure('TLabel', background='#f3f6fa', foreground='#172538', font=(self.font_family, 10))
-        style.configure('Title.TLabel', font=(self.font_family, 18, 'bold'))
+        if 'clam' in style.theme_names():
+            style.theme_use('clam')
+        style.configure('TFrame', background='#edf2f7')
+        style.configure('TLabel', background='#edf2f7', foreground='#1e293b', font=(self.font_family, 10))
         style.configure('TButton', font=(self.font_family, 10), padding=(12, 8))
-        style.configure('TCheckbutton', font=(self.font_family, 10), background='#f3f6fa')
-        style.configure('TEntry', font=(self.font_family, 10))
-        outer = ttk.Frame(root, padding=20)
+        style.configure('Primary.TButton', background='#1264d1', foreground='white')
+        style.map('Primary.TButton', background=[('active','#0955ba'),('disabled','#cbd5e1')])
+        style.configure('TCheckbutton', font=(self.font_family, 10), background='#edf2f7')
+        style.configure('Card.TFrame', background='white')
+        style.configure('Card.TLabel', background='white', foreground='#526176', font=(self.font_family,10))
+        style.configure('Value.TLabel', background='white', foreground='#172b4d', font=(self.font_family,18,'bold'))
+        style.configure('TNotebook.Tab', padding=(14,8), font=(self.font_family,10))
+        outer = ttk.Frame(parent or root, padding=14)
         outer.pack(fill='both', expand=True)
-        header = ttk.Frame(outer)
-        header.pack(fill='x', pady=(0, 12))
-        ttk.Label(header, text='BedPose  실시간 측정', style='Title.TLabel').pack(side='left')
-        self.kind = tk.StringVar(value='연결 중')
-        ttk.Label(header, textvariable=self.kind).pack(side='right')
-        self.status = tk.StringVar(value='카메라와 모델을 준비하고 있습니다.')
-        ttk.Label(outer, textvariable=self.status, wraplength=1100).pack(anchor='w', pady=(0, 10))
-        self.canvas = tk.Canvas(outer, background='#0c1420', highlightthickness=0, height=470)
-        self.canvas.pack(fill='both', expand=True)
+        self.outer = outer
+        self.kind = tk.StringVar(value=title+' · 연결 중')
+        ttk.Label(outer, textvariable=self.kind, font=(self.font_family,12,'bold')).grid(row=0,column=0,sticky='w')
+        self.status = tk.StringVar(value='입력과 모델을 준비하고 있습니다.')
+        ttk.Label(outer, textvariable=self.status, wraplength=1000).grid(row=1,column=0,sticky='w',pady=(4,10))
+        body = ttk.Frame(outer)
+        outer.columnconfigure(0,weight=1)
+        outer.rowconfigure(2,weight=1)
+        body.grid(row=2,column=0,sticky='nsew')
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(0, weight=1)
+        self.canvas = tk.Canvas(body, background='#101d30', highlightthickness=0, width=640, height=360)
+        self.canvas.grid(row=0,column=0,sticky='nsew',padx=(0,14))
+        self.canvas.create_text(24,24,anchor='nw',text='입력 연결 후 영상이 표시됩니다',fill='#cbd5e1')
         self.canvas.bind('<Configure>', lambda event: self.draw())
         self.canvas.bind('<ButtonPress-1>', self.drag_begin)
         self.canvas.bind('<B1-Motion>', self.drag_move)
         self.canvas.bind('<ButtonRelease-1>', self.drag_finish)
-        ttk.Label(outer, text='영상에서 침대의 두 모서리를 드래그해 영역을 지정하세요. 카메라는 측정 중 고정하세요.').pack(anchor='w', pady=(10, 6))
+        side = ttk.Frame(body, width=280)
+        side.grid(row=0,column=1,sticky='ns')
+        self.posture = tk.StringVar(value='판정 기능 준비 중')
+        self.detection = tk.StringVar(value='입력 대기')
+        self.bed_status = tk.StringVar(value='영역 미지정')
+        self.event_status = tk.StringVar(value='판정 기능 준비 중')
+        self.cards = []
+        self.details = []
+        for heading,value,detail in (
+            ('AI 자세 판정', self.posture, '분류기 연결 후 자세명을 표시합니다.'),
+            ('관절 검출', self.detection, '관절 후보는 자세 판정이나 정확도가 아닙니다.'),
+            ('침대 영역', self.bed_status, '영상에서 두 모서리를 드래그하세요.')):
+            card=ttk.Frame(side,style='Card.TFrame',padding=12)
+            card.pack(fill='x',pady=(0,10))
+            ttk.Label(card,text=heading,style='Card.TLabel').pack(anchor='w')
+            ttk.Label(card,textvariable=value,style='Value.TLabel').pack(anchor='w',pady=(6,6))
+            description=ttk.Label(card,text=detail,style='Card.TLabel',wraplength=250)
+            description.pack(anchor='w')
+            self.details.append(description)
+            self.cards.append(card)
+        ttk.Label(side,text='이탈 · 복귀: 판정 기능 준비 중',wraplength=265).pack(anchor='w',pady=4)
+        ttk.Label(outer,text='① 입력 확인   →   ② 침대 영역 지정   →   ③ 측정 시작',font=(self.font_family,10,'bold')).grid(row=3,column=0,sticky='w',pady=(10,6))
         controls = ttk.Frame(outer)
-        controls.pack(fill='x')
-        self.start_button = ttk.Button(controls, text='측정 시작', command=self.start)
-        self.start_button.pack(side='left', padx=(0, 8))
+        controls.grid(row=4,column=0,sticky='ew')
+        self.start_button = ttk.Button(controls, text='측정 시작', style='Primary.TButton', command=self.start)
+        self.start_button.pack(side='left', padx=(0,8))
         self.stop_button = ttk.Button(controls, text='측정 종료', command=self.stop)
-        self.stop_button.pack(side='left', padx=(0, 8))
-        self.clear_button = ttk.Button(controls, text='침대 영역 지우기', command=self.clear_region)
-        self.clear_button.pack(side='left', padx=(0, 16))
+        self.stop_button.pack(side='left', padx=(0,8))
+        self.clear_button = ttk.Button(controls, text='영역 지우기', command=self.clear_region)
+        self.clear_button.pack(side='left', padx=(0,12))
         self.overlay = tk.BooleanVar(value=True)
-        ttk.Checkbutton(controls, text='관절 표시', variable=self.overlay, command=self.draw).pack(side='left')
-        self.measure_status = tk.StringVar(value='기록 대기')
-        ttk.Label(controls, textvariable=self.measure_status).pack(side='right')
-        self.summary = tk.StringVar(value='프레임 수신 대기 · 침대 영역 미지정')
-        ttk.Label(outer, textvariable=self.summary).pack(anchor='w', pady=(10, 4))
-        ttk.Label(outer, text='자세 분류: 미구현  |  점유·이탈·복귀: 미구현  |  대상 추적: 미구현  |  원본 영상 저장: 꺼짐').pack(anchor='w')
-        ttk.Label(outer, text='좌표 출력과 정확도는 다릅니다. 수신 시각을 기록하며 카메라 노출 시각·센서 동기화는 제공하지 않습니다.').pack(anchor='w', pady=(4, 8))
+        ttk.Checkbutton(controls,text='관절 표시',variable=self.overlay,command=self.draw).pack(side='left')
+        if self.is_file:
+            self.play_button = ttk.Button(controls,text='재생',command=self.toggle_playback)
+            self.play_button.pack(side='left',padx=8)
+        ttk.Button(controls,text='입력 연결 종료',command=self.quit).pack(side='right')
+        self.measure_status = tk.StringVar(value='기록 대기 · 원본 영상 저장 꺼짐')
+        ttk.Label(outer,textvariable=self.measure_status,font=(self.font_family,11,'bold')).grid(row=5,column=0,sticky='w',pady=(8,3))
+        self.summary = tk.StringVar(value='프레임 수신 대기')
+        ttk.Label(outer,textvariable=self.summary,wraplength=1000).grid(row=6,column=0,sticky='w',pady=(0,6))
         self.path = tk.StringVar(value='측정을 시작하면 새 결과 폴더가 생성됩니다.')
-        ttk.Entry(outer, textvariable=self.path, state='readonly').pack(fill='x')
+        self.path_entry=ttk.Entry(outer,textvariable=self.path,state='readonly')
+        self.path_entry.grid(row=7,column=0,sticky='ew')
+        outer.bind('<Configure>',self.compact_layout)
         self.update_controls()
-        root.bind('<Configure>', self.resize_text)
-        self.outer = outer
-        root.protocol('WM_DELETE_WINDOW', self.quit)
+        if self.owns_window:
+            root.protocol('WM_DELETE_WINDOW', self.quit)
         root.after(30, self.poll)
 
-    def resize_text(self, event):
-        if event.widget == self.root:
-            for child in self.outer.winfo_children():
-                if isinstance(child, self.ttk.Label):
-                    child.configure(wraplength=max(500, self.root.winfo_width()-40))
+    def compact_layout(self,event):
+        if event.widget != self.outer:
+            return
+        for card in self.cards:
+            card.configure(padding=8 if event.height < 570 else 12)
+        for detail in self.details:
+            if event.height < 570:
+                detail.pack_forget()
+            elif not detail.winfo_manager():
+                detail.pack(anchor='w')
+
+    def toggle_playback(self):
+        self.worker.submit('playback', paused=not self.playback_paused)
+
+    def show_observation(self, row):
+        # This release has no classifier. Never derive posture from candidate count.
+        self.posture.set('판정 기능 준비 중')
+        count = row['candidate_count']
+        self.detection.set('후보 없음' if count == 0 else f'후보 {count}명')
+        self.bed_status.set('영역 지정됨' if self.region else '영역 미지정')
 
     def update_controls(self):
         active = not self.closed and not self.closing and not self.pending
         self.start_button.configure(state='normal' if active and self.frame is not None and self.region is not None and not self.recording else 'disabled')
         self.stop_button.configure(state='normal' if active and self.recording else 'disabled')
         self.clear_button.configure(state='normal' if active and self.frame is not None else 'disabled')
+        if self.is_file:
+            self.play_button.configure(state='normal' if active and self.frame is not None else 'disabled')
 
     def start(self):
         self.pending = True
@@ -188,10 +239,11 @@ class LiveWindow:
             while True:
                 kind, value = self.worker.messages.get_nowait()
                 if kind == 'ready':
-                    self.kind.set('합성 입력 · 실제 인식 아님' if self.worker.engine.execution_kind=='synthetic' else '카메라 · 모델 출력')
+                    self.kind.set('합성 입력 · 실제 인식 아님' if self.worker.engine.execution_kind=='synthetic' else ('저장 영상 · 처리 속도로 재생' if self.is_file else f'카메라 {self.worker.engine.source.index} · 모델 출력'))
                     self.status.set('영상을 확인하고 침대 영역을 드래그로 지정하세요.')
                 elif kind == 'region':
                     self.region = value['region']
+                    self.bed_status.set('영역 지정됨' if self.region else '영역 미지정')
                     self.status.set('침대 영역을 수동 지정했습니다.' if self.region else '침대 영역 미지정 · 침대 관련 판정은 제공하지 않습니다.')
                 elif kind == 'started':
                     self.recording, self.pending = True, False
@@ -212,6 +264,8 @@ class LiveWindow:
                 elif kind in ('error','command_rejected'):
                     self.pending = False
                     if kind == 'error':
+                        self.posture.set('입력/분석 중단')
+                        self.detection.set('입력/분석 중단')
                         self.had_error = True
                         self.last_error = value['message']
                         self.measure_status.set('오류 · 연결 종료 중')
@@ -223,7 +277,16 @@ class LiveWindow:
                     else:
                         self.measure_status.set('측정 중' if self.recording else '기록 대기')
                     self.status.set(('오류: ' if kind=='error' else '요청 확인: ') + value['message'])
+                elif kind == 'playback':
+                    self.playback_paused = value['paused']
+                    self.play_button.configure(text='재생' if self.playback_paused else '일시정지')
+                elif kind == 'eof':
+                    self.ended = True
+                    self.status.set('영상 끝 · 마지막 분석 프레임입니다. 다시 보려면 파일을 새로 여세요.')
+                    self.detection.set('영상 끝')
                 elif kind == 'closed':
+                    if not self.had_error:
+                        self.status.set(('영상 끝' if self.ended else '입력 연결 종료')+' · 마지막 결과입니다. 다시 분석하려면 새 입력으로 여세요.')
                     self.closed = True
                     self.recording = self.pending = False
         except queue.Empty:
@@ -241,7 +304,12 @@ class LiveWindow:
                 self.record_count = self.frame['recorded_frames']
                 if self.measure_started_ns is not None and int(row['received_ns']) >= self.measure_started_ns:
                     self.measure_elapsed = (int(row['received_ns'])-self.measure_started_ns)/1e9
-            self.summary.set(f"수신 프레임 {row['stream_frame_id']} · {candidate} · 최근 측정 기록 {self.record_count}개 · 측정 {self.measure_elapsed:.1f}초 · 세션 시각 +{int(row['received_ns'])/1e9:.1f}초 · 화면 교체 {self.frame['display_replaced']}개")
+            self.show_observation(row)
+            if self.closed:
+                self.detection.set(self.detection.get()+' · 마지막 결과')
+            media = row.get('source_media')
+            media_text = f" · 영상 {int(media['relative_time_ns'])/1e9:.2f}초" if media else ''
+            self.summary.set(f"입력 프레임 {row['stream_frame_id']} · {candidate} · 최근 측정 기록 {self.record_count}개 · 측정 {self.measure_elapsed:.1f}초{media_text}")
             try:
                 self.draw()
             except Exception as exc:
@@ -254,8 +322,9 @@ class LiveWindow:
         except queue.Empty:
             pass
         self.update_controls()
-        if self.closing and self.closed:
-            self.root.destroy()
+        if self.closed:
+            if self.closing and self.owns_window:
+                self.root.destroy()
             return
         if self.closing and self.close_started is not None and time.monotonic()-self.close_started > 5 and not self.closed:
             self.status.set('장치 응답을 기다리는 중입니다. 강제 종료하면 기록이 미완료 상태로 남을 수 있습니다.')
@@ -264,49 +333,16 @@ class LiveWindow:
     def quit(self):
         if self.closing:
             return
+        if self.closed and self.owns_window:
+            self.root.destroy()
+            return
         self.closing = True
         self.close_started = time.monotonic()
-        self.status.set('카메라와 모델을 종료하고 기록을 정리하고 있습니다.')
+        self.status.set('입력을 종료하고 기록을 정리하고 있습니다.')
         self.worker.request_close()
         self.update_controls()
 
 
-def launch_live(model=None, camera=0, output_root=Path('recordings/live'), demo=False):
-    try:
-        import tkinter as tk
-    except ImportError as exc:
-        raise ValueError('실시간 창에는 Python의 Tk 구성요소가 필요합니다.') from exc
-    try:
-        import cv2  # Reuse the OpenCV dependency supplied by the existing MediaPipe extra.
-    except ImportError as exc:
-        raise ValueError('실시간 기능에는 pip install -e .[live] 설치가 필요합니다.') from exc
-    if not demo and (model is None or not Path(model).is_file()):
-        raise ValueError('사용할 로컬 MediaPipe .task 모델을 지정하세요.')
-    with tempfile.TemporaryDirectory(prefix='bed-pose-live-') as tmp:
-        if demo:
-            from .pose.fake import FakeAdapter
-            source, adapter = SyntheticSource(), FakeAdapter()
-            settings, profile, kind = {'execution_mode':'ordered_sequence'}, None, 'synthetic'
-        else:
-            from .pose.mediapipe import MediaPipeAdapter, DEFAULT_OPTIONS, mapping_profile
-            model = Path(model).resolve()
-            options = Path(tmp)/'adapter_options.json'
-            atomic_json(options, DEFAULT_OPTIONS)
-            settings = {'execution_mode':'ordered_sequence', 'requested_device':'cpu',
-                        'assets':[{'role':'pose_landmarker_task','path':str(model),'sha256':file_hash(model)}],
-                        'adapter_options_path':str(options), 'adapter_options_sha256':file_hash(options)}
-            source, adapter, profile, kind = CameraSource(camera), MediaPipeAdapter(), mapping_profile(), 'model_inference'
-        engine = LiveEngine(source, adapter, settings, output_root, profile=profile, execution_kind=kind)
-        worker = LiveWorker(engine)
-        try:
-            root = tk.Tk()
-        except tk.TclError as exc:
-            raise ValueError('실시간 창을 열 수 없습니다. 데스크톱 화면과 Python Tk 설치를 확인하세요.') from exc
-        window = LiveWindow(root, worker)
-        worker.start()
-        try:
-            root.mainloop()
-        finally:
-            worker.request_close()
-            worker.join(timeout=5)
-        return 3 if window.had_error else 0
+def launch_live(model=None, camera=None, output_root=Path('recordings/live'), demo=False, video=None):
+    from .live_app import launch_workspace
+    return launch_workspace(model, camera, output_root, demo, video)

@@ -63,7 +63,9 @@ def frame_svg(packet, row, mapped, execution_kind, run_status):
     return '\n'.join(elements) + '\n</svg>\n'
 
 
-def render_overlay(video_path, run_dir, output):
+def render_overlay(video_path, run_dir, output, max_frames=None):
+    if max_frames is not None and (type(max_frames) is not int or max_frames < 1):
+        raise ValueError('max_frames must be a positive integer')
     bundle = read_run(run_dir, include_keypoints=True)
     manifest, source = bundle['manifest'], bundle['source']
     video_path, output = Path(video_path).resolve(), Path(output).resolve()
@@ -74,9 +76,10 @@ def render_overlay(video_path, run_dir, output):
     mapped = {row['frame_id']: row for row in bundle['keypoints']}
     decoder = VideoSource(source, bundle['input_frames'], video_path)
     hashes, catalog, svg_frames = {}, [], []
+    limit = min(max_frames or len(bundle['frames']), len(bundle['frames']))
     try:
         decoder.open()
-        for row in bundle['frames']:
+        for row in bundle['frames'][:limit]:
             packet = decoder.read_next()
             if packet is None:
                 raise SourceError('Render source ended before recorded frames')
@@ -94,7 +97,7 @@ def render_overlay(video_path, run_dir, output):
                 'processing_status', 'candidate_count', 'failure_code')},
                 'candidate_ids': [person['candidate_id'] for person in people],
                 'drawable_joint_count': drawable_count if row['keypoints_ref'] is not None else None})
-        if decoder.read_next() is not None:
+        if limit == len(bundle['frames']) and decoder.read_next() is not None:
             raise SourceError('Render source has unrecorded frames')
     finally:
         decoder.close()
@@ -110,7 +113,8 @@ def render_overlay(video_path, run_dir, output):
     report = {'complete': True, 'renderer_code': _code_version(), 'run_id': manifest['run_id'], 'run_status': manifest['run_status'],
               'execution_kind': manifest['execution_kind'], 'run_manifest_sha256': bundle['manifest_sha256'],
               'video_sha256': source['video_sha256'], 'input_manifest_sha256': manifest['input_manifest_sha256'],
-              'frame_count': len(catalog), 'format': 'svg_with_lossless_rgb_png', 'playback': 'manual_frame_selection',
+              'frame_count': len(catalog), 'source_frame_count': len(bundle['frames']),
+              'rendered_frame_range': [0, limit], 'format': 'svg_with_lossless_rgb_png', 'playback': 'manual_frame_selection',
               'artifact_sha256': hashes}
     atomic_json(output / 'manifest.json', report)
     return output, report

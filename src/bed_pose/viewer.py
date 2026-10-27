@@ -9,6 +9,7 @@ def viewer_html(manifest, source, catalog, svg_frames):
         raise ValueError('Viewer requires one SVG per catalog frame')
     payload = {'run_id': manifest['run_id'], 'run_status': manifest['run_status'],
                'execution_kind': manifest['execution_kind'],
+               'total_source_frames': manifest.get('expected_frames', len(catalog)),
                'width': source['canonical_width'], 'height': source['canonical_height'],
                'frames': [dict(frame, svg=base64.b64encode(svg.encode('utf-8')).decode('ascii'))
                           for frame, svg in zip(catalog, svg_frames)]}

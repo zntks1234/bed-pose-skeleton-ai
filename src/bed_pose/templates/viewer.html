@@ -16,7 +16,7 @@
 <body>
 <header class="topbar"><div class="wrap"><div class="brand"><span class="brand-icon" aria-hidden="true"><svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M3 17V9m0 5h18v5m-18-2v2m0-9h5a3 3 0 0 1 3 3v1m0-6h7a3 3 0 0 1 3 3v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>BedPose <small>프레임 검토</small></div><span class="badge"><span class="dot"></span><span id="data-badge">__DATA_BADGE__</span></span></div></header>
 <main class="wrap">
-<section class="heading"><div><h1>관절 분석 결과</h1><p class="subtitle">영상과 관절 출력을 프레임별로 확인합니다.</p></div><div class="run-overview"><div><span>실행 상태</span><strong id="run-status">—</strong></div><div><span>전체 프레임</span><strong id="frame-total">—</strong></div><div><span>원본 해상도</span><strong id="source-size">—</strong></div></div></section>
+<section class="heading"><div><h1>관절 분석 결과</h1><p class="subtitle">영상과 관절 출력을 프레임별로 확인합니다.</p></div><div class="run-overview"><div><span>실행 상태</span><strong id="run-status">—</strong></div><div><span>표시 / 전체 프레임</span><strong id="frame-total">—</strong></div><div><span>원본 해상도</span><strong id="source-size">—</strong></div></div></section>
 <div class="workspace">
 <div class="viewer-column"><section class="card" aria-label="영상과 프레임 선택">
 <div class="viewer-head"><div class="viewer-title"><span class="small-square"></span>프레임 뷰어</div><label class="switch"><input id="overlay-toggle" type="checkbox" checked>관절 표시</label></div>
@@ -65,10 +65,10 @@ function sourceTime(frame) {
 }
 text('data-badge',synthetic?'합성 데이터 · 실제 인식 아님':'모델 출력 · 정답 미확인');
 text('run-status',({succeeded:'정상 종료',failed:'오류로 종료',cancelled:'사용자 중단'})[data.run_status] || data.run_status);
-text('frame-total',frames.length+'개');
+text('frame-total',frames.length+' / '+data.total_source_frames+'개');
 text('source-size',data.width+' × '+data.height);
 text('context-note',synthetic?'생성 영상에 합성 관절을 표시한 예시입니다. 실제 사람의 자세 인식 결과가 아닙니다.':'관절 출력은 자세 판정이나 정확도 검증 결과가 아닙니다. 후보 ID는 프레임 안에서만 유효합니다.');
-text('footer-note','자세 분류 · 침대 이탈/복귀 판정은 아직 제공하지 않습니다.');
+text('footer-note',(frames.length<data.total_source_frames?'전체 '+data.total_source_frames+'개 중 처음 '+frames.length+'개를 표시합니다. ':'')+'자세 분류 · 침대 이탈/복귀 판정은 아직 제공하지 않습니다.');
 text('record-run',data.run_id);
 
 const buttons = frames.map((frame,index) => {

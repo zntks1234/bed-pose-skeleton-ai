@@ -85,3 +85,23 @@ class ViewerTests(unittest.TestCase):
             self.assertEqual(len(payload['frames']), 6)
             self.assertEqual(payload['frames'][2]['source_pts'], '100')
             self.assertEqual(parser.external_assets, [])
+
+    def test_limited_preview_preserves_source_count_and_record_ids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            video = create_demo_video(root / 'input.mkv')
+            prepared = prepare_input(video, root / 'input', root / 'runs')
+            run, _ = run_benchmark(validate_run(prepared.parent / 'run_config.fake.json'))
+            output, report = render_overlay(video, run, root / 'preview', max_frames=2)
+            self.assertEqual(report['frame_count'], 2)
+            self.assertEqual(report['source_frame_count'], 6)
+            self.assertEqual(report['rendered_frame_range'], [0, 2])
+            catalog = load_json(output / 'frames.json')
+            self.assertEqual([row['frame_id'] for row in catalog], [0, 1])
+            self.assertEqual([row['source_pts'] for row in catalog], ['0', '40'])
+            parser = PayloadParser()
+            parser.feed((output / 'index.html').read_text(encoding='utf-8'))
+            self.assertEqual(json.loads(parser.payload)['total_source_frames'], 6)
+            self.assertEqual(load_json(run / 'manifest.json')['counts']['ok'], 6)
+            with self.assertRaises(ValueError):
+                render_overlay(video, run, root / 'invalid', max_frames=0)

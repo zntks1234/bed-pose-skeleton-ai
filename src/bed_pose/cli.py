@@ -63,6 +63,7 @@ def main(argv=None):
     render.add_argument('--run', type=Path, required=True)
     render.add_argument('--video', type=Path, required=True)
     render.add_argument('--output', type=Path, required=True)
+    render.add_argument('--max-frames', type=int, default=None, help='Render only the first N frames; inference records remain unchanged')
     args = parser.parse_args(argv)
     try:
         if args.command in ('evaluate', 'compare'):
@@ -74,7 +75,7 @@ def main(argv=None):
             return 0 if report['evaluation_status'] == 'completed' else 4
         if args.command == 'render':
             from .rendering import render_overlay
-            path, report = render_overlay(args.video, args.run, args.output)
+            path, report = render_overlay(args.video, args.run, args.output, max_frames=args.max_frames)
             print(json.dumps({'render_directory': str(path), 'frame_count': report['frame_count'],
                               'execution_kind': report['execution_kind']}, ensure_ascii=False))
             return 0

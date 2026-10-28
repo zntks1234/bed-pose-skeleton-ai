@@ -65,6 +65,8 @@ class OpenRecord:
                 self.offsets.append(position)
         if len(self.offsets)!=self.manifest['recorded_frames']:raise ValueError('기록 프레임 수가 변경되었습니다.')
         self.check()
+        self.timeline_cache=OrderedDict()
+        self.timeline_lock=threading.Lock()
 
     def check(self):
         confined_files(self.directory)
@@ -93,6 +95,23 @@ class OpenRecord:
         self.check()
         return {'record_id':self.meta['record_id'],'offset':offset,'limit':limit,
                 'total':len(self.offsets),'frames':rows}
+
+    def timeline(self,basis,bins):
+        from .record_timeline import summarize
+        with self.timeline_lock:
+            self.check()
+            key=(basis,bins)
+            if key not in self.timeline_cache:
+                def rows():
+                    with (self.directory/'live_frames.jsonl').open(encoding='utf-8') as stream:
+                        for line in stream:yield strict_loads(line)
+                summary=summarize(rows,self.manifest,basis,bins)
+                self.check()
+                self.timeline_cache[key]=dict(summary,record_id=self.meta['record_id'])
+                while len(self.timeline_cache)>4:self.timeline_cache.popitem(last=False)
+            self.timeline_cache.move_to_end(key)
+            self.check()
+            return self.timeline_cache[key]
 
 
 class RecordLibrary:
@@ -145,3 +164,10 @@ class RecordLibrary:
         with self.lock:record=self.opened.get(record_id)
         if record is None:raise ValueError('기록 목록에서 측정을 먼저 여세요.')
         return record.page(offset,limit)
+
+    def timeline(self,record_id,basis=None,bins=240):
+        self.directory(record_id)
+        with self.lock:record=self.opened.get(record_id)
+        if record is None:raise ValueError('기록 목록에서 측정을 먼저 여세요.')
+        if basis is None:basis='media' if record.meta['source_kind']=='video_file' else 'receive'
+        return record.timeline(basis,bins)

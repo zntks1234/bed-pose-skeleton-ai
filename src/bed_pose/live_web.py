@@ -520,6 +520,11 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 return self._reply(403, {'error': '작업실 실행 주소로 다시 접속하세요.'})
             if path == '/api/state':
                 return self._reply(200, self.server.workspace.snapshot())
+            if path == '/api/records/timeline':
+                query=parse_qs(url.query)
+                result=self.server.workspace.records.timeline(query.get('record_id',[''])[0],
+                    query.get('basis',[None])[0],int(query.get('bins',['240'])[0]))
+                return self._reply(200,result)
             if path in ('/api/records','/api/records/frames'):
                 query=parse_qs(url.query)
                 offset=int(query.get('offset',['0'])[0]);limit=int(query.get('limit',['50'])[0])

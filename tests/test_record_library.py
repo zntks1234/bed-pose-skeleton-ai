@@ -99,6 +99,9 @@ class RecordWebTests(unittest.TestCase):
         self.assertEqual(self.request('/api/records/open',{'record_id':root.name})[0],200)
         _,page=self.request('/api/records/frames?record_id='+root.name)
         self.assertTrue(all(r['assessment'] is None and r['score_decision'] is None for r in page['frames']))
+        _,timeline=self.request('/api/records/timeline?record_id='+root.name)
+        self.assertEqual(timeline['totals']['postures']['unrecorded'],timeline['total_frames'])
+        self.assertEqual(timeline['totals']['scores']['side']['missing_count'],timeline['total_frames'])
 
     def test_failed_run_with_complete_records_is_readable_and_missing_file_rejected(self):
         sid,root=self.measured();manifest=load_json(root/'manifest.json');manifest.update(run_status='failed',errors=[{'code':'TEST_FAILURE'}])

@@ -255,6 +255,11 @@ class WebWorkspace:
                     raise ValueError('영역을 지정한 영상 프레임이 유효하지 않습니다.')
                 session.worker.submit('region', box=box, width=state['width'], height=state['height'],
                                       selected_frame_id=selected_id)
+            elif action == 'posture_reference':
+                if state['recording']:raise ValueError('측정 종료 후 기준을 변경하세요.')
+                if values.get('clear') is not True and values.get('confirmed') is not True:raise ValueError('실제 자세를 확인한 뒤 등록하세요.')
+                session.worker.submit('posture_reference',label=values.get('label'),selected_frame_id=values.get('selected_frame_id'),
+                    max_distance=values.get('max_distance',.35),min_margin=values.get('min_margin',.10),clear=values.get('clear') is True)
             elif action == 'start':
                 if state['frame_id'] is None or not state['region'] or state['recording']:
                     raise ValueError('영상에서 침대 영역을 먼저 지정하세요.')
@@ -316,6 +321,10 @@ class WebWorkspace:
                          phase='error' if manifest['run_status'] == 'failed' else 'preview')
             if manifest['run_status'] == 'failed' and not state['error']:
                 state['error'] = '오류로 측정을 종료했습니다. 기록을 확인하세요.'
+        elif kind == 'posture_reference':
+            state['posture_reference_profile']=value['profile']
+            state['posture_reference_model_id']=value['model_id']
+            state['pending']=None
         elif kind == 'target_selected':
             state['target_tracking']=value['tracking']
             state['target_selection_applied']=value.get('selection_id')
@@ -380,6 +389,7 @@ class WebWorkspace:
             state['elapsed'] = (int(row['received_ns'])-int(state['started_ns']))/1e9
         state['target_tracking']=row['target_tracking']
         state['posture_assessment']=row['posture_assessment']
+        state['posture']=row['posture_assessment']['label'] or ('held' if row['posture_assessment']['classifier_id'] else 'not_implemented')
         session.view = {'sequence': session.sequence, 'frame_id': row['stream_frame_id'],
                         'width': width, 'height': height, 'people': row['mapped_people'],
                         'clock_id':row['clock_id'],'received_ns':row['received_ns'],

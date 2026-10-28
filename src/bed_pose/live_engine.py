@@ -2,6 +2,7 @@
 from dataclasses import asdict
 from pathlib import Path
 import platform
+import math
 import queue
 import threading
 import time
@@ -41,6 +42,8 @@ class LiveEngine:
         self.ever_opened = False
         self.source_profile, self.adapter_profile = {}, {}
         self.target_tracker=TargetTracker()
+        self.posture_classifier=None
+        self.latest_posture_observation=None
 
     def clock(self):
         return self.clock_function() - self.origin
@@ -79,6 +82,44 @@ class LiveEngine:
                                 effective_stream_frame_id=self.next_frame_id, request=request, selection=self.region_selection)
         return self.region
 
+    def configure_posture(self, label=None, selected_frame_id=None, max_distance=.35, min_margin=.10, clear=False):
+        if self.recorder:raise ValueError('측정을 종료한 뒤 기준 자세를 변경하세요.')
+        if clear:
+            self.posture_classifier=None
+            return
+        from .posture import assess_frame,PostureInput
+        from .reference_posture import ReferenceClassifier,features,distance,METHOD
+        from copy import deepcopy
+        if type(selected_frame_id) is not int:raise ValueError('등록 프레임 번호를 확인하세요.')
+        if label not in ('supine','side','edge_sitting') or self.region is None:raise ValueError('침대 영역과 기준 자세를 선택하세요.')
+        with self.target_tracker.lock:
+            snapshot=next((s for s in self.target_tracker.history if s['frame_id']==selected_frame_id),None)
+            if snapshot is None:raise ValueError('선택 프레임이 만료됐습니다. 다시 등록하세요.')
+            row={'stream_frame_id':snapshot['frame_id'],'clock_id':self.clock_id,'received_ns':str(snapshot['time_ns']),
+                'processing_status':snapshot['processing_status'],'mapped_people':snapshot['people']}
+            # Reference capture requires exactly one visible candidate, avoiding a stale ID match.
+            a=assess_frame(row,*self.geometry,self.region)
+            if a['reasons']!=['classifier_not_configured']:raise ValueError('한 사람의 관절이 보이는 프레임으로 등록하세요.')
+            person=snapshot['people'][0]
+            points=tuple((j['x_px'],j['y_px']) if j.get('availability')=='predicted' and
+                type(j.get('x_px')) in (int,float) and type(j.get('y_px')) in (int,float) and
+                math.isfinite(j['x_px']) and math.isfinite(j['y_px']) and 0<=j['x_px']<self.geometry[0] and 0<=j['y_px']<self.geometry[1] else None for j in person['joints'])
+            box=[self.region[k] for k in ('x1','y1','x2','y2')]
+            vector=features(PostureInput(points,*self.geometry,tuple(box)))
+            if vector is None:raise ValueError('어깨·골반·무릎·발목의 화면 내 관절이 모두 필요합니다.')
+            previous=self.posture_classifier.profile if self.posture_classifier else None
+            refs=deepcopy(previous['references']) if previous and previous['bed_rectangle']==box else {}
+            profile={'version':METHOD,'label_source':'operator_reference_not_verified','width':self.geometry[0],'height':self.geometry[1],
+                     'bed_rectangle':box,'max_distance':max_distance,'min_margin':min_margin,'references':refs}
+            ReferenceClassifier(profile)  # Validate experimental settings before numeric operations.
+            for other,ref in refs.items():
+                if other!=label and distance(vector,ref['features'])<min_margin:
+                    raise ValueError('다른 자세 기준과 너무 비슷합니다. 실제 자세와 관절을 확인하세요.')
+            profile['references'][label]={'features':vector,'source':{'stream_id':self.stream_id,'stream_frame_id':selected_frame_id,
+                 'clock_id':self.clock_id,'observation_time_ns':str(snapshot['time_ns']),'time_basis':'media_relative' if getattr(self.source,'is_file',False) else 'stream_receive',
+                 'registered_ns':str(self.clock()),'assertion':'operator_reference_not_verified'}}
+            self.posture_classifier=ReferenceClassifier(profile)
+
     def start_measurement(self, request=None):
         if not self.opened or self.geometry is None or self.region is None:
             raise ValueError('영상이 표시된 뒤 침대 영역을 먼저 지정하세요.')
@@ -108,7 +149,8 @@ class LiveEngine:
                     'preview_tracking_history_retained': True, 'hardware_dropped_frames': None, 'start_request': request,
                     'target_tracking_initial':self.target_tracker.current(),
                     'posture_assessment_profile':dict(PROFILE),
-                    'target_policy': 'none', 'posture_classifier': 'not_implemented', 'event_analyzer': 'not_implemented'}
+                    'reference_posture_profile':self.posture_classifier.profile if self.posture_classifier else None,
+                    'target_policy': 'none', 'posture_classifier': self.posture_classifier.model_id if self.posture_classifier else 'not_implemented', 'event_analyzer': 'not_implemented'}
         self.recorder = LiveRecorder(self.output_root/measurement_id, manifest, self.clock)
         self.recorder.event('measurement_started', effective_stream_frame_id=self.next_frame_id, request=request)
         return self.recorder.directory
@@ -198,7 +240,10 @@ class LiveEngine:
             failure = LiveFailure(code, str(exc))
         row['target_tracking']=self.target_tracker.observe(row,*geometry)
         from .posture import assess_frame
-        row['posture_assessment']=assess_frame(row,*geometry,self.region)
+        row['posture_assessment']=assess_frame(row,*geometry,self.region,self.posture_classifier)
+        if self.posture_classifier:
+            a=row['posture_assessment']
+            row['posture_prediction']={'status':'experimental' if a['label'] else 'held','label':a['label']}
         if self.recorder:
             self.recorder.frame(row)
         if failure:
@@ -264,6 +309,10 @@ class LiveWorker(threading.Thread):
                                 self.engine.recorder.event('target_reselected',effective_stream_frame_id=self.engine.next_frame_id,
                                     request=request,selection=values,tracking=tracking)
                             self.messages.put(('target_selected',{'tracking':tracking,'selection_id':values.get('selection_id')}))
+                        elif action == 'posture_reference':
+                            self.engine.configure_posture(**values)
+                            model=self.engine.posture_classifier
+                            self.messages.put(('posture_reference',{'profile':model.profile if model else None,'model_id':model.model_id if model else None}))
                         elif action == 'start':
                             path = self.engine.start_measurement(request=request)
                             if getattr(self.engine.source, 'is_file', False):

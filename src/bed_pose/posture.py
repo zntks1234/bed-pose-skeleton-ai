@@ -52,8 +52,16 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
         'bed_region_available':region is not None,'classifier_id':getattr(classifier,'model_id',None)}
     if reasons:return result
     try:
-        label=classifier.predict(PostureInput(tuple(points),width,height,
-            tuple(region[k] for k in ('x1','y1','x2','y2')) if region else None))
+        observation=PostureInput(tuple(points),width,height,
+            tuple(region[k] for k in ('x1','y1','x2','y2')) if region else None)
+        from .reference_posture import ReferenceClassifier
+        if isinstance(classifier,ReferenceClassifier):
+            label,reason,distances=classifier.evaluate(observation)
+            result.update(reference_distances=distances,experimental=True)
+            if reason:
+                result.update(status='held',reasons=[reason])
+                return result
+        else:label=classifier.predict(observation)
         if label is None:result.update(status='held',reasons=['insufficient_or_out_of_scope'])
         elif type(label) is not str or label not in LABELS:result.update(status='held',reasons=['invalid_classifier_output'])
         else:result.update(status='predicted',label=label)

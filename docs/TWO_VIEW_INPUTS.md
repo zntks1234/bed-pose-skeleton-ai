@@ -94,3 +94,8 @@ left/right는 코드상 입력 슬롯이며 해부학적 좌우가 아닙니다.
 향후 실제 두 카메라의 수신/촬영 시점 오차·추적 오류·촬영 배치 차이를 확인해야 합니다. 학습 전에는 확인된 자세 정답, 참가자/세션 단위 분할, 시점 순서/일반화 조건과 실제 입력 품질 기준이 필요합니다. 현재 입력 후보를 정답 라벨이 붙은 학습 데이터라고 취급하지 않습니다.
 
 계획 측정은 target_label_source=operator_instruction_not_ground_truth로 목표 출처를 보존합니다. 목표는 특징 계산/게이트/예측에 넣지 않으며 계획 메타데이터와 파생 행의 일관성을 검사합니다. [단일 자세 계획 측정](SINGLE_POSTURE_PLAN.md).
+
+
+## 실험 자세 판정 확장 · 2026-10-28
+
+기준 비교 분류기가 설정된 입력의 view에는 원본 posture_assessment를 추가 보존한다. 이 특징 파일의 기존 posture_prediction은 유지하고, 통합 예측은 별도 posture_predictions.jsonl과 그룹 manifest의 posture_predictions에 기록한다. group-inspect는 파일 해시와 원본 기반 재계산을 확인한다. [사용법·현재 한계](REFERENCE_POSTURE.md).

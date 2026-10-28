@@ -74,7 +74,7 @@ def view_features(row,manifest,regions,input_id):
                                 region['y1']<=joint['y_px']<=region['y2']) if numeric and region else None))
         if not any(j['image_mask'] for j in features):reasons.append('no_in_image_joints')
     elif tracking['status']=='tracking_provisional':reasons.append('tracked_candidate_missing')
-    return {'input_id':input_id,'measurement_id':manifest['measurement_id'],'frame_id':row['frame_id'],
+    result={'input_id':input_id,'measurement_id':manifest['measurement_id'],'frame_id':row['frame_id'],
             'stream_frame_id':row['stream_frame_id'],'clock_id':row['clock_id'],'received_ns':row['received_ns'],
             'time_ns':str(int(manifest['clock_origin_perf_counter_ns'])+int(row['received_ns'])),
             'width':manifest['width'],'height':manifest['height'],
@@ -82,6 +82,9 @@ def view_features(row,manifest,regions,input_id):
             'score_source_block':manifest['mapping_profile']['image_block_id'],'bed_region_revision':row['bed_region_revision'],
             'bed_region':region,'tracking':tracking,'joints':features,'hold_reasons':reasons,
             'identity_verified':False,'input_quality_status':'not_assessed'}
+    if manifest.get('reference_posture_profile'):
+        result['posture_assessment']=row['posture_assessment']
+    return result
 
 
 def iter_inputs(group,directory,*,legacy=False):
@@ -193,8 +196,11 @@ def _inspect_group(directory):
         if next(stream,None) is not None:raise IntegrityError('Extra fusion rows')
     if dict(counts)!=result['counts'] or dict(reasons)!=result['hold_reason_counts']:
         raise IntegrityError('Fusion counts mismatch')
+    if group.get('posture_predictions',{}).get('status')=='generated':
+        from .group_posture import verify_predictions
+        verify_predictions(group,directory)
     return {'group_id':group['group_id'],'integrity':'verified','input_counts':dict(counts),
-            'hold_reason_counts':dict(reasons),'posture_classifier':'not_implemented',
+            'hold_reason_counts':dict(reasons),'posture_classifier':('reference_distance_experimental' if group.get('posture_predictions',{}).get('status')=='generated' else 'not_implemented'),
             'identity_verified':False,'exposure_synchronized':False}
 
 

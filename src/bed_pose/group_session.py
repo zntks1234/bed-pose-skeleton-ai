@@ -205,6 +205,8 @@ class MeasurementGroup:
             try:
                 from .fusion_inputs import build_inputs
                 self.data['fusion_inputs']=build_inputs(self.data,self.directory)
+                from .group_posture import build_predictions
+                self.data['posture_predictions']=build_predictions(self.data,self.directory)
             except Exception as exc:
                 self.failed=True
                 self.data['errors'].append({'code':'FUSION_INPUT_FAILED','exception_type':type(exc).__name__})
@@ -235,7 +237,17 @@ class MeasurementGroup:
             if plan['measurement_started_perf_counter_ns']:
                 end=plan['measurement_stopped_perf_counter_ns'] or str(now)
                 progress['measurement_elapsed_seconds']=max(0,(int(end)-int(plan['measurement_started_perf_counter_ns']))/1e9)
-        from .posture import group_assessment
-        posture=group_assessment([{'input_id':s.id,'title':s.title,'closed':s.state['closed'],
-            'assessment':s.state.get('posture_assessment')} for s in self.members])
+        from .reference_posture import combine_views
+        from .fusion_inputs import confirmations
+        views=[]
+        for s in self.members:
+            a=s.state.get('posture_assessment')
+            tracking=s.state.get('target_tracking') or {}
+            views.append({'input_id':s.id,'title':s.title,'closed':s.state['closed'],'assessment':a,
+                'reference_profile':s.state.get('posture_reference_profile'),
+                'tracking_provisional':tracking.get('status')=='tracking_provisional',
+                'time_ns':str(s.worker.engine.origin+int(a['received_ns'])) if a else '0',
+                'max_age_ns':int(tracking.get('config',{}).get('max_gap_ms',500)*1e6)})
+        posture=combine_views(views,int(self.data['alignment_max_skew_ns']) if self.data['alignment_max_skew_ns'] is not None else None,
+            confirmations(self.data),self.data['phase']=='recording' and all(s.kind!='video_file' for s in self.members),time.perf_counter_ns())
         return dict(self.data,directory=str(self.directory),target_observations=observations,plan_progress=progress,posture_assessment=posture)

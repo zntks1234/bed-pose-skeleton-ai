@@ -83,6 +83,8 @@ def _verify(directory, manifest, hashes=True):
     if 'posture_assessment_profile' in manifest:
         from .posture import PROFILE
         if manifest['posture_assessment_profile']!=PROFILE:raise IntegrityError('Unsupported posture assessment profile')
+    from .reference_posture import ReferenceClassifier
+    reference_model=ReferenceClassifier(manifest['reference_posture_profile']) if manifest.get('reference_posture_profile') else None
     revision = manifest['initial_bed_revision']
     regions={manifest['initial_bed_revision']:manifest['initial_bed_region']}
     changes = []
@@ -180,17 +182,20 @@ def _verify(directory, manifest, hashes=True):
                 raise IntegrityError('Live model timestamp is not increasing')
             if not collision:
                 previous_model_ms = model_ms
-            if (row['posture_prediction'] != {'status': 'not_implemented', 'label': None}
+            from .posture import assess_frame
+            expected_assessment=assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']],reference_model) if reference_model else None
+            expected_prediction=({'status':'experimental' if expected_assessment['label'] else 'held','label':expected_assessment['label']} if reference_model else {'status':'not_implemented','label':None})
+            if (row['posture_prediction'] != expected_prediction
                     or row['event_predictions'] != [] or row['event_analysis_status'] != 'not_implemented'
                     or row['bed_occupancy_status'] != 'not_implemented'
                     or row['target_resolution'] != {'status': 'not_configured', 'candidate_id': None}
                     or any(row[k] is not None for k in ('target_posture', 'verified_gt', 'sensor_results'))):
                 raise IntegrityError('Unsupported live prediction or label injection')
-            if 'posture_assessment_profile' in manifest and 'posture_assessment' not in row:
+            if ('posture_assessment_profile' in manifest or reference_model) and 'posture_assessment' not in row:
                 raise IntegrityError('Missing posture assessment')
             if 'posture_assessment' in row:
                 from .posture import assess_frame
-                if row['posture_assessment']!=assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']]):
+                if row['posture_assessment']!=assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']],reference_model):
                     raise IntegrityError('Posture assessment differs from source frame')
             tracking=row.get('target_tracking')
             if tracking is not None and tracking != {'status':'not_configured','candidate_id':None}:

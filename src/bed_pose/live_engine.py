@@ -42,6 +42,8 @@ class LiveEngine:
         self.ever_opened = False
         self.source_profile, self.adapter_profile = {}, {}
         self.target_tracker=TargetTracker()
+        from .posture_diagnostics import PostureDiagnostics
+        self.posture_diagnostics=PostureDiagnostics()
         from .automatic_posture import AutomaticClassifier
         self.posture_classifier=AutomaticClassifier() if execution_kind=='model_inference' else None
 
@@ -250,9 +252,10 @@ class LiveEngine:
             row['posture_prediction']={'status':'experimental' if a['label'] else 'held','label':a['label']}
         if self.recorder:
             self.recorder.frame(row)
+        diagnostics=self.posture_diagnostics.observe(row['posture_assessment'],self.region_revision)
         if failure:
             raise failure
-        return {'rgb': rgb, 'row': row, 'bed_region': self.region, 'bed_revision': self.region_revision,
+        return {'rgb': rgb, 'row': row, 'posture_diagnostics':diagnostics, 'bed_region': self.region, 'bed_revision': self.region_revision,
                 'recorded_frames': self.recorder.manifest['recorded_frames'] if self.recorder else 0}
 
     def close(self, outcome='succeeded', error=None, request=None, reason='stream_closed'):

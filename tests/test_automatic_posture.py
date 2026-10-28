@@ -42,7 +42,7 @@ class AutomaticTests(unittest.TestCase):
     def test_standing_face_and_missing_and_outside_hold(self):
         model=AutomaticClassifier()
         self.assertEqual(model.evaluate(observation('standing'))[1],'standing_or_upright_out_of_scope')
-        for index,reason in ((0,'front_facing_evidence_missing'),(15,'automatic_joints_missing')):
+        for index,reason in ((0,'front_facing_evidence_missing'),(5,'automatic_torso_joints_missing')):
             obs=observation('supine');p=list(obs.points);p[index]=None
             self.assertEqual(model.evaluate(PostureInput(tuple(p),640,360,obs.bed_rectangle))[1],reason)
         obs=observation('supine');p=list(obs.points);p[5],p[6]=p[6],p[5]
@@ -129,3 +129,27 @@ class AutomaticWebTests(unittest.TestCase):
         rows[0]['label']='side';path.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
         manifest=load_json(root/'manifest.json');manifest['posture_predictions']['sha256']=file_hash(path);atomic_json(root/'manifest.json',manifest)
         with self.assertRaises(IntegrityError):inspect_group(root)
+
+    def test_partial_leg_prediction_record_and_diagnostics(self):
+        sid=self.automatic();engine=self.workspace.sessions[sid].worker.engine
+        original=engine.adapter.estimate
+        def partial(model_input):
+            out=original(model_input);candidates=copy.deepcopy(out.candidates)
+            for i in (13,14,15,16):candidates[0]['pose_blocks'][0]['values'][i]=[None,None]
+            return PoseOutput(candidates,out.model_timestamp_ms,out.sdk_call_started)
+        engine.adapter.estimate=partial
+        before=self.workspace.sessions[sid].state['frame_id']
+        self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['frame_id']>=before+3 and next(s for s in x['sessions'] if s['id']==sid)['posture_assessment']['label']=='supine')
+        self.control(sid,'start');self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['recorded_frames']>=2)
+        self.control(sid,'stop');state=self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['integrity']=='verified')['sessions'][0]
+        self.assertGreater(state['posture_diagnostics']['predicted'],0)
+        self.assertEqual(verify_live(state['directory'])['integrity'],'verified')
+
+    def test_previous_rule_version_records_still_verify(self):
+        from bed_pose.automatic_posture import LEGACY_METHOD
+        sid=self.automatic();engine=self.workspace.sessions[sid].worker.engine
+        engine.posture_classifier=AutomaticClassifier(dict(DEFAULTS,version=LEGACY_METHOD))
+        self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['posture_assessment']['classifier_id'].startswith(LEGACY_METHOD+':'))
+        self.control(sid,'start');self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['recorded_frames']>=2)
+        self.control(sid,'stop');state=self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['integrity']=='verified')['sessions'][0]
+        self.assertEqual(verify_live(state['directory'])['integrity'],'verified')

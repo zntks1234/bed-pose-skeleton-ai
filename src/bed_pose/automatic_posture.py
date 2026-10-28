@@ -3,7 +3,8 @@ import math
 from copy import deepcopy
 from .io_utils import object_hash
 
-METHOD='automatic-posture-rules-0.1'
+LEGACY_METHOD='automatic-posture-rules-0.1'
+METHOD='automatic-posture-rules-0.2'
 DEFAULTS={'version':METHOD,'view':'oblique','upright_cos':.85,'lying_cos':.55,
           'side_span_max':.22,'front_span_min':.40,'straight_knee_min':155.,
           'bent_knee_min':65.,'bent_knee_max':135.,'edge_fraction':.18}
@@ -19,15 +20,15 @@ def angle(a,b,c):
 class AutomaticClassifier:
     def __init__(self,profile=None):
         self.profile=deepcopy(DEFAULTS if profile is None else profile)
-        if set(self.profile)!=set(DEFAULTS) or self.profile['version']!=METHOD or self.profile['view'] not in ('oblique','overhead'):raise ValueError('Unknown automatic posture profile')
+        if set(self.profile)!=set(DEFAULTS) or self.profile['version'] not in (LEGACY_METHOD,METHOD) or self.profile['view'] not in ('oblique','overhead'):raise ValueError('Unknown automatic posture profile')
         for k in set(DEFAULTS)-{'version','view'}:
             v=self.profile[k]
             if type(v) not in (float,int) or not math.isfinite(v) or v<=0:raise ValueError('Invalid automatic threshold')
         if not (self.profile['lying_cos']<self.profile['upright_cos']<=1 and self.profile['side_span_max']<self.profile['front_span_min'] and
                 self.profile['bent_knee_min']<self.profile['bent_knee_max']<self.profile['straight_knee_min']<=180 and self.profile['edge_fraction']<.5):raise ValueError('Inconsistent automatic thresholds')
-        self.model_id=METHOD+':'+object_hash(self.profile)
+        self.model_id=self.profile['version']+':'+object_hash(self.profile)
 
-    def evaluate(self,obs):
+    def _evaluate_v1(self,obs):
         evidence={'view':self.profile['view']}
         def held(reason):return None,reason,evidence
         if obs.bed_rectangle is None:return held('bed_region_required')
@@ -69,6 +70,32 @@ class AutomaticClassifier:
         if min(spans)>=cfg['front_span_min']:
             if any(p[i] is None for i in (0,1,2)):return held('front_facing_evidence_missing')
             # Anatomical left/right chirality is a weak anterior-facing cue, not a prone detector.
+            across=(p[5][0]-p[6][0],p[5][1]-p[6][1]);down=(h[0]-s[0],h[1]-s[1])
+            if across[0]*down[1]-across[1]*down[0]<=0:return held('front_back_ambiguous')
+            return 'supine',None,evidence
+        return held('lying_orientation_ambiguous')
+
+    def evaluate(self,obs):
+        if self.profile['version']==LEGACY_METHOD:return self._evaluate_v1(obs)
+        evidence={'view':self.profile['view']}
+        def held(reason):return None,reason,evidence
+        if obs.bed_rectangle is None:return held('bed_region_required')
+        torso_indices=(5,6,11,12)
+        if len(obs.points)!=17 or any(obs.points[i] is None for i in torso_indices):return held('automatic_torso_joints_missing')
+        if all(obs.points[i] is not None for i in CORE):return self._evaluate_v1(obs)
+        p=obs.points;s=midpoint(p[5],p[6]);h=midpoint(p[11],p[12]);torso=math.dist(s,h)
+        if torso<=0:return held('degenerate_body_geometry')
+        c=abs(h[1]-s[1])/torso
+        spans=(math.dist(p[5],p[6])/torso,math.dist(p[11],p[12])/torso)
+        evidence.update(torso_vertical_cos=c,shoulder_span_ratio=spans[0],hip_span_ratio=spans[1],
+            missing_lower_joints=[i for i in (13,14,15,16) if p[i] is None])
+        # This is a class-specific information gate, not a relaxed angle/score threshold.
+        if c>self.profile['lying_cos']:return held('automatic_lower_body_needed')
+        from .bed_geometry import contains
+        if not all(contains(obs.bed_rectangle,p[i]) for i in torso_indices):return held('body_outside_bed_region')
+        if max(spans)<=self.profile['side_span_max']:return 'side',None,evidence
+        if min(spans)>=self.profile['front_span_min']:
+            if any(p[i] is None for i in (0,1,2)):return held('front_facing_evidence_missing')
             across=(p[5][0]-p[6][0],p[5][1]-p[6][1]);down=(h[0]-s[0],h[1]-s[1])
             if across[0]*down[1]-across[1]*down[0]<=0:return held('front_back_ambiguous')
             return 'supine',None,evidence

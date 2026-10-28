@@ -357,6 +357,7 @@ class WebWorkspace:
                 state['phase'] = 'error'
                 state['candidate_count'] = None
                 state['posture_assessment'] = None
+                state['posture_diagnostics'] = session.worker.engine.posture_diagnostics.latest
                 session.view = None  # Never send a previous observation as a current failed frame.
         elif kind == 'eof':
             state['eof'] = True
@@ -404,6 +405,7 @@ class WebWorkspace:
             state['elapsed'] = (int(row['received_ns'])-int(state['started_ns']))/1e9
         state['target_tracking']=row['target_tracking']
         state['posture_assessment']=row['posture_assessment']
+        state['posture_diagnostics']=frame.get('posture_diagnostics')
         state['posture']=row['posture_assessment']['label'] or ('held' if row['posture_assessment']['classifier_id'] else 'not_implemented')
         session.view = {'sequence': session.sequence, 'frame_id': row['stream_frame_id'],
                         'width': width, 'height': height, 'people': row['mapped_people'],

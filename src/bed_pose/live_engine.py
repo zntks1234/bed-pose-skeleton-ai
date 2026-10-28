@@ -85,6 +85,7 @@ class LiveEngine:
         if self.recorder:
             raise ValueError('이미 측정 중입니다.')
         from .runner import _code_version
+        from .posture import PROFILE
         width, height = self.geometry
         measurement_id = uuid.uuid4().hex
         manifest = {'measurement_id': measurement_id, 'stream_id': self.stream_id,
@@ -106,6 +107,7 @@ class LiveEngine:
                     'video_recording': False, 'tracking_scope': 'input_stream',
                     'preview_tracking_history_retained': True, 'hardware_dropped_frames': None, 'start_request': request,
                     'target_tracking_initial':self.target_tracker.current(),
+                    'posture_assessment_profile':dict(PROFILE),
                     'target_policy': 'none', 'posture_classifier': 'not_implemented', 'event_analyzer': 'not_implemented'}
         self.recorder = LiveRecorder(self.output_root/measurement_id, manifest, self.clock)
         self.recorder.event('measurement_started', effective_stream_frame_id=self.next_frame_id, request=request)
@@ -195,6 +197,8 @@ class LiveEngine:
                        sdk_call_started=row['sdk_call_started'] or bool(getattr(exc, 'sdk_call_started', False)))
             failure = LiveFailure(code, str(exc))
         row['target_tracking']=self.target_tracker.observe(row,*geometry)
+        from .posture import assess_frame
+        row['posture_assessment']=assess_frame(row,*geometry,self.region)
         if self.recorder:
             self.recorder.frame(row)
         if failure:

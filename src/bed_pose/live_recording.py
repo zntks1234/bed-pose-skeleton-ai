@@ -80,7 +80,11 @@ def _verify(directory, manifest, hashes=True):
     if (selection['effective_stream_frame_id'] > manifest['first_stream_frame_id']
             or validate_selection(selection, selection['effective_stream_frame_id']) > unsigned_ns(manifest['started_ns'])):
         raise IntegrityError('Initial bed selection occurs after measurement start')
+    if 'posture_assessment_profile' in manifest:
+        from .posture import PROFILE
+        if manifest['posture_assessment_profile']!=PROFILE:raise IntegrityError('Unsupported posture assessment profile')
     revision = manifest['initial_bed_revision']
+    regions={manifest['initial_bed_revision']:manifest['initial_bed_region']}
     changes = []
     event_types = []
     previous_effective_id = manifest['first_stream_frame_id']
@@ -88,6 +92,7 @@ def _verify(directory, manifest, hashes=True):
         previous_time = 0
         for index, line in enumerate(stream):
             event = strict_loads(line)
+            if event['type']=='bed_region_changed':regions[event['revision']]=event['region']
             if (event['event_index'] != index or event['measurement_id'] != manifest['measurement_id']
                     or event['clock_id'] != manifest['clock_id'] or unsigned_ns(event['time_ns']) < previous_time):
                 raise IntegrityError('Invalid control event identity/order')
@@ -181,6 +186,12 @@ def _verify(directory, manifest, hashes=True):
                     or row['target_resolution'] != {'status': 'not_configured', 'candidate_id': None}
                     or any(row[k] is not None for k in ('target_posture', 'verified_gt', 'sensor_results'))):
                 raise IntegrityError('Unsupported live prediction or label injection')
+            if 'posture_assessment_profile' in manifest and 'posture_assessment' not in row:
+                raise IntegrityError('Missing posture assessment')
+            if 'posture_assessment' in row:
+                from .posture import assess_frame
+                if row['posture_assessment']!=assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']]):
+                    raise IntegrityError('Posture assessment differs from source frame')
             tracking=row.get('target_tracking')
             if tracking is not None and tracking != {'status':'not_configured','candidate_id':None}:
                 from .target_tracking import TrackingConfig

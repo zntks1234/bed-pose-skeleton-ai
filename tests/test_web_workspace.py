@@ -138,3 +138,29 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request('/api/inputs',{'kind':'demo'})[0],400)
         self.workspace.close();self.assertFalse(root.exists())
         self.assertFalse(self.workspace.sessions[sid].worker.is_alive())
+
+    def test_posture_assessment_matches_display_and_record_and_rejects_tampering(self):
+        from bed_pose.io_utils import load_json,atomic_json,file_hash
+        from bed_pose.contracts import IntegrityError
+        sid=self.demo();view=self.workspace.view(sid)
+        self.assertEqual(view['posture_assessment']['stream_frame_id'],view['frame_id'])
+        self.assertIsNone(view['posture_assessment']['label'])
+        self.control(sid,'region',box=[10,10,200,200],selected_frame_id=view['frame_id'])
+        self.wait(lambda x:x['sessions'][0]['region'] is not None)
+        self.control(sid,'start');self.wait(lambda x:x['sessions'][0]['recorded_frames']>=2)
+        self.control(sid,'stop');state=self.wait(lambda x:x['sessions'][0]['integrity']=='verified')['sessions'][0]
+        root=Path(state['directory']);path=root/'live_frames.jsonl'
+        rows=[json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()]
+        self.assertTrue(all(r['posture_assessment']['stream_frame_id']==r['stream_frame_id'] and r['posture_assessment']['label'] is None for r in rows))
+        rows[0]['posture_assessment']['label']='supine'
+        path.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
+        manifest=load_json(root/'manifest.json');manifest['artifact_sha256']['live_frames.jsonl']=file_hash(path)
+        atomic_json(root/'manifest.json',manifest)
+        with self.assertRaises(IntegrityError):verify_live(root)
+        # Legacy records without the optional extension remain readable.
+        manifest.pop('posture_assessment_profile')
+        for row in rows:row.pop('posture_assessment')
+        path.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
+        manifest['artifact_sha256']['live_frames.jsonl']=file_hash(path)
+        atomic_json(root/'manifest.json',manifest)
+        self.assertEqual(verify_live(root)['integrity'],'verified')

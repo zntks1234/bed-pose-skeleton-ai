@@ -235,4 +235,7 @@ class MeasurementGroup:
             if plan['measurement_started_perf_counter_ns']:
                 end=plan['measurement_stopped_perf_counter_ns'] or str(now)
                 progress['measurement_elapsed_seconds']=max(0,(int(end)-int(plan['measurement_started_perf_counter_ns']))/1e9)
-        return dict(self.data,directory=str(self.directory),target_observations=observations,plan_progress=progress)
+        from .posture import group_assessment
+        posture=group_assessment([{'input_id':s.id,'title':s.title,'closed':s.state['closed'],
+            'assessment':s.state.get('posture_assessment')} for s in self.members])
+        return dict(self.data,directory=str(self.directory),target_observations=observations,plan_progress=progress,posture_assessment=posture)

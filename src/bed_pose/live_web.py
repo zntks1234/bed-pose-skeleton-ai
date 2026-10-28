@@ -99,7 +99,7 @@ class WebWorkspace:
                      'paused': kind == 'video_file', 'frame_id': None, 'sequence': 0,
                      'candidate_count': None, 'recorded_frames': 0, 'elapsed': 0,
                      'media_seconds': None, 'directory': None, 'integrity': None, 'error': None,
-                     'width': None, 'height': None, 'posture': 'not_implemented'}
+                     'width': None, 'height': None, 'posture': 'not_implemented', 'posture_assessment': None}
             self.sessions[session_id] = Session(session_id, title, kind, worker, state)
             worker.start()
             return {'id': session_id}
@@ -332,6 +332,7 @@ class WebWorkspace:
             if kind == 'error':
                 state['phase'] = 'error'
                 state['candidate_count'] = None
+                state['posture_assessment'] = None
                 session.view = None  # Never send a previous observation as a current failed frame.
         elif kind == 'eof':
             state['eof'] = True
@@ -378,10 +379,12 @@ class WebWorkspace:
             state['recorded_frames'] = frame['recorded_frames']
             state['elapsed'] = (int(row['received_ns'])-int(state['started_ns']))/1e9
         state['target_tracking']=row['target_tracking']
+        state['posture_assessment']=row['posture_assessment']
         session.view = {'sequence': session.sequence, 'frame_id': row['stream_frame_id'],
                         'width': width, 'height': height, 'people': row['mapped_people'],
                         'clock_id':row['clock_id'],'received_ns':row['received_ns'],
                         'target_tracking':row['target_tracking'],
+                        'posture_assessment':row['posture_assessment'],
                         'candidate_count': row['candidate_count'],
                         'inference_ms': (int(row['inference_finished_ns'])-int(row['inference_started_ns']))/1e6,
                         'read_ms': (int(row['received_ns'])-int(row['read_started_ns']))/1e6,

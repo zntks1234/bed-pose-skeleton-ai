@@ -153,3 +153,37 @@ class AutomaticWebTests(unittest.TestCase):
         self.control(sid,'start');self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['recorded_frames']>=2)
         self.control(sid,'stop');state=self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['integrity']=='verified')['sessions'][0]
         self.assertEqual(verify_live(state['directory'])['integrity'],'verified')
+
+    def test_lower_geometry_review_records_replay_by_rule_version(self):
+        from bed_pose.automatic_posture import METHOD,PREVIOUS_METHOD
+        sid=self.automatic();engine=self.workspace.sessions[sid].worker.engine
+        original=engine.adapter.estimate
+        def overlapping(model_input):
+            out=original(model_input);candidates=copy.deepcopy(out.candidates)
+            values=candidates[0]['pose_blocks'][0]['values'];values[15]=list(values[13])
+            return PoseOutput(candidates,out.model_timestamp_ms,out.sdk_call_started)
+        engine.adapter.estimate=overlapping
+        for version,label in ((PREVIOUS_METHOD,None),(METHOD,'supine')):
+            engine.posture_classifier=AutomaticClassifier(dict(DEFAULTS,version=version))
+            self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['posture_assessment']['classifier_id'].startswith(version+':')
+                      and next(s for s in x['sessions'] if s['id']==sid)['posture_assessment']['label']==label)
+            previous_directory=self.workspace.sessions[sid].state.get('directory')
+            self.assertEqual(self.control(sid,'start')[0],200)
+            self.wait(lambda x:any(s['id']==sid and s['recording'] and not s.get('pending')
+                      and s.get('directory')!=previous_directory and s['recorded_frames']>=2 for s in x['sessions']))
+            self.assertEqual(self.control(sid,'stop')[0],200)
+            state=self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['integrity']=='verified')['sessions'][0]
+            root=Path(state['directory']);self.assertEqual(verify_live(root)['integrity'],'verified')
+            manifest=load_json(root/'manifest.json')
+            self.assertEqual(manifest['automatic_posture_profile']['version'],version)
+            rows=[json.loads(line) for line in (root/'live_frames.jsonl').read_text(encoding='utf-8').splitlines()]
+            self.assertTrue(all(row['posture_assessment']['label']==label for row in rows))
+            if label:
+                self.assertTrue(all(row['posture_assessment']['rule_features']['invalid_knee_geometry']==[13] for row in rows))
+                rows[0]['posture_assessment']['rule_features']['invalid_knee_geometry']=[]
+                path=root/'live_frames.jsonl'
+                path.write_text(''.join(json.dumps(row)+'\n' for row in rows),encoding='utf-8')
+                manifest['artifact_sha256']['live_frames.jsonl']=file_hash(path)
+                atomic_json(root/'manifest.json',manifest)
+                with self.assertRaisesRegex(IntegrityError,'Posture assessment differs'):
+                    verify_live(root)

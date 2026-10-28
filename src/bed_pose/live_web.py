@@ -248,6 +248,11 @@ class WebWorkspace:
             if action == 'region':
                 if state['frame_id'] is None:
                     raise ValueError('첫 영상을 기다려 주세요.')
+                points=values.get('points')
+                if points is not None:
+                    from .bed_geometry import make_quadrilateral
+                    make_quadrilateral(points,state['width'],state['height'])
+                    if values.get('box') is not None:raise ValueError('영역 형식을 하나만 지정하세요.')
                 box = values.get('box')
                 if box is not None and (not isinstance(box, list) or len(box) != 4 or
                         any(type(x) not in (int, float) or not math.isfinite(x) for x in box)):
@@ -255,7 +260,7 @@ class WebWorkspace:
                 selected_id = values.get('selected_frame_id')
                 if type(selected_id) is not int or not 0 <= selected_id <= state['frame_id']:
                     raise ValueError('영역을 지정한 영상 프레임이 유효하지 않습니다.')
-                session.worker.submit('region', box=box, width=state['width'], height=state['height'],
+                session.worker.submit('region', box=box, points=points, width=state['width'], height=state['height'],
                                       selected_frame_id=selected_id)
             elif action == 'posture_mode':
                 if state['recording']:raise ValueError('측정을 종료한 뒤 판정 설정을 바꾸세요.')

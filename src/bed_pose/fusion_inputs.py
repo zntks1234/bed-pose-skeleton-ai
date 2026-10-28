@@ -20,6 +20,19 @@ POLICY=dict(LEGACY_POLICY,method='separate_view_features_v2',
             bed_mask_meaning='in_image_coordinate_and_reference_rectangle_available',
             inside_bed_meaning='rectangle_membership_including_boundary_null_if_unavailable')
 
+QUAD_SCHEMA='two-view-input-0.3-draft'
+QUAD_POLICY=dict(POLICY,method='separate_view_features_v3',
+    normalization='image_dimensions_and_per_region_rectangle_or_quadrilateral_homography',
+    bed_coordinate_units='dimensionless_unit_square_click_order_axes_not_metric_or_3d',
+    bed_mask_meaning='in_image_coordinate_and_finite_region_transform',
+    inside_bed_meaning='polygon_or_legacy_rectangle_membership_including_boundary_null_if_unavailable')
+
+def input_schema(group):
+    for member in group['members']:
+        root=Path(member['run_directory']);manifest=load_json(root/'manifest.json')
+        if any(r and r.get('method')=='manual_quadrilateral' for r in bed_regions(root,manifest).values()):return QUAD_SCHEMA
+    return SCHEMA
+
 def next_json(stream):
     try:return strict_loads(next(stream))
     except StopIteration as exc:raise IntegrityError('Missing input/source row') from exc
@@ -64,14 +77,14 @@ def view_features(row,manifest,regions,input_id):
         for joint in inspected:
             numeric=joint['availability']=='predicted' and joint['x_px'] is not None and joint['y_px'] is not None
             inside=numeric and 0<=joint['x_px']<manifest['width'] and 0<=joint['y_px']<manifest['height']
+            from .bed_geometry import contains,relative_xy
+            bed_xy=relative_xy(region,(joint['x_px'],joint['y_px'])) if numeric and region else None
             features.append(dict(joint,
                 image_xy=[joint['x_px']/manifest['width'],joint['y_px']/manifest['height']] if numeric else [None,None],
                 image_mask=bool(inside),
-                bed_xy=[(joint['x_px']-region['x1'])/(region['x2']-region['x1']),
-                        (joint['y_px']-region['y1'])/(region['y2']-region['y1'])] if numeric and region else [None,None],
-                bed_mask=bool(inside and region),
-                inside_bed=bool(region['x1']<=joint['x_px']<=region['x2'] and
-                                region['y1']<=joint['y_px']<=region['y2']) if numeric and region else None))
+                bed_xy=bed_xy if bed_xy is not None else [None,None],
+                bed_mask=bool(inside and bed_xy is not None),
+                inside_bed=bool(contains(region,(joint['x_px'],joint['y_px']))) if numeric and region else None))
         if not any(j['image_mask'] for j in features):reasons.append('no_in_image_joints')
     elif tracking['status']=='tracking_provisional':reasons.append('tracked_candidate_missing')
     result={'input_id':input_id,'measurement_id':manifest['measurement_id'],'frame_id':row['frame_id'],
@@ -101,6 +114,8 @@ def iter_inputs(group,directory,*,legacy=False):
             'preparation_seconds':plan['preparation_seconds'] if plan['preparation_mode']=='timer' else 0,
             'duration_seconds':plan['duration_seconds']})
         if any(plan.get(key)!=value for key,value in validated.items()):raise IntegrityError('Plan instruction metadata mismatch')
+    schema=input_schema(group)
+    if legacy and schema==QUAD_SCHEMA:raise IntegrityError('Legacy schema cannot describe quadrilaterals')
     timeline=confirmations(group)
     with ExitStack() as stack:
         manifests=[];regions=[];streams=[];consumed=[0,0]
@@ -142,7 +157,7 @@ def iter_inputs(group,directory,*,legacy=False):
             elif aligned['status']=='unmatched' and sum(v is not None for v in views)==1:
                 reasons.append('unmatched_time')
             else:raise IntegrityError('Invalid alignment status/shape')
-            result={'schema_version':LEGACY_SCHEMA if legacy else SCHEMA,'group_id':group['group_id'],'alignment_id':index,
+            result={'schema_version':LEGACY_SCHEMA if legacy else schema,'group_id':group['group_id'],'alignment_id':index,
                    'status':'held' if reasons else 'candidate_input','hold_reasons':reasons,
                    'views':views,'delta_ns':aligned['delta_ns'],'time_basis':'receive_time_approximation',
                    'exposure_synchronized':False,'identity_verified':False,'input_quality_status':'not_assessed',
@@ -160,14 +175,15 @@ def build_inputs(group,directory):
         return {'status':'blocked_alignment_unavailable','posture_classifier':'not_implemented'}
     directory=Path(directory);temp=directory/'fusion_inputs.jsonl.tmp';target=directory/'fusion_inputs.jsonl'
     counts=Counter(candidate_input=0,held=0);reasons=Counter()
+    schema=input_schema(group);policy=QUAD_POLICY if schema==QUAD_SCHEMA else POLICY
     try:
         with temp.open('x',encoding='utf-8',newline='\n') as stream:
             for row in iter_inputs(group,directory):
                 counts[row['status']]+=1;reasons.update(row['hold_reasons']);stream.write(json_text(row)+'\n')
             stream.flush();os.fsync(stream.fileno())
         os.replace(temp,target)
-        return {'status':'generated','schema_version':SCHEMA,'path':target.name,'sha256':file_hash(target),
-                'counts':dict(counts),'hold_reason_counts':dict(reasons),'policy':POLICY,'policy_sha256':object_hash(POLICY),
+        return {'status':'generated','schema_version':schema,'path':target.name,'sha256':file_hash(target),
+                'counts':dict(counts),'hold_reason_counts':dict(reasons),'policy':policy,'policy_sha256':object_hash(policy),
                 'posture_classifier':'not_implemented'}
     except Exception:
         temp.unlink(missing_ok=True)
@@ -182,8 +198,9 @@ def _inspect_group(directory):
     if result.get('status')!='generated':
         raise IntegrityError('No generated two-view input artifact')
     legacy=result.get('schema_version')==LEGACY_SCHEMA
-    if result.get('schema_version') not in (LEGACY_SCHEMA,SCHEMA):raise IntegrityError('Unsupported fusion schema')
-    policy=LEGACY_POLICY if legacy else POLICY
+    if result.get('schema_version') not in (LEGACY_SCHEMA,SCHEMA,QUAD_SCHEMA):raise IntegrityError('Unsupported fusion schema')
+    if not legacy and result['schema_version']!=input_schema(group):raise IntegrityError('Region coordinate schema mismatch')
+    policy=LEGACY_POLICY if legacy else QUAD_POLICY if result['schema_version']==QUAD_SCHEMA else POLICY
     if (result['path']!='fusion_inputs.jsonl' or file_hash(directory/result['path'])!=result['sha256']
             or result['policy']!=policy or object_hash(result['policy'])!=result['policy_sha256']):
         raise IntegrityError('Fusion input artifact/policy checksum mismatch')

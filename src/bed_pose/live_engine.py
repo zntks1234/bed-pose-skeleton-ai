@@ -66,12 +66,14 @@ class LiveEngine:
             self.close('failed')
             raise
 
-    def set_region(self, box, width, height, request=None, selected_frame_id=None):
+    def set_region(self, box, width, height, request=None, selected_frame_id=None, points=None):
         if self.geometry != (width, height):
             raise ValueError('최신 영상 크기에 맞춰 침대 영역을 다시 지정하세요.')
         if selected_frame_id is not None and (type(selected_frame_id) is not int or not 0 <= selected_frame_id < self.next_frame_id):
             raise ValueError('영역을 지정한 미리보기 프레임이 유효하지 않습니다.')
-        region = make_region(box, width, height) if box is not None else None
+        from .bed_geometry import make_quadrilateral
+        if box is not None and points is not None:raise ValueError('영역 형식을 하나만 지정하세요.')
+        region = make_quadrilateral(points,width,height) if points is not None else make_region(box, width, height) if box is not None else None
         self.region_revision += 1
         self.region = region
         self.region_selection = {'selected_stream_frame_id': selected_frame_id,
@@ -91,6 +93,7 @@ class LiveEngine:
         from .reference_posture import ReferenceClassifier,features,distance,METHOD
         from copy import deepcopy
         if type(selected_frame_id) is not int:raise ValueError('등록 프레임 번호를 확인하세요.')
+        if self.region and self.region.get('method')=='manual_quadrilateral':raise ValueError('네 점 영역은 자동 판정을 사용하세요. 이전 기준 등록은 사각형 기록용입니다.')
         if label not in ('supine','side','edge_sitting') or self.region is None:raise ValueError('침대 영역과 기준 자세를 선택하세요.')
         with self.target_tracker.lock:
             snapshot=next((s for s in self.target_tracker.history if s['frame_id']==selected_frame_id),None)

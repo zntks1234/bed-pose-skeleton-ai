@@ -38,10 +38,17 @@ class AutomaticClassifier:
         if k1 is None or k2 is None:return held('degenerate_body_geometry')
         c=abs(h[1]-s[1])/torso
         spans=(math.dist(p[5],p[6])/torso,math.dist(p[11],p[12])/torso)
-        x1,y1,x2,y2=obs.bed_rectangle
-        hips_inside=all(x1<=p[i][0]<=x2 and y1<=p[i][1]<=y2 for i in (11,12))
-        shoulders_inside=all(x1<=p[i][0]<=x2 and y1<=p[i][1]<=y2 for i in (5,6))
-        edge=min((h[0]-x1)/(x2-x1),(x2-h[0])/(x2-x1),(h[1]-y1)/(y2-y1),(y2-h[1])/(y2-y1))
+        from .bed_geometry import contains,relative_xy
+        hips_inside=all(contains(obs.bed_rectangle,p[i]) for i in (11,12))
+        shoulders_inside=all(contains(obs.bed_rectangle,p[i]) for i in (5,6))
+        uv=relative_xy(obs.bed_rectangle,h)
+        if uv is None:return held('bed_coordinate_unavailable')
+        if isinstance(obs.bed_rectangle,tuple):
+            x1,y1,x2,y2=obs.bed_rectangle
+            edge=min((h[0]-x1)/(x2-x1),(x2-h[0])/(x2-x1),(h[1]-y1)/(y2-y1),(y2-h[1])/(y2-y1))
+        else:
+            edge=min(uv[0],1-uv[0],uv[1],1-uv[1])
+            if hips_inside and -1e-9<edge<0:edge=0.
         evidence.update(torso_vertical_cos=c,shoulder_span_ratio=spans[0],hip_span_ratio=spans[1],knee_angles=[k1,k2],hip_edge_fraction=edge)
         cfg=self.profile
         if cfg['view']=='oblique':

@@ -8,7 +8,7 @@ CORE=(5,6,11,12,13,14,15,16)
 METHOD='reference-posture-0.1'
 
 def features(observation):
-    if observation.bed_rectangle is None or len(observation.points)!=17:return None
+    if observation.bed_rectangle is None or isinstance(observation.bed_rectangle,dict) or len(observation.points)!=17:return None
     if any(observation.points[i] is None for i in CORE):return None
     p=observation.points
     hip=tuple((p[11][i]+p[12][i])/2 for i in (0,1))

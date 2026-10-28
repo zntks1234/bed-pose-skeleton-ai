@@ -19,6 +19,10 @@ def unsigned_ns(value):
 
 
 def validate_region(region, width, height):
+    from .bed_geometry import is_quad,make_quadrilateral
+    if is_quad(region):
+        if region!=make_quadrilateral(region.get('vertices'),width,height):raise ValueError('네 점 영역의 메타데이터가 맞지 않습니다.')
+        return
     if (not isinstance(region, dict) or set(region) != {'x1', 'y1', 'x2', 'y2', 'width', 'height', 'normalized', 'method'}
             or region['width'] != width or region['height'] != height or region['method'] != 'manual_rectangle'):
         raise ValueError('침대 영역의 영상 크기 또는 형식이 맞지 않습니다.')

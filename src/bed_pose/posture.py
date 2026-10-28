@@ -14,7 +14,7 @@ class PostureInput:
     points: tuple
     width: int
     height: int
-    bed_rectangle: tuple | None
+    bed_rectangle: tuple | dict | None
 
 class PostureClassifier(Protocol):
     model_id: str
@@ -52,8 +52,8 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
         'bed_region_available':region is not None,'classifier_id':getattr(classifier,'model_id',None)}
     if reasons:return result
     try:
-        observation=PostureInput(tuple(points),width,height,
-            tuple(region[k] for k in ('x1','y1','x2','y2')) if region else None)
+        from .bed_geometry import observation_region
+        observation=PostureInput(tuple(points),width,height,observation_region(region))
         from .reference_posture import ReferenceClassifier
         from .automatic_posture import AutomaticClassifier
         if isinstance(classifier,AutomaticClassifier):

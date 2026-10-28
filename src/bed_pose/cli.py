@@ -73,10 +73,19 @@ def main(argv=None):
     live.add_argument('--output-root', type=Path, default=Path('recordings/live'))
     live_inspect = commands.add_parser('live-inspect', help='Verify the separate live measurement record contract')
     live_inspect.add_argument('--run', type=Path, required=True)
+    evidence=commands.add_parser('posture-evidence',help='Export same-frame body 2D and estimated 3D features; not accuracy')
+    evidence.add_argument('--run',type=Path,required=True)
+    evidence.add_argument('--output',type=Path,required=True)
     group_inspect=commands.add_parser('group-inspect',help='Verify original records, alignment and two-view input features')
     group_inspect.add_argument('--run',type=Path,required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == 'posture-evidence':
+            from .evidence_report import export_evidence
+            path,report=export_evidence(args.run,args.output)
+            print(json.dumps({'report_directory':str(path),'frame_count':report['frame_count'],
+                              'evaluation_status':report['evaluation_status']},ensure_ascii=False))
+            return 0
         if args.command == 'group-inspect':
             from .fusion_inputs import inspect_group
             print(json.dumps(inspect_group(args.run),ensure_ascii=False))

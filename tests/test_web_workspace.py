@@ -159,7 +159,10 @@ class WebTests(unittest.TestCase):
         with self.assertRaises(IntegrityError):verify_live(root)
         # Legacy records without the optional extension remain readable.
         manifest.pop('posture_assessment_profile')
-        for row in rows:row.pop('posture_assessment')
+        manifest.pop('posture_evidence_profile')
+        for row in rows:
+            row.pop('posture_assessment')
+            row.pop('posture_evidence')
         path.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
         manifest['artifact_sha256']['live_frames.jsonl']=file_hash(path)
         atomic_json(root/'manifest.json',manifest)

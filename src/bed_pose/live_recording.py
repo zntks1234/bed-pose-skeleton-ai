@@ -87,6 +87,9 @@ def _verify(directory, manifest, hashes=True):
     if 'posture_assessment_profile' in manifest:
         from .posture import PROFILE
         if manifest['posture_assessment_profile']!=PROFILE:raise IntegrityError('Unsupported posture assessment profile')
+    if 'posture_evidence_profile' in manifest:
+        from .posture_evidence import PROFILE as EVIDENCE_PROFILE
+        if manifest['posture_evidence_profile']!=EVIDENCE_PROFILE:raise IntegrityError('Unsupported posture evidence profile')
     from .posture import load_classifier
     reference_model=load_classifier(manifest)
     revision = manifest['initial_bed_revision']
@@ -201,6 +204,15 @@ def _verify(directory, manifest, hashes=True):
                 from .posture import assess_frame
                 if row['posture_assessment']!=assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']],reference_model):
                     raise IntegrityError('Posture assessment differs from source frame')
+            if 'posture_evidence_profile' in manifest or 'posture_evidence' in row:
+                from .posture_evidence import compare_frame
+                if 'posture_evidence_profile' not in manifest or 'posture_evidence' not in row:
+                    raise IntegrityError('Missing posture evidence or profile')
+                if 'posture_assessment' not in row:
+                    raise IntegrityError('Missing posture assessment for evidence')
+                expected_evidence=compare_frame(row,manifest['width'],manifest['height'],row['posture_assessment'])
+                if row['posture_evidence']!=expected_evidence:
+                    raise IntegrityError('Posture evidence differs from source frame')
             tracking=row.get('target_tracking')
             if tracking is not None and tracking != {'status':'not_configured','candidate_id':None}:
                 from .target_tracking import TrackingConfig

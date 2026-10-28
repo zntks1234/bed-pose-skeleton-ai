@@ -132,6 +132,7 @@ class LiveEngine:
             raise ValueError('이미 측정 중입니다.')
         from .runner import _code_version
         from .posture import PROFILE
+        from .posture_evidence import PROFILE as EVIDENCE_PROFILE
         width, height = self.geometry
         measurement_id = uuid.uuid4().hex
         manifest = {'measurement_id': measurement_id, 'stream_id': self.stream_id,
@@ -154,6 +155,7 @@ class LiveEngine:
                     'preview_tracking_history_retained': True, 'hardware_dropped_frames': None, 'start_request': request,
                     'target_tracking_initial':self.target_tracker.current(),
                     'posture_assessment_profile':dict(PROFILE),
+                    'posture_evidence_profile':dict(EVIDENCE_PROFILE),
                     'reference_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version']=='reference-posture-0.1' else None,
                     'automatic_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version'].startswith('automatic-posture') else None,
                     'target_policy': 'none', 'posture_classifier': self.posture_classifier.model_id if self.posture_classifier else 'not_implemented', 'event_analyzer': 'not_implemented'}
@@ -247,6 +249,8 @@ class LiveEngine:
         row['target_tracking']=self.target_tracker.observe(row,*geometry)
         from .posture import assess_frame
         row['posture_assessment']=assess_frame(row,*geometry,self.region,self.posture_classifier)
+        from .posture_evidence import compare_frame
+        row['posture_evidence']=compare_frame(row,*geometry,row['posture_assessment'])
         if self.posture_classifier:
             a=row['posture_assessment']
             row['posture_prediction']={'status':'experimental' if a['label'] else 'held','label':a['label']}

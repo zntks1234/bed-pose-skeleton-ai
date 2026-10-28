@@ -37,7 +37,8 @@ class PostureTests(unittest.TestCase):
     def test_classifier_only_receives_visual_input(self):
         row=frame();model=Classifier('side');a=assess_frame(row,100,100,None,model)
         self.assertEqual((a['status'],a['label']),('predicted','side'))
-        self.assertEqual(set(vars(model.seen)),{'points','width','height','bed_rectangle'})
+        self.assertEqual(set(vars(model.seen)),{'points','width','height','bed_rectangle','world_body'})
+        self.assertIsNone(model.seen.world_body)
         self.assertEqual(model.seen.points,((0,5),));self.assertFalse(a['identity_verified'])
 
     def test_abstention_invalid_output_failure_and_processing_gate(self):

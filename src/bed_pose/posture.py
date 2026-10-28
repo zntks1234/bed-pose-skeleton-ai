@@ -15,6 +15,8 @@ class PostureInput:
     width: int
     height: int
     bed_rectangle: tuple | dict | None
+    # Optional same-candidate model estimate. Never a measured bed height.
+    world_body: dict | None = None
 
 class PostureClassifier(Protocol):
     model_id: str
@@ -53,9 +55,13 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
     if reasons:return result
     try:
         from .bed_geometry import observation_region
-        observation=PostureInput(tuple(points),width,height,observation_region(region))
         from .reference_posture import ReferenceClassifier
-        from .automatic_posture import AutomaticClassifier
+        from .automatic_posture import AutomaticClassifier,METHOD
+        world=None
+        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version']==METHOD:
+            from .posture_evidence import world_body_evidence
+            world=world_body_evidence(row,candidate)
+        observation=PostureInput(tuple(points),width,height,observation_region(region),world)
         if isinstance(classifier,AutomaticClassifier):
             label,reason,evidence=classifier.evaluate(observation)
             result.update(rule_features=evidence,experimental=True)

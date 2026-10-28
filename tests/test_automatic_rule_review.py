@@ -2,7 +2,7 @@
 from dataclasses import replace
 import unittest
 
-from bed_pose.automatic_posture import AutomaticClassifier, DEFAULTS, LEGACY_METHOD, PREVIOUS_METHOD
+from bed_pose.automatic_posture import AutomaticClassifier, DEFAULTS, OLD_DEFAULTS, LEGACY_METHOD, PREVIOUS_METHOD
 from bed_pose.posture import assess_frame
 from test_automatic_posture import observation
 
@@ -22,7 +22,7 @@ class RuleDependencyTests(unittest.TestCase):
     def test_old_versions_retain_their_original_lower_body_gate(self):
         obs=observation('supine');points=list(obs.points);points[15]=points[13]
         for version in (LEGACY_METHOD,PREVIOUS_METHOD):
-            model=AutomaticClassifier(dict(DEFAULTS,version=version))
+            model=AutomaticClassifier(dict(OLD_DEFAULTS,version=version))
             self.assertEqual(model.evaluate(replace(obs,points=tuple(points)))[:2],
                              (None,'degenerate_body_geometry'))
 

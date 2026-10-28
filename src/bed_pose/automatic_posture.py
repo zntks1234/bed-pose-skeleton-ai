@@ -1,14 +1,17 @@
-"""Uncalibrated 2D geometric baseline. Thresholds are experimental, not accuracy claims."""
+"""Experimental geometry rules; model-estimated 3D is optional visual evidence."""
 import math
 from copy import deepcopy
 from .io_utils import object_hash
 
 LEGACY_METHOD='automatic-posture-rules-0.1'
 PREVIOUS_METHOD='automatic-posture-rules-0.2'
-METHOD='automatic-posture-rules-0.3'
-DEFAULTS={'version':METHOD,'view':'oblique','upright_cos':.85,'lying_cos':.55,
+TORSO_METHOD='automatic-posture-rules-0.3'
+METHOD='automatic-posture-rules-0.4'
+OLD_DEFAULTS={'version':TORSO_METHOD,'view':'oblique','upright_cos':.85,'lying_cos':.55,
           'side_span_max':.22,'front_span_min':.40,'straight_knee_min':155.,
           'bent_knee_min':65.,'bent_knee_max':135.,'edge_fraction':.18}
+DEFAULTS=dict(OLD_DEFAULTS,version=METHOD,body_axial_max=.35,body_line_angle_max=30.,
+              world_side_depth_min=.75,world_front_depth_max=.35,world_depth_difference_max=.25)
 CORE=(5,6,11,12,13,14,15,16)
 
 def midpoint(a,b):return ((a[0]+b[0])/2,(a[1]+b[1])/2)
@@ -21,12 +24,17 @@ def angle(a,b,c):
 class AutomaticClassifier:
     def __init__(self,profile=None):
         self.profile=deepcopy(DEFAULTS if profile is None else profile)
-        if set(self.profile)!=set(DEFAULTS) or self.profile['version'] not in (LEGACY_METHOD,PREVIOUS_METHOD,METHOD) or self.profile['view'] not in ('oblique','overhead'):raise ValueError('Unknown automatic posture profile')
-        for k in set(DEFAULTS)-{'version','view'}:
+        version=self.profile.get('version')
+        fields=DEFAULTS if version==METHOD else OLD_DEFAULTS
+        if set(self.profile)!=set(fields) or version not in (LEGACY_METHOD,PREVIOUS_METHOD,TORSO_METHOD,METHOD) or self.profile['view'] not in ('oblique','overhead'):raise ValueError('Unknown automatic posture profile')
+        for k in set(fields)-{'version','view'}:
             v=self.profile[k]
             if type(v) not in (float,int) or not math.isfinite(v) or v<=0:raise ValueError('Invalid automatic threshold')
         if not (self.profile['lying_cos']<self.profile['upright_cos']<=1 and self.profile['side_span_max']<self.profile['front_span_min'] and
                 self.profile['bent_knee_min']<self.profile['bent_knee_max']<self.profile['straight_knee_min']<=180 and self.profile['edge_fraction']<.5):raise ValueError('Inconsistent automatic thresholds')
+        if version==METHOD and not (self.profile['body_axial_max']<1 and self.profile['body_line_angle_max']<90
+                and self.profile['world_front_depth_max']<self.profile['world_side_depth_min']<=1
+                and self.profile['world_depth_difference_max']<=1):raise ValueError('Inconsistent orientation thresholds')
         self.model_id=self.profile['version']+':'+object_hash(self.profile)
 
     def _evaluate_v1(self,obs):
@@ -102,7 +110,7 @@ class AutomaticClassifier:
             return 'supine',None,evidence
         return held('lying_orientation_ambiguous')
 
-    def evaluate(self,obs):
+    def _evaluate_v3(self,obs):
         if self.profile['version']==LEGACY_METHOD:return self._evaluate_v1(obs)
         if self.profile['version']==PREVIOUS_METHOD:return self._evaluate_v2(obs)
         # Keep old rule paths unchanged so saved observations remain reproducible.
@@ -167,5 +175,19 @@ class AutomaticClassifier:
             if across[0]*down[1]-across[1]*down[0]<=0:return held('front_back_ambiguous')
             return 'supine',None,evidence
         return held('lying_orientation_ambiguous')
+
+    def evaluate(self,obs):
+        result=self._evaluate_v3(obs)
+        if self.profile['version']!=METHOD:return result
+        from .lying_orientation import classify_lying
+        label,reason,evidence=result
+        # These gates determine eligibility, not a confirmed physical lying state.
+        # Never turn an upright/unknown body, failed bed/face gate into lying.
+        if label not in ('supine','side') and reason!='lying_orientation_ambiguous':
+            evidence['orientation_decision']={'status':'not_used','source':'existing_gate','gate_reason':reason}
+            return label,reason,evidence
+        label,reason,orientation=classify_lying(obs,self.profile)
+        evidence['orientation_decision']=orientation
+        return label,reason,evidence
 
     def predict(self,observation):return self.evaluate(observation)[0]

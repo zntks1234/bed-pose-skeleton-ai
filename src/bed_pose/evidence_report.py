@@ -17,7 +17,7 @@ COLUMNS=('measurement_id','frame_id','stream_frame_id','clock_id','received_ns',
          'world_3d_status','world_3d_reasons','shoulder_transverse_3d','shoulder_axial_3d',
          'hip_transverse_3d','hip_axial_3d','line_angle_3d',
          'shoulder_depth_fraction','hip_depth_fraction','normal_world_x','normal_world_y','normal_world_z',
-         'combined_status','combined_reasons')
+         'combined_status','combined_reasons','decision_source','orientation_2d','orientation_3d')
 
 
 def _cells(row,evidence):
@@ -28,6 +28,9 @@ def _cells(row,evidence):
                   body_2d_status=body['status'],body_2d_reasons='|'.join(body['reasons']),
                   world_3d_status=world['status'],world_3d_reasons='|'.join(world['reasons']),
                   combined_status=combined['status'],combined_reasons='|'.join(combined['reasons']))
+    orientation=row.get('posture_assessment',{}).get('rule_features',{}).get('orientation_decision',{})
+    values.update(decision_source=orientation.get('source'),orientation_2d=orientation.get('orientation_2d'),
+                  orientation_3d=orientation.get('orientation_3d'))
     for node,suffix in ((body,'2d'),(world,'3d')):
         f=node['features']
         for part,name in (('shoulders','shoulder'),('hips','hip')):
@@ -61,14 +64,15 @@ def export_evidence(directory,output):
         frames_hash=file_hash(directory/'live_frames.jsonl')
         if frames_hash!=manifest['artifact_sha256']['live_frames.jsonl'] or file_hash(directory/'manifest.json')!=manifest_hash:
             raise IntegrityError('Source record changed while exporting evidence')
-        summary={'version':'posture-evidence-report-0.1','profile':PROFILE,'run_directory':str(directory),
+        summary={'version':'posture-evidence-report-0.2','profile':PROFILE,'run_directory':str(directory),
                  'measurement_id':manifest['measurement_id'],'execution_kind':manifest['execution_kind'],
                  'source_manifest_sha256':manifest_hash,'source_frames_sha256':frames_hash,
                  'frame_count':frames,'counts':{k:dict(v) for k,v in counts.items()},
                  'features_csv_sha256':file_hash(output/'features.csv'),
                  'feature_origin':'recomputed_from_verified_original_observations',
                  'evaluation_status':'features_only_no_ground_truth_accuracy',
-                 'candidate_classifiers':'body_2d_and_combined_not_configured',
+                 'classification_policy':'source_record_profile_unchanged_not_reclassified',
+                 'source_automatic_posture_profile':manifest.get('automatic_posture_profile'),
                  'world_coordinates':'monocular_estimate_not_bed_height_or_external_sensor'}
         atomic_json(output/'summary.json',summary)
         return output,summary

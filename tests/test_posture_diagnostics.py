@@ -1,6 +1,6 @@
 import unittest
 from bed_pose.posture_diagnostics import PostureDiagnostics
-from bed_pose.automatic_posture import AutomaticClassifier,DEFAULTS,LEGACY_METHOD
+from bed_pose.automatic_posture import AutomaticClassifier,DEFAULTS,OLD_DEFAULTS,LEGACY_METHOD
 from bed_pose.posture import PostureInput
 from test_automatic_posture import observation
 
@@ -12,7 +12,7 @@ class PartialJointTests(unittest.TestCase):
             for i in (13,14,15,16):p[i]=None
             partial=PostureInput(tuple(p),640,360,obs.bed_rectangle)
             self.assertEqual(model.predict(partial),label)
-            self.assertEqual(AutomaticClassifier(dict(DEFAULTS,version=LEGACY_METHOD)).evaluate(partial)[1],'automatic_joints_missing')
+            self.assertEqual(AutomaticClassifier(dict(OLD_DEFAULTS,version=LEGACY_METHOD)).evaluate(partial)[1],'automatic_joints_missing')
             p[11]=None
             self.assertEqual(model.evaluate(PostureInput(tuple(p),640,360,obs.bed_rectangle))[1],'automatic_torso_joints_missing')
 

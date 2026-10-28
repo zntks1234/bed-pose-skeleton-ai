@@ -3,7 +3,7 @@ import copy
 import json
 import unittest
 from pathlib import Path
-from bed_pose.automatic_posture import AutomaticClassifier,DEFAULTS
+from bed_pose.automatic_posture import AutomaticClassifier,DEFAULTS,OLD_DEFAULTS
 from bed_pose.posture import PostureInput,assess_frame
 from bed_pose.contracts import PoseOutput,IntegrityError
 from bed_pose.live_recording import verify_live
@@ -54,7 +54,7 @@ class AutomaticTests(unittest.TestCase):
         model=AutomaticClassifier(dict(DEFAULTS,view='overhead'))
         self.assertEqual(model.evaluate(observation('edge_sitting'))[1],'overhead_sitting_ambiguous')
         obs=observation('supine');p=list(obs.points);p[11]=(300.,175.);p[12]=(300.,185.)
-        self.assertEqual(model.evaluate(PostureInput(tuple(p),640,360,obs.bed_rectangle))[1],'lying_orientation_ambiguous')
+        self.assertEqual(model.evaluate(PostureInput(tuple(p),640,360,obs.bed_rectangle))[1],'shoulder_hip_orientation_conflict')
 
     def test_bad_profile_and_no_goal_leak(self):
         with self.assertRaises(ValueError):AutomaticClassifier(dict(DEFAULTS,lying_cos=True))
@@ -148,14 +148,14 @@ class AutomaticWebTests(unittest.TestCase):
     def test_previous_rule_version_records_still_verify(self):
         from bed_pose.automatic_posture import LEGACY_METHOD
         sid=self.automatic();engine=self.workspace.sessions[sid].worker.engine
-        engine.posture_classifier=AutomaticClassifier(dict(DEFAULTS,version=LEGACY_METHOD))
+        engine.posture_classifier=AutomaticClassifier(dict(OLD_DEFAULTS,version=LEGACY_METHOD))
         self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['posture_assessment']['classifier_id'].startswith(LEGACY_METHOD+':'))
         self.control(sid,'start');self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['recorded_frames']>=2)
         self.control(sid,'stop');state=self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['integrity']=='verified')['sessions'][0]
         self.assertEqual(verify_live(state['directory'])['integrity'],'verified')
 
     def test_lower_geometry_review_records_replay_by_rule_version(self):
-        from bed_pose.automatic_posture import METHOD,PREVIOUS_METHOD
+        from bed_pose.automatic_posture import METHOD,PREVIOUS_METHOD,TORSO_METHOD
         sid=self.automatic();engine=self.workspace.sessions[sid].worker.engine
         original=engine.adapter.estimate
         def overlapping(model_input):
@@ -163,8 +163,8 @@ class AutomaticWebTests(unittest.TestCase):
             values=candidates[0]['pose_blocks'][0]['values'];values[15]=list(values[13])
             return PoseOutput(candidates,out.model_timestamp_ms,out.sdk_call_started)
         engine.adapter.estimate=overlapping
-        for version,label in ((PREVIOUS_METHOD,None),(METHOD,'supine')):
-            engine.posture_classifier=AutomaticClassifier(dict(DEFAULTS,version=version))
+        for version,label in ((PREVIOUS_METHOD,None),(TORSO_METHOD,'supine'),(METHOD,'supine')):
+            engine.posture_classifier=AutomaticClassifier(dict(DEFAULTS if version==METHOD else OLD_DEFAULTS,version=version))
             self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['posture_assessment']['classifier_id'].startswith(version+':')
                       and next(s for s in x['sessions'] if s['id']==sid)['posture_assessment']['label']==label)
             previous_directory=self.workspace.sessions[sid].state.get('directory')

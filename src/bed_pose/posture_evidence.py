@@ -26,7 +26,7 @@ def _angle(a,b):
     return math.degrees(math.acos(min(1.,max(0.,c))))
 
 
-def _geometry(points,dimensions):
+def body_geometry(points,dimensions):
     sl,sr,hl,hr=points
     shoulder,hip=_mid(sl,sr),_mid(hl,hr)
     torso=_sub(hip,shoulder);length=_norm(torso)
@@ -66,12 +66,12 @@ def _body_2d(person,width,height):
         if (j.get('availability')!='predicted' or not _number(x) or not _number(y)
                 or not 0<=x<width or not 0<=y<height):return _held('body_joints_missing')
         points.append((x,y))
-    try:features=_geometry(points,2)
+    try:features=body_geometry(points,2)
     except (ValueError,OverflowError):return _held('degenerate_body_geometry')
     return {'status':'available','reasons':[],'features':features}
 
 
-def _world_3d(row,person):
+def world_body_evidence(row,person):
     # Match the same raw candidate and the exact adapter joint mapping. A
     # candidate index or COCO index must never be used as a world-landmark index.
     raw=[p for p in row.get('raw_candidates') or [] if isinstance(p,dict) and p.get('candidate_id')==person['candidate_id']]
@@ -91,7 +91,7 @@ def _world_3d(row,person):
         if len(landmarks)!=33:return _held('world_mapping_mismatch')
         points=[tuple(landmarks[i][k] for k in ('x','y','z')) for i in WORLD_INDICES]
         if any(not _number(v) for p in points for v in p):return _held('world_coordinates_invalid')
-        features=_geometry(points,3)
+        features=body_geometry(points,3)
         scores={}
         for space in ('image','world'):
             source=candidate['sdk_landmarks'].get(space,[])
@@ -128,8 +128,14 @@ def compare_frame(row,width,height,assessment):
         result['body_2d']=_held(gate);result['world_3d']=_held(gate)
     else:
         result['body_2d']=_body_2d(matches[0],width,height)
-        result['world_3d']=_world_3d(row,matches[0])
+        result['world_3d']=world_body_evidence(row,matches[0])
     reasons=[key+'_unavailable' for key in ('body_2d','world_3d') if result[key]['status']!='available']
     result['combined']={'status':'held' if reasons else 'available','reasons':reasons,
                         'label':None,'classifier_status':'not_configured'}
+    decision=assessment.get('rule_features',{}).get('orientation_decision')
+    if decision is not None:
+        # The bundle is not a separate classifier: reflect the final rule's use
+        # without duplicating its label or changing old record calculations.
+        result['combined']['classifier_status']=('used_by_automatic_rules'
+            if decision['source']=='body_2d_world_3d' else 'not_used_by_automatic_rules')
     return result

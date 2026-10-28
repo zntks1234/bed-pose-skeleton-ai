@@ -1,5 +1,4 @@
 """Loopback HTML workspace. Cameras, inference and records remain in Python."""
-import base64
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
@@ -19,6 +18,7 @@ from .group_session import MeasurementGroup
 from .live_factory import make_engine
 from .live_sources import CameraSource, SyntheticSource, VideoFileSource, probe_cameras, named_cameras
 from .io_utils import strict_loads
+from .preview_quality import encode_preview, PROFILES as PREVIEW_PROFILES, DEFAULT as PREVIEW_DEFAULT
 
 
 @dataclass
@@ -31,6 +31,7 @@ class Session:
     view: dict | None = None
     sequence: int = 0
     remove: bool = False
+    preview_rgb: object | None = None  # One current frame per input, RAM only.
 
 
 class WebWorkspace:
@@ -46,6 +47,7 @@ class WebWorkspace:
         self.groups = {}
         self.target_tickets = {}
         self.lock = threading.RLock()
+        self.preview_quality = PREVIEW_DEFAULT
         self.stop_requested = threading.Event()
         self.monitor_stop = threading.Event()
         self.scan_state = {'busy': False, 'indices': [], 'error': None}
@@ -114,7 +116,25 @@ class WebWorkspace:
             return json.loads(json.dumps({'sessions': [s.state for s in self.sessions.values()],
                                          'groups': [g.public() for g in self.groups.values()],
                                          'scan': self.scan_state, 'closing': self.stop_requested.is_set(),
+                                         'preview_quality': self.preview_quality,
                                          'model': self.model.name, 'model_available': self.model.is_file()}))
+
+    def set_preview_quality(self, quality):
+        if not isinstance(quality,str) or quality not in PREVIEW_PROFILES:
+            raise ValueError('표준 또는 고화질 표시를 선택하세요.')
+        with self.lock:
+            # Encode all first, so a display failure cannot partially change settings.
+            updates=[]
+            for session in self.sessions.values():
+                if session.view is not None and session.preview_rgb is not None:
+                    image,metadata=encode_preview(session.preview_rgb,quality)
+                    updates.append((session,image,metadata))
+            self.preview_quality=quality
+            for session,image,metadata in updates:
+                session.sequence+=1
+                session.view=dict(session.view,image=image,preview=metadata,sequence=session.sequence)
+                session.state.update(sequence=session.sequence,preview=metadata)
+            return {'quality':quality,**PREVIEW_PROFILES[quality]}
 
     def capture_target(self, session_id):
         with self.lock:
@@ -361,6 +381,7 @@ class WebWorkspace:
                 state['posture_assessment'] = None
                 state['posture_diagnostics'] = session.worker.engine.posture_diagnostics.latest
                 session.view = None  # Never send a previous observation as a current failed frame.
+                session.preview_rgb = None
         elif kind == 'eof':
             state['eof'] = True
         elif kind == 'closed':
@@ -389,17 +410,14 @@ class WebWorkspace:
             return
         if state['phase'] == 'error':
             return
-        import cv2
         rgb, row = frame['rgb'], frame['row']
         height, width = rgb.shape[:2]
-        ratio = min(1, 1280/max(width, height))
-        preview = cv2.resize(rgb, (max(1, round(width*ratio)), max(1, round(height*ratio)))) if ratio < 1 else rgb
-        ok, encoded = cv2.imencode('.jpg', cv2.cvtColor(preview, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 85])
-        if not ok:
-            raise ValueError('브라우저 미리보기 영상을 만들지 못했습니다.')
+        image, preview = encode_preview(rgb,self.preview_quality)
+        session.preview_rgb = rgb
         media = row.get('source_media')
         session.sequence += 1
         state.update(frame_id=row['stream_frame_id'], sequence=session.sequence, width=width, height=height,
+                     preview=preview,
                      candidate_count=row['candidate_count'],
                      media_seconds=int(media['relative_time_ns'])/1e9 if media else None)
         if state['recording'] and int(row['received_ns']) >= int(state['started_ns']):
@@ -423,7 +441,7 @@ class WebWorkspace:
                         'inference_ms': (int(row['inference_finished_ns'])-int(row['inference_started_ns']))/1e6,
                         'read_ms': (int(row['received_ns'])-int(row['read_started_ns']))/1e6,
                         'media_seconds': int(media['relative_time_ns'])/1e9 if media else None,
-                        'image': 'data:image/jpeg;base64,'+base64.b64encode(encoded).decode('ascii')}
+                        'image':image,'preview':preview}
 
     def _monitor(self):
         while not self.monitor_stop.wait(.015):
@@ -589,6 +607,8 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 raise ValueError('JSON object required')
             if url.path == '/api/inputs':
                 result = workspace.add(values)
+            elif url.path == '/api/preview-quality':
+                result=workspace.set_preview_quality(values.get('quality'))
             elif url.path == '/api/records/open':
                 result=workspace.records.open(values.get('record_id'))
             elif url.path == '/api/target-select':

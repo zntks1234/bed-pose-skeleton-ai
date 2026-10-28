@@ -122,6 +122,7 @@ class WebTests(unittest.TestCase):
         state=self.wait(lambda x:x['sessions'][0]['closed'])['sessions'][0]
         self.assertEqual(state['phase'],'error')
         self.assertIsNone(self.request('/api/view/'+sid)[1])
+        self.assertIsNone(self.workspace.sessions[sid].preview_rgb)
         self.assertEqual(self.control(sid,'start')[0],400)
 
     def test_upload_validation_and_no_client_paths(self):

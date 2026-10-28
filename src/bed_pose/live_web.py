@@ -37,6 +37,8 @@ class WebWorkspace:
     def __init__(self, model=None, output_root=Path('recordings/live'), *, engine_factory=make_engine):
         self.model = Path(model or 'checkpoints/pose_landmarker_full.task').resolve()
         self.output_root = Path(output_root).resolve()
+        from .record_library import RecordLibrary
+        self.records=RecordLibrary(self.output_root)
         self.temp = tempfile.TemporaryDirectory(prefix='bed-pose-browser-')
         self.temp_root = Path(self.temp.name)
         self.factory = engine_factory
@@ -505,7 +507,8 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            path = urlsplit(self.path).path
+            url=urlsplit(self.path)
+            path = url.path
             if path == '/':
                 if self.headers.get('Host') != self.server.origin.removeprefix('http://'):
                     return self._reply(403, {'error': 'Invalid host'})
@@ -514,11 +517,20 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 return self._reply(403, {'error': '작업실 실행 주소로 다시 접속하세요.'})
             if path == '/api/state':
                 return self._reply(200, self.server.workspace.snapshot())
+            if path in ('/api/records','/api/records/frames'):
+                query=parse_qs(url.query)
+                offset=int(query.get('offset',['0'])[0]);limit=int(query.get('limit',['50'])[0])
+                library=self.server.workspace.records
+                result=(library.catalog(offset,limit) if path=='/api/records' else
+                        library.frames(query.get('record_id',[''])[0],offset,limit))
+                return self._reply(200,result)
             if path.startswith('/api/view/'):
                 return self._reply(200, self.server.workspace.view(path.split('/')[-1]))
             self._reply(404, {'error': 'Not found'})
         except KeyError:
             self._reply(404, {'error': '입력을 찾을 수 없습니다.'})
+        except (ValueError,TypeError,OSError):
+            self._reply(400, {'error': '기록을 읽을 수 없습니다. 목록 새로고침 후 다시 여세요.'})
         except (BrokenPipeError, ConnectionResetError):
             pass
 
@@ -569,6 +581,8 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 raise ValueError('JSON object required')
             if url.path == '/api/inputs':
                 result = workspace.add(values)
+            elif url.path == '/api/records/open':
+                result=workspace.records.open(values.get('record_id'))
             elif url.path == '/api/target-select':
                 result = workspace.select_target(values)
             elif url.path == '/api/target-capture':

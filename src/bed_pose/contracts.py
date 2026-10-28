@@ -56,6 +56,7 @@ class PoseOutput:
     model_timestamp_ms: int | None
     sdk_call_started: bool = False
     silhouette_observation: dict | None = None
+    silhouette_preview: dict | None = None  # Transient display only; never a recording field.
 
 
 class SourceError(RuntimeError):

@@ -125,12 +125,16 @@ class MediaPipeAdapter:
             else:
                 result = self.task.detect(image)
             candidates = self._candidates(result, packet.width, packet.height)
-            observation=None
+            observation=preview=None
             if self.silhouette:
                 from ..silhouette import capture
                 try:observation=capture(result,candidates,model_input)
                 except Exception:observation=None
-            return PoseOutput(tuple(candidates), stamp, sdk_call_started=True,silhouette_observation=observation)
+                from ..silhouette_overlay import capture_preview
+                try:preview=capture_preview(result,candidates,model_input)
+                except Exception:preview=None
+            return PoseOutput(tuple(candidates), stamp, sdk_call_started=True,
+                              silhouette_observation=observation,silhouette_preview=preview)
         except Exception as exc:
             raise AdapterCallError(f'MediaPipe call/result conversion failed: {type(exc).__name__}',
                                    sdk_call_started=True) from exc

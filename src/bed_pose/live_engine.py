@@ -224,6 +224,7 @@ class LiveEngine:
         if media is not None:
             row['source_media'] = dict(media)
         failure = None
+        preview_packet = None
         stage = 'inference'
         try:
             if self.last_model_ms is not None and timestamp <= self.last_model_ms:
@@ -231,6 +232,7 @@ class LiveEngine:
             row['inference_started_ns'] = str(self.clock())
             self.last_model_ms = timestamp
             output = self.adapter.estimate(ModelInput(FramePacket(self.stream_id, frame_id, rgb, {}), timestamp))
+            preview_packet = getattr(output, 'silhouette_preview', None)
             row['sdk_call_started'] = output.sdk_call_started
             if output.model_timestamp_ms != timestamp:
                 raise ValueError('Adapter timestamp mismatch')
@@ -258,6 +260,9 @@ class LiveEngine:
         row['posture_evidence']=compare_frame(row,*geometry,row['posture_assessment'])
         from .silhouette import assess as assess_silhouette
         row['silhouette_assessment']=assess_silhouette(row,*geometry)
+        from .silhouette_overlay import select_preview
+        try:silhouette_preview=select_preview(preview_packet,row,*geometry)
+        except Exception:silhouette_preview=None
         if self.posture_classifier:
             a=row['posture_assessment']
             row['posture_prediction']={'status':'experimental' if a['label'] else 'held','label':a['label']}
@@ -266,7 +271,8 @@ class LiveEngine:
         diagnostics=self.posture_diagnostics.observe(row['posture_assessment'],self.region_revision)
         if failure:
             raise failure
-        return {'rgb': rgb, 'row': row, 'posture_diagnostics':diagnostics, 'bed_region': self.region, 'bed_revision': self.region_revision,
+        return {'rgb': rgb, 'row': row, 'silhouette_preview':silhouette_preview,
+                'posture_diagnostics':diagnostics, 'bed_region': self.region, 'bed_revision': self.region_revision,
                 'recorded_frames': self.recorder.manifest['recorded_frames'] if self.recorder else 0}
 
     def close(self, outcome='succeeded', error=None, request=None, reason='stream_closed'):

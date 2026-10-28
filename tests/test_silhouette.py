@@ -121,7 +121,13 @@ class SilhouetteAdapterTests(unittest.TestCase):
         self.assertFalse(plain.sdk_options.output_segmentation_masks)
         self.assertTrue(enabled.sdk_options.output_segmentation_masks);self.assertTrue(metadata['segmentation_masks'])
         self.assertEqual(old.candidates,new.candidates);self.assertIsNone(old.silhouette_observation)
+        self.assertIsNone(old.silhouette_preview)
+        self.assertTrue(new.silhouette_preview['candidates'][0]['image'].startswith('data:image/png;base64,'))
         self.assertEqual(new.silhouette_observation['candidates'][0]['status'],'available')
+        with patch.object(self.tasks[1],'detect',return_value=result), patch('bed_pose.silhouette_overlay.capture_preview',side_effect=RuntimeError('display error')):
+            degraded=enabled.estimate(self.input())
+        self.assertEqual(degraded.candidates,new.candidates);self.assertIsNone(degraded.silhouette_preview)
+        self.assertEqual(degraded.silhouette_observation,new.silhouette_observation)
         plain.close();enabled.close()
 
     def test_auxiliary_read_failure_does_not_fail_pose_inference(self):

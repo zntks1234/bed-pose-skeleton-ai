@@ -418,6 +418,7 @@ class WebWorkspace:
                         'posture_assessment':row['posture_assessment'],
                         'posture_evidence':row.get('posture_evidence'),
                         'silhouette_assessment':row.get('silhouette_assessment'),
+                        'silhouette_preview':frame.get('silhouette_preview'),
                         'candidate_count': row['candidate_count'],
                         'inference_ms': (int(row['inference_finished_ns'])-int(row['inference_started_ns']))/1e6,
                         'read_ms': (int(row['received_ns'])-int(row['read_started_ns']))/1e6,

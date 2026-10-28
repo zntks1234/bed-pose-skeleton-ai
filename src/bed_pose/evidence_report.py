@@ -17,7 +17,8 @@ COLUMNS=('measurement_id','frame_id','stream_frame_id','clock_id','received_ns',
          'world_3d_status','world_3d_reasons','shoulder_transverse_3d','shoulder_axial_3d',
          'hip_transverse_3d','hip_axial_3d','line_angle_3d',
          'shoulder_depth_fraction','hip_depth_fraction','normal_world_x','normal_world_y','normal_world_z',
-         'combined_status','combined_reasons','decision_source','orientation_2d','orientation_3d')
+         'combined_status','combined_reasons','decision_source','orientation_2d','orientation_3d',
+         'score_supine','score_side','score_edge_sitting','score_minimum','score_gap','score_close_candidates')
 
 
 def _cells(row,evidence):
@@ -31,6 +32,10 @@ def _cells(row,evidence):
     orientation=row.get('posture_assessment',{}).get('rule_features',{}).get('orientation_decision',{})
     values.update(decision_source=orientation.get('source'),orientation_2d=orientation.get('orientation_2d'),
                   orientation_3d=orientation.get('orientation_3d'))
+    decision=row.get('posture_assessment',{}).get('rule_features',{}).get('score_decision',{})
+    for name in ('supine','side','edge_sitting'):values['score_'+name]=decision.get('scores',{}).get(name)
+    values.update(score_minimum=decision.get('minimum'),score_gap=decision.get('gap'),
+                  score_close_candidates=decision.get('close_candidates'))
     for node,suffix in ((body,'2d'),(world,'3d')):
         f=node['features']
         for part,name in (('shoulders','shoulder'),('hips','hip')):
@@ -64,7 +69,7 @@ def export_evidence(directory,output):
         frames_hash=file_hash(directory/'live_frames.jsonl')
         if frames_hash!=manifest['artifact_sha256']['live_frames.jsonl'] or file_hash(directory/'manifest.json')!=manifest_hash:
             raise IntegrityError('Source record changed while exporting evidence')
-        summary={'version':'posture-evidence-report-0.2','profile':PROFILE,'run_directory':str(directory),
+        summary={'version':'posture-evidence-report-0.3','profile':PROFILE,'run_directory':str(directory),
                  'measurement_id':manifest['measurement_id'],'execution_kind':manifest['execution_kind'],
                  'source_manifest_sha256':manifest_hash,'source_frames_sha256':frames_hash,
                  'frame_count':frames,'counts':{k:dict(v) for k,v in counts.items()},

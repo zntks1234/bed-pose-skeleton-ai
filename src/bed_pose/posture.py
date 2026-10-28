@@ -56,9 +56,9 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
     try:
         from .bed_geometry import observation_region
         from .reference_posture import ReferenceClassifier
-        from .automatic_posture import AutomaticClassifier,METHOD
+        from .automatic_posture import AutomaticClassifier,METHOD,WORLD_METHOD
         world=None
-        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version']==METHOD:
+        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (WORLD_METHOD,METHOD):
             from .posture_evidence import world_body_evidence
             world=world_body_evidence(row,candidate)
         observation=PostureInput(tuple(points),width,height,observation_region(region),world)

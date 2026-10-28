@@ -155,7 +155,7 @@ class AutomaticWebTests(unittest.TestCase):
         self.assertEqual(verify_live(state['directory'])['integrity'],'verified')
 
     def test_lower_geometry_review_records_replay_by_rule_version(self):
-        from bed_pose.automatic_posture import METHOD,PREVIOUS_METHOD,TORSO_METHOD
+        from bed_pose.automatic_posture import METHOD,PREVIOUS_METHOD,TORSO_METHOD,WORLD_METHOD,V4_DEFAULTS
         sid=self.automatic();engine=self.workspace.sessions[sid].worker.engine
         original=engine.adapter.estimate
         def overlapping(model_input):
@@ -163,8 +163,8 @@ class AutomaticWebTests(unittest.TestCase):
             values=candidates[0]['pose_blocks'][0]['values'];values[15]=list(values[13])
             return PoseOutput(candidates,out.model_timestamp_ms,out.sdk_call_started)
         engine.adapter.estimate=overlapping
-        for version,label in ((PREVIOUS_METHOD,None),(TORSO_METHOD,'supine'),(METHOD,'supine')):
-            engine.posture_classifier=AutomaticClassifier(dict(DEFAULTS if version==METHOD else OLD_DEFAULTS,version=version))
+        for version,label in ((PREVIOUS_METHOD,None),(TORSO_METHOD,'supine'),(WORLD_METHOD,'supine'),(METHOD,'supine')):
+            engine.posture_classifier=AutomaticClassifier(dict(DEFAULTS if version==METHOD else V4_DEFAULTS if version==WORLD_METHOD else OLD_DEFAULTS,version=version))
             self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['posture_assessment']['classifier_id'].startswith(version+':')
                       and next(s for s in x['sessions'] if s['id']==sid)['posture_assessment']['label']==label)
             previous_directory=self.workspace.sessions[sid].state.get('directory')

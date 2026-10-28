@@ -259,7 +259,7 @@ PCK는 평가 가능한 GT 관절에서 예측 누락·대상 미해결을 분�
 
 `joint_inspection.py`는 공통 관절의 source_index와 후보 ID를 사용해 원본 image score 블록을 검사 화면에 연결하는 후처리 모듈입니다. 수치 점검 결과·점수 미제공·원본 필드는 분리하며 매핑·추론·품질 판정 정책을 변경하지 않습니다. 실시간 품질 검증기나 임계값 기반 자세 수용기로 취급하지 않습니다.
 
-## 최소 실시간 경로의 현재 구현
+## 이전 구현 이력: 최소 실시간 경로
 
 `live_sources.py`(OpenCV RGB/합성), `live_engine.py`(단일 작업 스레드와 제어), `live_recording.py`(unbounded 입력용 별도 live-0.1-draft 기록/검사), `live_gui.py`(표준 Tk/영역 투영·조작)를 추가했습니다. 기존 어댑터와 공통 17점 매핑을 재사용합니다. 화면 큐는 최신 처리 결과 1개로 제한하고, 기록은 UI와 독립적으로 먼저 수행합니다. 이 구현은 모델이나 플랫폼의 최종 채택이 아닙니다. [범위·시간·입출력·오류 정책](LIVE_MEASUREMENT.md)을 따릅니다.
 
@@ -271,7 +271,7 @@ PCK는 평가 가능한 GT 관절에서 예측 누락·대상 미해결을 분�
 
 ## HTML 작업실 기본 진입 · 2026-10-27
 
-`live`의 launcher는 이제 `live_web.launch_browser`를 엽니다. `live_factory.py`가 Tk 없이 기존 소스/SDK/매핑을 생성하고, `WebWorkspace`가 입력별 Worker 메시지/결과·제어를 관리합니다. `WorkspaceHTTPServer`는 loopback만 사용하며 토큰·Host/Origin 검사, 로컬 파일 전달과 상태/화면 API를 제공합니다. `templates/live_workspace.html`은 별도 CDN 없이 CSS/JS를 포함하며 원본 좌표와 letterbox 변환으로 영역을 지정합니다. JPEG와 관절/프레임 ID는 한 응답에 묶고 저장은 화면 전달보다 먼저 수행합니다. 기존 Tk 모듈은 호환용으로 남으며 기본 경로에서 창을 생성하지 않습니다.
+`live`의 launcher는 현재 `live_web.launch_browser`를 엽니다. `live_factory.py`가 Tk 없이 기존 소스/SDK/매핑을 생성하고, `WebWorkspace`가 입력별 Worker 메시지/결과·제어를 관리합니다. `WorkspaceHTTPServer`는 loopback만 사용하며 토큰·Host/Origin 검사, 로컬 파일 전달과 상태/화면 API를 제공합니다. `templates/live_workspace.html`은 별도 CDN 없이 CSS/JS를 포함하며 원본 좌표와 letterbox 변환으로 영역을 지정합니다. JPEG와 관절/프레임 ID는 한 응답에 묶고 저장은 화면 전달보다 먼저 수행합니다. 기존 Tk 모듈은 호환용으로 남으며 기본 경로에서 창을 생성하지 않습니다.
 
 
 ## 그룹 대상 선택 근거 · 2026-10-27

@@ -60,6 +60,21 @@ class QualityWebTests(unittest.TestCase):
         self.wait(lambda x:any(s['id']==sid and s['frame_id'] is not None for s in x['sessions']))
         return sid
 
+    def test_paused_failed_preview_can_reencode_without_new_inference(self):
+        with patch('bed_pose.live_web.encode_preview',side_effect=ValueError('display only')):
+            sid=self.paused_file()
+            state=self.wait(lambda x:x['sessions'][0].get('preview_error'))['sessions'][0]
+            self.assertFalse(state['closed']);self.assertTrue(state['paused'])
+            before=self.request('/api/view/'+sid)[1]
+            self.assertIsNone(before['image'])
+        self.assertEqual(self.request('/api/preview-quality',{'quality':'standard'})[0],200)
+        after=self.request('/api/view/'+sid)[1]
+        self.assertEqual(before['frame_id'],after['frame_id'])
+        self.assertEqual(before['received_ns'],after['received_ns'])
+        self.assertEqual(before['posture_assessment'],after['posture_assessment'])
+        self.assertTrue(after['image'])
+        self.assertIsNone(self.request('/api/state')[1]['sessions'][0]['preview_error'])
+
     def test_authenticated_validated_global_default_and_paused_frame_reencode(self):
         self.assertEqual(self.request('/api/state')[1]['preview_quality'],'high')
         self.assertEqual(self.request('/api/preview-quality',{'quality':'standard'},auth=False)[0],403)
@@ -111,3 +126,23 @@ class QualityRecordingTests(unittest.TestCase):
         before={p.name:file_hash(p) for p in root.iterdir() if p.is_file()}
         self.request('/api/preview-quality',{'quality':'high'})
         self.assertEqual(before,{p.name:file_hash(p) for p in root.iterdir() if p.is_file()})
+
+
+    def test_preview_failure_keeps_recording_and_recovers_on_next_frame(self):
+        sid=self.weighted_input();self.control(sid,'start')
+        self.wait(lambda x:x['sessions'][0]['recorded_frames']>=1)
+        with patch('bed_pose.live_web.encode_preview',side_effect=ValueError('display only')):
+            state=self.wait(lambda x:x['sessions'][0].get('preview_error'))['sessions'][0]
+            before=state['recorded_frames']
+            state=self.wait(lambda x:x['sessions'][0]['recorded_frames']>=before+3)['sessions'][0]
+            self.assertTrue(state['recording']);self.assertFalse(state['closed'])
+            self.assertIsNone(state['error'])
+            self.assertEqual(state['posture_assessment']['label'],'side')
+            view=self.request('/api/view/'+sid)[1]
+            self.assertIsNone(view['image']);self.assertIsNone(view['preview'])
+            self.assertEqual(self.request('/api/target-capture',{'id':sid})[0],400)
+        self.wait(lambda x:not x['sessions'][0].get('preview_error'))
+        self.assertTrue(self.request('/api/view/'+sid)[1]['image'].startswith('data:image/jpeg'))
+        self.control(sid,'stop')
+        state=self.wait(lambda x:x['sessions'][0]['integrity']=='verified')['sessions'][0]
+        self.assertEqual(verify_live(Path(state['directory']))['integrity'],'verified')

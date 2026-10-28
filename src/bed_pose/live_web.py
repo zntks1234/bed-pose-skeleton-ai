@@ -102,7 +102,7 @@ class WebWorkspace:
                      'closed': False, 'recording': False, 'pending': None, 'region': None,
                      'paused': kind == 'video_file', 'frame_id': None, 'sequence': 0,
                      'candidate_count': None, 'recorded_frames': 0, 'elapsed': 0,
-                     'media_seconds': None, 'directory': None, 'integrity': None, 'error': None,
+                     'media_seconds': None, 'directory': None, 'integrity': None, 'error': None, 'preview_error': None,
                      'width': None, 'height': None, 'posture': 'not_implemented', 'posture_assessment': None,
                      'posture_model_id':engine.posture_classifier.model_id if engine.posture_classifier else None,
                      'automatic_posture_profile':engine.posture_classifier.profile if engine.posture_classifier else None}
@@ -133,13 +133,13 @@ class WebWorkspace:
             for session,image,metadata in updates:
                 session.sequence+=1
                 session.view=dict(session.view,image=image,preview=metadata,sequence=session.sequence)
-                session.state.update(sequence=session.sequence,preview=metadata)
+                session.state.update(sequence=session.sequence,preview=metadata,preview_error=None)
             return {'quality':quality,**PREVIEW_PROFILES[quality]}
 
     def capture_target(self, session_id):
         with self.lock:
             session=self.sessions[session_id]
-            if session.state['closed'] or not session.view or not session.view['people']:
+            if session.state['closed'] or not session.view or not session.view.get('image') or not session.view['people']:
                 raise ValueError('선택할 관절 후보가 없습니다. 입력을 확인하세요.')
             ticket=uuid.uuid4().hex
             capture=json.loads(json.dumps(session.view))
@@ -412,7 +412,13 @@ class WebWorkspace:
             return
         rgb, row = frame['rgb'], frame['row']
         height, width = rgb.shape[:2]
-        image, preview = encode_preview(rgb,self.preview_quality)
+        # Display encoding is optional: it must never terminate inference/recording.
+        try:
+            image, preview = encode_preview(rgb,self.preview_quality)
+            state['preview_error'] = None
+        except Exception:
+            image, preview = None, None
+            state['preview_error'] = '미리보기 변환 실패 · 분석과 진행 중인 기록은 계속됩니다. 다음 프레임에서 재시도하며, 정지 영상은 화질을 전환해 재시도할 수 있습니다.'
         session.preview_rgb = rgb
         media = row.get('source_media')
         session.sequence += 1

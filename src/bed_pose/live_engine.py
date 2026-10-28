@@ -42,8 +42,8 @@ class LiveEngine:
         self.ever_opened = False
         self.source_profile, self.adapter_profile = {}, {}
         self.target_tracker=TargetTracker()
-        self.posture_classifier=None
-        self.latest_posture_observation=None
+        from .automatic_posture import AutomaticClassifier
+        self.posture_classifier=AutomaticClassifier() if execution_kind=='model_inference' else None
 
     def clock(self):
         return self.clock_function() - self.origin
@@ -107,7 +107,7 @@ class LiveEngine:
             box=[self.region[k] for k in ('x1','y1','x2','y2')]
             vector=features(PostureInput(points,*self.geometry,tuple(box)))
             if vector is None:raise ValueError('어깨·골반·무릎·발목의 화면 내 관절이 모두 필요합니다.')
-            previous=self.posture_classifier.profile if self.posture_classifier else None
+            previous=self.posture_classifier.profile if isinstance(self.posture_classifier,ReferenceClassifier) else None
             refs=deepcopy(previous['references']) if previous and previous['bed_rectangle']==box else {}
             profile={'version':METHOD,'label_source':'operator_reference_not_verified','width':self.geometry[0],'height':self.geometry[1],
                      'bed_rectangle':box,'max_distance':max_distance,'min_margin':min_margin,'references':refs}
@@ -149,7 +149,8 @@ class LiveEngine:
                     'preview_tracking_history_retained': True, 'hardware_dropped_frames': None, 'start_request': request,
                     'target_tracking_initial':self.target_tracker.current(),
                     'posture_assessment_profile':dict(PROFILE),
-                    'reference_posture_profile':self.posture_classifier.profile if self.posture_classifier else None,
+                    'reference_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version']=='reference-posture-0.1' else None,
+                    'automatic_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version'].startswith('automatic-posture') else None,
                     'target_policy': 'none', 'posture_classifier': self.posture_classifier.model_id if self.posture_classifier else 'not_implemented', 'event_analyzer': 'not_implemented'}
         self.recorder = LiveRecorder(self.output_root/measurement_id, manifest, self.clock)
         self.recorder.event('measurement_started', effective_stream_frame_id=self.next_frame_id, request=request)
@@ -309,6 +310,14 @@ class LiveWorker(threading.Thread):
                                 self.engine.recorder.event('target_reselected',effective_stream_frame_id=self.engine.next_frame_id,
                                     request=request,selection=values,tracking=tracking)
                             self.messages.put(('target_selected',{'tracking':tracking,'selection_id':values.get('selection_id')}))
+                        elif action == 'posture_mode':
+                            if self.engine.recorder:raise ValueError('측정을 종료한 뒤 설정을 바꾸세요.')
+                            from .automatic_posture import AutomaticClassifier,DEFAULTS
+                            mode=values.get('mode')
+                            if mode not in ('automatic','off') or values.get('view') not in ('oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
+                            self.engine.posture_classifier=AutomaticClassifier(dict(DEFAULTS,view=values['view'])) if mode=='automatic' else None
+                            model=self.engine.posture_classifier
+                            self.messages.put(('posture_mode',{'profile':model.profile if model else None,'model_id':model.model_id if model else None}))
                         elif action == 'posture_reference':
                             self.engine.configure_posture(**values)
                             model=self.engine.posture_classifier

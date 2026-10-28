@@ -244,7 +244,7 @@ class MeasurementGroup:
             a=s.state.get('posture_assessment')
             tracking=s.state.get('target_tracking') or {}
             views.append({'input_id':s.id,'title':s.title,'closed':s.state['closed'],'assessment':a,
-                'reference_profile':s.state.get('posture_reference_profile'),
+                'reference_profile':s.state.get('automatic_posture_profile') or s.state.get('posture_reference_profile'),
                 'tracking_provisional':tracking.get('status')=='tracking_provisional',
                 'time_ns':str(s.worker.engine.origin+int(a['received_ns'])) if a else '0',
                 'max_age_ns':int(tracking.get('config',{}).get('max_gap_ms',500)*1e6)})

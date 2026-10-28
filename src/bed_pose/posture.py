@@ -1,4 +1,4 @@
-"""Frame-scoped posture interface. No trained or rule-based classifier is bundled."""
+"""Frame-scoped posture interface with explicit abstention and experimental classifiers."""
 from dataclasses import dataclass
 import math
 from typing import Protocol
@@ -55,7 +55,14 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
         observation=PostureInput(tuple(points),width,height,
             tuple(region[k] for k in ('x1','y1','x2','y2')) if region else None)
         from .reference_posture import ReferenceClassifier
-        if isinstance(classifier,ReferenceClassifier):
+        from .automatic_posture import AutomaticClassifier
+        if isinstance(classifier,AutomaticClassifier):
+            label,reason,evidence=classifier.evaluate(observation)
+            result.update(rule_features=evidence,experimental=True)
+            if reason:
+                result.update(status='held',reasons=[reason])
+                return result
+        elif isinstance(classifier,ReferenceClassifier):
             label,reason,distances=classifier.evaluate(observation)
             result.update(reference_distances=distances,experimental=True)
             if reason:
@@ -74,3 +81,15 @@ def group_assessment(observations):
     # Latest previews are NOT time-aligned classifier inputs.
     return {'status':'unavailable','label':None,'reasons':['live_pairing_not_connected','classifier_not_configured'],
             'views':observations,'identity_verified':False,'exposure_synchronized':False}
+
+
+def load_classifier(manifest):
+    automatic=manifest.get('automatic_posture_profile');reference=manifest.get('reference_posture_profile')
+    if automatic and reference:raise ValueError('Multiple active posture classifiers')
+    if automatic:
+        from .automatic_posture import AutomaticClassifier
+        return AutomaticClassifier(automatic)
+    if reference:
+        from .reference_posture import ReferenceClassifier
+        return ReferenceClassifier(reference)
+    return None

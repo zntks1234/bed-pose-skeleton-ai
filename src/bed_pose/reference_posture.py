@@ -76,6 +76,15 @@ def combine_views(views,max_skew_ns,confirmations,active,now_ns):
     for v in views:
         a=v['assessment']
         if not a.get('track_id') or a.get('track_id')!=confirmed.get(v['input_id']):reasons.append('operator_pair_confirmation_missing');break
+    auto=[v.get('reference_profile',{}).get('version','').startswith('automatic-posture') if v.get('reference_profile') else False for v in views]
+    if any(auto):
+        result['method']='automatic_two_view_agreement_v1'
+        if reasons:return result
+        if not all(auto):reasons.append('mixed_classifier_modes')
+        elif any(not v.get('tracking_provisional') or v['assessment']['status']!='predicted' for v in views):reasons.append('view_features_unavailable')
+        elif views[0]['assessment']['label']!=views[1]['assessment']['label']:reasons.append('view_posture_conflict')
+        else:result.update(status='predicted',label=views[0]['assessment']['label'])
+        return result
     for v in views:
         a=v['assessment'];p=v.get('reference_profile')
         if (not p or not v.get('tracking_provisional') or set(a.get('reference_distances',{}))!=set(LABELS)):

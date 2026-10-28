@@ -99,7 +99,9 @@ class WebWorkspace:
                      'paused': kind == 'video_file', 'frame_id': None, 'sequence': 0,
                      'candidate_count': None, 'recorded_frames': 0, 'elapsed': 0,
                      'media_seconds': None, 'directory': None, 'integrity': None, 'error': None,
-                     'width': None, 'height': None, 'posture': 'not_implemented', 'posture_assessment': None}
+                     'width': None, 'height': None, 'posture': 'not_implemented', 'posture_assessment': None,
+                     'posture_model_id':engine.posture_classifier.model_id if engine.posture_classifier else None,
+                     'automatic_posture_profile':engine.posture_classifier.profile if engine.posture_classifier else None}
             self.sessions[session_id] = Session(session_id, title, kind, worker, state)
             worker.start()
             return {'id': session_id}
@@ -255,6 +257,10 @@ class WebWorkspace:
                     raise ValueError('영역을 지정한 영상 프레임이 유효하지 않습니다.')
                 session.worker.submit('region', box=box, width=state['width'], height=state['height'],
                                       selected_frame_id=selected_id)
+            elif action == 'posture_mode':
+                if state['recording']:raise ValueError('측정을 종료한 뒤 판정 설정을 바꾸세요.')
+                if values.get('mode') not in ('automatic','off') or values.get('view','oblique') not in ('oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
+                session.worker.submit('posture_mode',mode=values['mode'],view=values.get('view','oblique'))
             elif action == 'posture_reference':
                 if state['recording']:raise ValueError('측정 종료 후 기준을 변경하세요.')
                 if values.get('clear') is not True and values.get('confirmed') is not True:raise ValueError('실제 자세를 확인한 뒤 등록하세요.')
@@ -321,7 +327,11 @@ class WebWorkspace:
                          phase='error' if manifest['run_status'] == 'failed' else 'preview')
             if manifest['run_status'] == 'failed' and not state['error']:
                 state['error'] = '오류로 측정을 종료했습니다. 기록을 확인하세요.'
+        elif kind == 'posture_mode':
+            state.update(automatic_posture_profile=value['profile'],posture_reference_profile=None,posture_model_id=value['model_id'],pending=None)
         elif kind == 'posture_reference':
+            state['automatic_posture_profile']=None
+            state['posture_model_id']=value['model_id']
             state['posture_reference_profile']=value['profile']
             state['posture_reference_model_id']=value['model_id']
             state['pending']=None

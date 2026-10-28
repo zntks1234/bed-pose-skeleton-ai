@@ -83,8 +83,8 @@ def _verify(directory, manifest, hashes=True):
     if 'posture_assessment_profile' in manifest:
         from .posture import PROFILE
         if manifest['posture_assessment_profile']!=PROFILE:raise IntegrityError('Unsupported posture assessment profile')
-    from .reference_posture import ReferenceClassifier
-    reference_model=ReferenceClassifier(manifest['reference_posture_profile']) if manifest.get('reference_posture_profile') else None
+    from .posture import load_classifier
+    reference_model=load_classifier(manifest)
     revision = manifest['initial_bed_revision']
     regions={manifest['initial_bed_revision']:manifest['initial_bed_region']}
     changes = []

@@ -82,7 +82,7 @@ def view_features(row,manifest,regions,input_id):
             'score_source_block':manifest['mapping_profile']['image_block_id'],'bed_region_revision':row['bed_region_revision'],
             'bed_region':region,'tracking':tracking,'joints':features,'hold_reasons':reasons,
             'identity_verified':False,'input_quality_status':'not_assessed'}
-    if manifest.get('reference_posture_profile'):
+    if manifest.get('reference_posture_profile') or manifest.get('automatic_posture_profile'):
         result['posture_assessment']=row['posture_assessment']
     return result
 
@@ -200,7 +200,7 @@ def _inspect_group(directory):
         from .group_posture import verify_predictions
         verify_predictions(group,directory)
     return {'group_id':group['group_id'],'integrity':'verified','input_counts':dict(counts),
-            'hold_reason_counts':dict(reasons),'posture_classifier':('reference_distance_experimental' if group.get('posture_predictions',{}).get('status')=='generated' else 'not_implemented'),
+            'hold_reason_counts':dict(reasons),'posture_classifier':('experimental_posture_combination' if group.get('posture_predictions',{}).get('status')=='generated' else 'not_implemented'),
             'identity_verified':False,'exposure_synchronized':False}
 
 

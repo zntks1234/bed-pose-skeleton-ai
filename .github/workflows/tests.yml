@@ -26,3 +26,11 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Build distributable
         run: python -m pip wheel . --no-deps --wheel-dir dist
+      - name: Install browser regression tools
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install playwright==1.62.0
+          python -m playwright install --with-deps chromium
+      - name: Check browser preview recovery
+        if: runner.os == 'Linux'
+        run: python tests/browser_preview_recovery.py

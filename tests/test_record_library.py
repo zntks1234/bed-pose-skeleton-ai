@@ -89,8 +89,11 @@ class RecordWebTests(unittest.TestCase):
         sid=self.demo();self.control(sid,'region',box=[1,1,630,350],selected_frame_id=0)
         self.wait(lambda x:x['sessions'][0]['region'] is not None);root=self.finish(sid)
         manifest=load_json(root/'manifest.json');manifest.pop('posture_assessment_profile');manifest.pop('posture_evidence_profile')
+        manifest.pop('silhouette_profile')
         path=root/'live_frames.jsonl';rows=[json.loads(l) for l in path.read_text(encoding='utf-8').splitlines()]
-        for row in rows:row.pop('posture_assessment');row.pop('posture_evidence')
+        for row in rows:
+            row.pop('posture_assessment');row.pop('posture_evidence')
+            row.pop('silhouette_observation');row.pop('silhouette_assessment')
         path.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
         manifest['artifact_sha256'][path.name]=file_hash(path);atomic_json(root/'manifest.json',manifest)
         self.assertEqual(self.request('/api/records/open',{'record_id':root.name})[0],200)

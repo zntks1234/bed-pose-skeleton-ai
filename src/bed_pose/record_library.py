@@ -88,6 +88,7 @@ class OpenRecord:
                     'source_media':row.get('source_media'),'processing_status':row['processing_status'],
                     'candidate_count':row['candidate_count'],'assessment':assessment,
                     'score_decision':(a or {}).get('rule_features',{}).get('score_decision'),
+                    'silhouette_assessment':row.get('silhouette_assessment'),
                     'decision_source':orientation.get('source'),'error':row.get('error')})
         self.check()
         return {'record_id':self.meta['record_id'],'offset':offset,'limit':limit,

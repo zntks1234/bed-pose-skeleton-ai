@@ -55,6 +55,7 @@ class PoseOutput:
     candidates: tuple
     model_timestamp_ms: int | None
     sdk_call_started: bool = False
+    silhouette_observation: dict | None = None
 
 
 class SourceError(RuntimeError):

@@ -19,4 +19,4 @@ def make_engine(source, model, output_root, options_root, *, demo=False):
     settings = {'execution_mode': 'ordered_sequence', 'requested_device': 'cpu',
                 'assets': [{'role': 'pose_landmarker_task', 'path': str(model), 'sha256': file_hash(model)}],
                 'adapter_options_path': str(options), 'adapter_options_sha256': file_hash(options)}
-    return LiveEngine(source, MediaPipeAdapter(), settings, output_root, profile=mapping_profile())
+    return LiveEngine(source, MediaPipeAdapter(silhouette=True), settings, output_root, profile=mapping_profile())

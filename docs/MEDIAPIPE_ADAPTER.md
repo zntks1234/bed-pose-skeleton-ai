@@ -1,5 +1,7 @@
 # MediaPipe 실험용 어댑터
 
+**HTML 작업실 보조 기능 추가 · 2026-10-28:** `MediaPipeAdapter(silhouette=True)`로 분할 출력을 활성화하고 희소 표본을 별도 `PoseOutput.silhouette_observation`에 전달합니다. 기본 생성자·오프라인 benchmark는 기존 마스크 꺼짐을 유지합니다. 원본 관절 구조와 기존 최종 자세 판정은 보존하고, 보조 읽기 실패는 별도 확인 불가로 처리합니다. [출처·설정·검증 한계](SILHOUETTE_SUPPORT.md).
+
 [프로젝트 홈](../README.md) · [진행 현황](PROJECT_STATUS.md) · [비교 실험 계획](POSE_BENCHMARK_PLAN.md)
 
 **2026-10-27: 코드 연결·SDK 경계 검사 완료, 실제 모델 추론 성공·등록 게이트·침대 성능 검증 미완료.** MediaPipe의 최종 채택을 의미하지 않습니다.

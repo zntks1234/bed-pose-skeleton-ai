@@ -408,6 +408,7 @@ class WebWorkspace:
         state['target_tracking']=row['target_tracking']
         state['posture_assessment']=row['posture_assessment']
         state['posture_evidence']=row.get('posture_evidence')
+        state['silhouette_assessment']=row.get('silhouette_assessment')
         state['posture_diagnostics']=frame.get('posture_diagnostics')
         state['posture']=row['posture_assessment']['label'] or ('held' if row['posture_assessment']['classifier_id'] else 'not_implemented')
         session.view = {'sequence': session.sequence, 'frame_id': row['stream_frame_id'],
@@ -416,6 +417,7 @@ class WebWorkspace:
                         'target_tracking':row['target_tracking'],
                         'posture_assessment':row['posture_assessment'],
                         'posture_evidence':row.get('posture_evidence'),
+                        'silhouette_assessment':row.get('silhouette_assessment'),
                         'candidate_count': row['candidate_count'],
                         'inference_ms': (int(row['inference_finished_ns'])-int(row['inference_started_ns']))/1e6,
                         'read_ms': (int(row['received_ns'])-int(row['read_started_ns']))/1e6,

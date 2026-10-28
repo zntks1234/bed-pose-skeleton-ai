@@ -18,7 +18,8 @@ COLUMNS=('measurement_id','frame_id','stream_frame_id','clock_id','received_ns',
          'hip_transverse_3d','hip_axial_3d','line_angle_3d',
          'shoulder_depth_fraction','hip_depth_fraction','normal_world_x','normal_world_y','normal_world_z',
          'combined_status','combined_reasons','decision_source','orientation_2d','orientation_3d',
-         'score_supine','score_side','score_edge_sitting','score_minimum','score_gap','score_close_candidates')
+         'score_supine','score_side','score_edge_sitting','score_minimum','score_gap','score_close_candidates',
+         'silhouette_status','silhouette_reasons','silhouette_inside','silhouette_outside','silhouette_uncertain','silhouette_support_ratio')
 
 
 def _cells(row,evidence):
@@ -36,6 +37,10 @@ def _cells(row,evidence):
     for name in ('supine','side','edge_sitting'):values['score_'+name]=decision.get('scores',{}).get(name)
     values.update(score_minimum=decision.get('minimum'),score_gap=decision.get('gap'),
                   score_close_candidates=decision.get('close_candidates'))
+    visual=row.get('silhouette_assessment') or {}
+    values.update(silhouette_status=visual.get('status'),silhouette_reasons='|'.join(visual.get('reasons',[])),
+                  silhouette_inside=visual.get('inside_count'),silhouette_outside=visual.get('outside_count'),
+                  silhouette_uncertain=visual.get('uncertain_count'),silhouette_support_ratio=visual.get('support_ratio'))
     for node,suffix in ((body,'2d'),(world,'3d')):
         f=node['features']
         for part,name in (('shoulders','shoulder'),('hips','hip')):
@@ -69,7 +74,7 @@ def export_evidence(directory,output):
         frames_hash=file_hash(directory/'live_frames.jsonl')
         if frames_hash!=manifest['artifact_sha256']['live_frames.jsonl'] or file_hash(directory/'manifest.json')!=manifest_hash:
             raise IntegrityError('Source record changed while exporting evidence')
-        summary={'version':'posture-evidence-report-0.3','profile':PROFILE,'run_directory':str(directory),
+        summary={'version':'posture-evidence-report-0.4','profile':PROFILE,'run_directory':str(directory),
                  'measurement_id':manifest['measurement_id'],'execution_kind':manifest['execution_kind'],
                  'source_manifest_sha256':manifest_hash,'source_frames_sha256':frames_hash,
                  'frame_count':frames,'counts':{k:dict(v) for k,v in counts.items()},
@@ -78,6 +83,7 @@ def export_evidence(directory,output):
                  'evaluation_status':'features_only_no_ground_truth_accuracy',
                  'classification_policy':'source_record_profile_unchanged_not_reclassified',
                  'source_automatic_posture_profile':manifest.get('automatic_posture_profile'),
+                 'silhouette_profile':manifest.get('silhouette_profile'),
                  'world_coordinates':'monocular_estimate_not_bed_height_or_external_sensor'}
         atomic_json(output/'summary.json',summary)
         return output,summary

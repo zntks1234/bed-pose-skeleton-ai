@@ -133,6 +133,7 @@ class LiveEngine:
         from .runner import _code_version
         from .posture import PROFILE
         from .posture_evidence import PROFILE as EVIDENCE_PROFILE
+        from .silhouette import PROFILE as SILHOUETTE_PROFILE
         width, height = self.geometry
         measurement_id = uuid.uuid4().hex
         manifest = {'measurement_id': measurement_id, 'stream_id': self.stream_id,
@@ -156,6 +157,7 @@ class LiveEngine:
                     'target_tracking_initial':self.target_tracker.current(),
                     'posture_assessment_profile':dict(PROFILE),
                     'posture_evidence_profile':dict(EVIDENCE_PROFILE),
+                    'silhouette_profile':dict(SILHOUETTE_PROFILE),
                     'reference_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version']=='reference-posture-0.1' else None,
                     'automatic_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version'].startswith('automatic-posture') else None,
                     'target_policy': 'none', 'posture_classifier': self.posture_classifier.model_id if self.posture_classifier else 'not_implemented', 'event_analyzer': 'not_implemented'}
@@ -212,6 +214,7 @@ class LiveEngine:
                'inference_finished_ns': None, 'mapping_finished_ns': None,
                'processing_status': 'ok', 'candidate_count': None, 'raw_candidates': None,
                'mapped_people': None, 'sdk_call_started': False, 'error': None,
+               'silhouette_observation':None,
                'bed_region_revision': self.region_revision,
                'posture_prediction': {'status': 'not_implemented', 'label': None},
                'event_predictions': [], 'event_analysis_status': 'not_implemented',
@@ -234,6 +237,8 @@ class LiveEngine:
             row['inference_finished_ns'] = str(self.clock())
             row['candidate_count'] = len(output.candidates)
             row['raw_candidates'] = raw_json_value(output.candidates)
+            try:row['silhouette_observation']=raw_json_value(getattr(output,'silhouette_observation',None))
+            except Exception:row['silhouette_observation']=None
             stage = 'mapping'
             row['mapped_people'] = map_keypoints(output, *geometry, self.profile)
             row['mapping_finished_ns'] = str(self.clock())
@@ -251,6 +256,8 @@ class LiveEngine:
         row['posture_assessment']=assess_frame(row,*geometry,self.region,self.posture_classifier)
         from .posture_evidence import compare_frame
         row['posture_evidence']=compare_frame(row,*geometry,row['posture_assessment'])
+        from .silhouette import assess as assess_silhouette
+        row['silhouette_assessment']=assess_silhouette(row,*geometry)
         if self.posture_classifier:
             a=row['posture_assessment']
             row['posture_prediction']={'status':'experimental' if a['label'] else 'held','label':a['label']}

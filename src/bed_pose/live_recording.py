@@ -90,6 +90,9 @@ def _verify(directory, manifest, hashes=True):
     if 'posture_evidence_profile' in manifest:
         from .posture_evidence import PROFILE as EVIDENCE_PROFILE
         if manifest['posture_evidence_profile']!=EVIDENCE_PROFILE:raise IntegrityError('Unsupported posture evidence profile')
+    if 'silhouette_profile' in manifest:
+        from .silhouette import PROFILE as SILHOUETTE_PROFILE
+        if manifest['silhouette_profile']!=SILHOUETTE_PROFILE:raise IntegrityError('Unsupported silhouette profile')
     from .posture import load_classifier
     reference_model=load_classifier(manifest)
     revision = manifest['initial_bed_revision']
@@ -213,6 +216,13 @@ def _verify(directory, manifest, hashes=True):
                 expected_evidence=compare_frame(row,manifest['width'],manifest['height'],row['posture_assessment'])
                 if row['posture_evidence']!=expected_evidence:
                     raise IntegrityError('Posture evidence differs from source frame')
+            if 'silhouette_profile' in manifest or 'silhouette_assessment' in row or 'silhouette_observation' in row:
+                from .silhouette import assess as assess_silhouette
+                if ('silhouette_profile' not in manifest or 'silhouette_assessment' not in row
+                        or 'silhouette_observation' not in row or 'posture_assessment' not in row):
+                    raise IntegrityError('Missing silhouette observation, assessment or profile')
+                if row['silhouette_assessment']!=assess_silhouette(row,manifest['width'],manifest['height']):
+                    raise IntegrityError('Silhouette evidence differs from source samples')
             tracking=row.get('target_tracking')
             if tracking is not None and tracking != {'status':'not_configured','candidate_id':None}:
                 from .target_tracking import TrackingConfig

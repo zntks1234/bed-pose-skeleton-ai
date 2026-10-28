@@ -52,7 +52,9 @@ def validated_options(settings):
 
 
 class MediaPipeAdapter:
-    def __init__(self):
+    def __init__(self,*,silhouette=False):
+        if type(silhouette) is not bool:raise ValueError('silhouette must be boolean')
+        self.silhouette=silhouette
         self.task = None
         self.mp = None
         self.last_timestamp = None
@@ -83,7 +85,7 @@ class MediaPipeAdapter:
         self.sdk_options = vision.PoseLandmarkerOptions(
             base_options=mp.tasks.BaseOptions(model_asset_buffer=model,
                                              delegate=mp.tasks.BaseOptions.Delegate.CPU),
-            running_mode=mode, output_segmentation_masks=False, **options)
+            running_mode=mode, output_segmentation_masks=self.silhouette, **options)
         self.task = vision.PoseLandmarker.create_from_options(self.sdk_options)
         self.last_timestamp = None
         return {'adapter_id': 'mediapipe_pose', 'execution_kind': 'model_inference',
@@ -94,7 +96,7 @@ class MediaPipeAdapter:
                 'internal_smoothing': self.mode == 'ordered_sequence' and options['num_poses'] == 1,
                 'max_returned_people': options['num_poses'], 'options': options,
                 'assets': settings['assets'], 'estimated_world_coordinates': True,
-                'segmentation_masks': False, 'stable_person_ids': False}
+                'segmentation_masks': self.silhouette, 'stable_person_ids': False}
 
     def reset_for_video(self):
         if self.task is None:
@@ -123,7 +125,12 @@ class MediaPipeAdapter:
             else:
                 result = self.task.detect(image)
             candidates = self._candidates(result, packet.width, packet.height)
-            return PoseOutput(tuple(candidates), stamp, sdk_call_started=True)
+            observation=None
+            if self.silhouette:
+                from ..silhouette import capture
+                try:observation=capture(result,candidates,model_input)
+                except Exception:observation=None
+            return PoseOutput(tuple(candidates), stamp, sdk_call_started=True,silhouette_observation=observation)
         except Exception as exc:
             raise AdapterCallError(f'MediaPipe call/result conversion failed: {type(exc).__name__}',
                                    sdk_call_started=True) from exc

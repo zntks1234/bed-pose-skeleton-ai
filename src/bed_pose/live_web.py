@@ -13,6 +13,7 @@ import time
 from urllib.parse import parse_qs, urlsplit
 import uuid
 import webbrowser
+from .preview_worker import PreviewWorker
 from .live_engine import LiveWorker
 from .group_session import MeasurementGroup
 from .live_factory import make_engine
@@ -31,6 +32,11 @@ class Session:
     view: dict | None = None
     sequence: int = 0
     remove: bool = False
+    preview_frame: dict | None = None
+    preview_worker: object | None = None
+    preview_generation: int = 0
+    displayed_generation: int = -1
+    preview_epoch: int = 0
     preview_rgb: object | None = None  # One current frame per input, RAM only.
 
 
@@ -47,6 +53,8 @@ class WebWorkspace:
         self.groups = {}
         self.target_tickets = {}
         self.lock = threading.RLock()
+        self.quality_lock=threading.Lock()
+        self.quality_epoch=0
         self.preview_quality = PREVIEW_DEFAULT
         self.stop_requested = threading.Event()
         self.monitor_stop = threading.Event()
@@ -110,6 +118,9 @@ class WebWorkspace:
                      'posture_model_id':engine.posture_classifier.model_id if engine.posture_classifier else None,
                      'automatic_posture_profile':engine.posture_classifier.profile if engine.posture_classifier else None}
             self.sessions[session_id] = Session(session_id, title, kind, worker, state)
+            session=self.sessions[session_id]
+            session.preview_worker=PreviewWorker(lambda rgb,quality:encode_preview(rgb,quality),
+                lambda job,result,error:self._preview_ready(session,job,result,error))
             worker.start()
             return {'id': session_id}
 
@@ -125,19 +136,38 @@ class WebWorkspace:
     def set_preview_quality(self, quality):
         if not isinstance(quality,str) or quality not in PREVIEW_PROFILES:
             raise ValueError('표준 또는 고화질 표시를 선택하세요.')
+        # Serialize quality commands, without holding the workspace lock while encoding.
+        with self.quality_lock:
+            with self.lock:
+                if self.stop_requested.is_set():raise ValueError('작업실을 종료하고 있습니다.')
+                jobs=[(session,self._preview_job(session,quality)) for session in self.sessions.values()
+                      if session.preview_frame is not None]
+            updates=[(session,job,encode_preview(job['frame']['rgb'],quality)) for session,job in jobs]
+            with self.lock:
+                if self.stop_requested.is_set():raise ValueError('작업실을 종료하고 있습니다.')
+                self.preview_quality=quality;self.quality_epoch+=1
+                for session,job,result in updates:
+                    job=dict(job,quality_epoch=self.quality_epoch)
+                    self._preview_ready(session,job,result,False)
+                # A moving source may have advanced during the quality change.
+                for session in self.sessions.values():
+                    if session.preview_frame is not None:
+                        session.preview_worker.submit(self._preview_job(session,quality))
+                return {'quality':quality,**PREVIEW_PROFILES[quality]}
+
+    def _preview_job(self,session,quality=None):
+        return {'frame':session.preview_frame,'generation':session.preview_generation,
+                'epoch':session.preview_epoch,'quality_epoch':self.quality_epoch,
+                'quality':quality or self.preview_quality}
+
+    def _preview_ready(self,session,job,result,error):
         with self.lock:
-            # Encode all first, so a display failure cannot partially change settings.
-            updates=[]
-            for session in self.sessions.values():
-                if session.view is not None and session.preview_rgb is not None:
-                    image,metadata=encode_preview(session.preview_rgb,quality)
-                    updates.append((session,image,metadata))
-            self.preview_quality=quality
-            for session,image,metadata in updates:
-                session.sequence+=1
-                session.view=dict(session.view,image=image,preview=metadata,sequence=session.sequence)
-                session.state.update(sequence=session.sequence,preview=metadata,preview_error=None)
-            return {'quality':quality,**PREVIEW_PROFILES[quality]}
+            if (self.stop_requested.is_set() or self.sessions.get(session.id) is not session
+                    or session.state['phase']=='error' or job['epoch']!=session.preview_epoch
+                    or job['quality_epoch']!=self.quality_epoch
+                    or job['generation']<session.displayed_generation):return
+            self._publish_preview(session,job['frame'],result,error)
+            session.displayed_generation=job['generation']
 
     def capture_target(self, session_id):
         with self.lock:
@@ -262,6 +292,7 @@ class WebWorkspace:
             if action in ('close', 'remove'):
                 session.remove = action == 'remove'
                 if session.remove and state['closed']:
+                    session.preview_worker.stop()
                     del self.sessions[session_id]
                     self.target_tickets={k:v for k,v in self.target_tickets.items() if v['input_id']!=session_id}
                 else:
@@ -386,6 +417,9 @@ class WebWorkspace:
                 state['posture_diagnostics'] = session.worker.engine.posture_diagnostics.latest
                 session.view = None  # Never send a previous observation as a current failed frame.
                 session.preview_rgb = None
+                session.preview_frame = None
+                session.preview_epoch += 1
+                if session.preview_worker:session.preview_worker.stop()
         elif kind == 'eof':
             state['eof'] = True
         elif kind == 'closed':
@@ -414,25 +448,27 @@ class WebWorkspace:
             return
         if state['phase'] == 'error':
             return
-        rgb, row = frame['rgb'], frame['row']
-        height, width = rgb.shape[:2]
-        # Display encoding is optional: it must never terminate inference/recording.
-        try:
-            image, preview = encode_preview(rgb,self.preview_quality)
-            state['preview_error'] = None
-        except Exception:
-            image, preview = None, None
-            state['preview_error'] = '미리보기 변환 실패 · 분석과 진행 중인 기록은 계속됩니다. 다음 프레임에서 재시도하며, 정지 영상은 화질을 전환해 재시도할 수 있습니다.'
-        session.preview_rgb = rgb
+        session.preview_rgb=frame['rgb']
+        session.preview_frame=frame
+        session.preview_generation+=1
+        if state['recording'] and int(frame['row']['received_ns'])>=int(state['started_ns']):
+            state['recorded_frames']=frame['recorded_frames']
+            state['elapsed']=(int(frame['row']['received_ns'])-int(state['started_ns']))/1e9
+        state['processing_fps']=frame.get('processing_fps')
+        session.preview_worker.submit(self._preview_job(session))
+
+    def _publish_preview(self,session,frame,result,error):
+        state=session.state
+        rgb,row=frame['rgb'],frame['row']
+        height,width=rgb.shape[:2]
+        image,preview=result
+        state['preview_error']=('미리보기 변환 실패 · 분석과 진행 중인 기록은 계속됩니다. 다음 프레임에서 재시도하며, 정지 영상은 화질을 전환해 재시도할 수 있습니다.' if error else None)
         media = row.get('source_media')
         session.sequence += 1
-        state.update(processing_fps=frame.get('processing_fps'),frame_id=row['stream_frame_id'], sequence=session.sequence, width=width, height=height,
+        state.update(frame_id=row['stream_frame_id'], sequence=session.sequence, width=width, height=height,
                      preview=preview,
                      candidate_count=row['candidate_count'],
                      media_seconds=int(media['relative_time_ns'])/1e9 if media else None)
-        if state['recording'] and int(row['received_ns']) >= int(state['started_ns']):
-            state['recorded_frames'] = frame['recorded_frames']
-            state['elapsed'] = (int(row['received_ns'])-int(state['started_ns']))/1e9
         state['target_tracking']=row['target_tracking']
         state['posture_assessment']=row['posture_assessment']
         state['posture_evidence']=row.get('posture_evidence')
@@ -463,6 +499,7 @@ class WebWorkspace:
                         self._message(session, 'error', {'message': '화면 전달 오류: '+str(exc)})
                         session.worker.request_close()
                     if session.remove and session.state['closed']:
+                        session.preview_worker.stop()
                         self.sessions.pop(session.id, None)
                         self.target_tickets={k:v for k,v in self.target_tickets.items() if v['input_id']!=session.id}
 
@@ -502,6 +539,8 @@ class WebWorkspace:
             time.sleep(.03)
         self.monitor_stop.set()
         self.monitor.join(timeout=2)
+        for session in sessions:session.preview_worker.stop()
+        for session in sessions:session.preview_worker.thread.join(timeout=.2)
         self.temp.cleanup()
 
 

@@ -6,9 +6,15 @@ from .contracts import SourceError
 
 
 class CameraSource:
-    def __init__(self, camera_index=0):
+    def __init__(self, camera_index=0, *, resolution=None, fps=None):
         if type(camera_index) is not int or camera_index < 0:
             raise ValueError('Camera index must be a nonnegative integer')
+        if resolution is not None and (not isinstance(resolution,(list,tuple)) or
+                any(type(v) is not int for v in resolution) or tuple(resolution) not in ((640,480),(1280,720),(1920,1080))):
+            raise ValueError('지원하는 카메라 해상도를 선택하세요.')
+        if fps is not None and (type(fps) is not int or fps not in (15,30,60)):
+            raise ValueError('카메라 FPS는 기본값 또는 15·30·60을 선택하세요.')
+        self.requested = {'resolution':list(resolution) if resolution is not None else None,'fps':fps}
         self.index, self.capture = camera_index, None
 
     def open(self):
@@ -18,10 +24,32 @@ class CameraSource:
         if not self.capture.isOpened():
             self.close()
             raise SourceError('카메라를 열 수 없습니다. 연결·권한·장치 번호를 확인하세요.')
-        rate = self.capture.get(cv2.CAP_PROP_FPS)
+        results={}
+        def request(prop,value):
+            try:return bool(self.capture.set(prop,value))
+            except Exception:return False
+        try:
+            if self.requested['resolution']:
+                for name,prop,value in zip(('width','height'),(cv2.CAP_PROP_FRAME_WIDTH,cv2.CAP_PROP_FRAME_HEIGHT),self.requested['resolution']):
+                    results[name]=request(prop,value)
+            if self.requested['fps'] is not None:
+                results['fps']=request(cv2.CAP_PROP_FPS,self.requested['fps'])
+            def reported(prop):
+                try:
+                    value=self.capture.get(prop)
+                    return value if type(value) in (int,float) and math.isfinite(value) and value>0 else None
+                except Exception:return None
+            rate=reported(cv2.CAP_PROP_FPS)
+            driver_size=[reported(cv2.CAP_PROP_FRAME_WIDTH),reported(cv2.CAP_PROP_FRAME_HEIGHT)]
+        except Exception:
+            self.close()
+            raise
+
         return {'kind': 'camera', 'camera_index': self.index,
                 'backend': self.capture.getBackendName(), 'opencv_version': cv2.__version__,
-                'driver_reported_fps': rate if math.isfinite(rate) and rate > 0 else None,
+                'requested_capture':self.requested, 'capture_set_results':results,
+                'driver_reported_resolution':driver_size,
+                'driver_reported_fps': rate,
                 'timestamp_source': 'received_after_read', 'exposure_timestamp_available': False,
                 'hardware_dropped_frames': None, 'pixel_format': 'rgb24', 'mirror': False}
 

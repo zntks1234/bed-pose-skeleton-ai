@@ -41,6 +41,8 @@ class LiveEngine:
         self.opened = False
         self.ever_opened = False
         self.source_profile, self.adapter_profile = {}, {}
+        from .processing_rate import ProcessingRate
+        self.processing_rate=ProcessingRate()
         self.target_tracker=TargetTracker()
         from .posture_diagnostics import PostureDiagnostics
         self.posture_diagnostics=PostureDiagnostics()
@@ -271,7 +273,7 @@ class LiveEngine:
         diagnostics=self.posture_diagnostics.observe(row['posture_assessment'],self.region_revision)
         if failure:
             raise failure
-        return {'rgb': rgb, 'row': row, 'silhouette_preview':silhouette_preview,
+        return {'processing_fps':self.processing_rate.observe(self.clock()), 'rgb': rgb, 'row': row, 'silhouette_preview':silhouette_preview,
                 'posture_diagnostics':diagnostics, 'bed_region': self.region, 'bed_revision': self.region_revision,
                 'recorded_frames': self.recorder.manifest['recorded_frames'] if self.recorder else 0}
 
@@ -349,6 +351,7 @@ class LiveWorker(threading.Thread):
                             path = self.engine.start_measurement(request=request)
                             if getattr(self.engine.source, 'is_file', False):
                                 self.paused = False
+                                self.engine.processing_rate.reset()
                                 self.messages.put(('playback', {'paused': False}))
                             self.messages.put(('started', {'directory': str(path), 'started_ns': self.engine.recorder.manifest['started_ns']}))
                         elif action == 'stop':
@@ -359,6 +362,7 @@ class LiveWorker(threading.Thread):
                                 self.messages.put(('playback', {'paused': True}))
                         elif action == 'playback' and getattr(self.engine.source, 'is_file', False):
                             self.paused = bool(values['paused'])
+                            self.engine.processing_rate.reset()
                             if self.engine.recorder:
                                 self.engine.recorder.event('playback_changed', paused=self.paused, effective_stream_frame_id=self.engine.next_frame_id, request=request)
                             self.messages.put(('playback', {'paused': self.paused}))

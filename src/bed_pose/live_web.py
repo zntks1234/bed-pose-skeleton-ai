@@ -82,7 +82,10 @@ class WebWorkspace:
                 if any(s.kind == 'camera' and not s.state['closed'] and s.worker.engine.source.index == index
                        for s in self.sessions.values()):
                     raise ValueError('이미 연결한 카메라입니다. 기존 입력을 선택하세요.')
-                source = CameraSource(index)
+                capture=values.get('camera_settings',{})
+                if not isinstance(capture,dict) or set(capture)-{'resolution','fps'}:
+                    raise ValueError('카메라 입력 설정을 확인하세요.')
+                source = CameraSource(index,**capture)
                 title = next((d['name'] for d in self.scan_state.get('devices', []) if d['index'] == index), f'카메라 {index} · 이름 미확인')
             elif kind == 'video_file':
                 if values.get('video_asset') not in self.assets:
@@ -339,6 +342,7 @@ class WebWorkspace:
         state = session.state
         if kind == 'ready':
             state['phase'] = 'preview'
+            state['source_profile'] = dict(session.worker.engine.source_profile)
         elif kind == 'region':
             state.update(region=value['region'], pending=None)
         elif kind == 'started':
@@ -422,7 +426,7 @@ class WebWorkspace:
         session.preview_rgb = rgb
         media = row.get('source_media')
         session.sequence += 1
-        state.update(frame_id=row['stream_frame_id'], sequence=session.sequence, width=width, height=height,
+        state.update(processing_fps=frame.get('processing_fps'),frame_id=row['stream_frame_id'], sequence=session.sequence, width=width, height=height,
                      preview=preview,
                      candidate_count=row['candidate_count'],
                      media_seconds=int(media['relative_time_ns'])/1e9 if media else None)

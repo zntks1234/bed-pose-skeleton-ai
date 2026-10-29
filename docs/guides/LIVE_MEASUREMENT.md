@@ -5,7 +5,7 @@
 
 [프로젝트 홈](../../README.md) · [문서 목차](../README.md) · [현재 지원 범위](../PROJECT_STATUS.md)
 
-**2026-10-29 · 로컬 HTML 작업실.** 실제 자세 정확도 검증은 남아 있습니다. 기술적 기록/시간 규약과 이전 실행 사례는 [정리 전 상세 기록](../archive/LIVE_MEASUREMENT_BEFORE_REORGANIZATION.md)에 보존했습니다.
+**2026-10-29 · 로컬 HTML 작업실.** 실제 자세 정확도 검증은 남아 있습니다. 기술적 기록/시간 규약과 이전 실행 사례는 [정리 전 상세 기록](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/LIVE_MEASUREMENT_BEFORE_REORGANIZATION.md)에 보존했습니다.
 
 ## 설치와 실행
 
@@ -61,9 +61,9 @@ MediaPipe 모델 파일 `checkpoints/pose_landmarker_full.task`가 없으면 입
 
 기본 저장 위치는 `recordings/live/<measurement_id>/`입니다. `manifest.json`, `live_frames.jsonl`, `control_events.jsonl`에 원본 관측·판정·설정·시각·영역/제어 이력을 남깁니다. 개발용 live-0.2-draft이며 기존 live-0.1-draft 읽기를 유지합니다.
 
-- **측정 기록 보기:** 완료 기록·저장 자세·점수·사유를 조회합니다. [조회 안내](RECORD_BROWSER.md).
-- **시간축:** 문제 구간에서 원본 기록 프레임으로 이동합니다. [집계 의미](RECORD_TIMELINE.md).
-- **원본 프레임 대조:** 저장 영상 기록에서 원본 파일을 다시 선택해 같은 프레임의 영상·관절·근거를 봅니다. 카메라 원본은 녹화되지 않습니다. [대조 안내](RECORD_IMAGE_COMPARISON.md).
+- **측정 기록 보기:** 완료 기록·저장 자세·점수·사유를 조회합니다. [조회 안내](RECORD_REVIEW.md#browse).
+- **시간축:** 문제 구간에서 원본 기록 프레임으로 이동합니다. [집계 의미](RECORD_REVIEW.md#timeline).
+- **원본 프레임 대조:** 저장 영상 기록에서 원본 파일을 다시 선택해 같은 프레임의 영상·관절·근거를 봅니다. 카메라 원본은 녹화되지 않습니다. [대조 안내](RECORD_REVIEW.md#image).
 
 ```powershell
 & .\.venv\Scripts\python.exe -m bed_pose live-inspect --run "recordings/live/<measurement_id>"

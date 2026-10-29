@@ -2,7 +2,7 @@
 
 [문서 목차](../README.md) · [분야 목차](README.md) · [현재 상태](../PROJECT_STATUS.md)
 
-**기준일: 2026-10-29.** 최초 인터페이스 도입과 분류기 미연결 단계는 [과거 기록](../archive/POSTURE_INTERFACE_BEFORE_REORGANIZATION.md)입니다. 현재 실제 카메라/파일 입력은 기본 자동 규칙 0.5를 사용합니다.
+**기준일: 2026-10-29.** 최초 인터페이스 도입과 분류기 미연결 단계는 [과거 기록](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/POSTURE_INTERFACE_BEFORE_REORGANIZATION.md)입니다. 현재 실제 카메라/파일 입력은 기본 자동 규칙 0.5를 사용합니다.
 
 ## 입력과 출력
 

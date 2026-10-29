@@ -5,7 +5,7 @@
 
 [문서 목차](../README.md) · [시스템 구조](ARCHITECTURE.md) · [진행 현황](../PROJECT_STATUS.md)
 
-**기준일: 2026-10-29.** 실제 파일 기준의 모듈 안내입니다. 첫 비교 러너의 상세 설계와 이전 UI 경로는 [정리 전 코드 설계](../archive/CODE_DESIGN_BEFORE_REORGANIZATION.md)에 보존했습니다. Tk 경로는 기본 실행에 사용하지 않습니다.
+**기준일: 2026-10-29.** 실제 파일 기준의 모듈 안내입니다. 첫 비교 러너의 상세 설계와 이전 UI 경로는 [정리 전 코드 설계](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/CODE_DESIGN_BEFORE_REORGANIZATION.md)에 보존했습니다. Tk 경로는 기본 실행에 사용하지 않습니다.
 
 ## 실행 흐름
 
@@ -40,7 +40,7 @@
 
 ## 상세 계약과 검사
 
-[기록/시간 설계](DATA_AND_VALIDATION.md) · [첫 benchmark 필드 계약](../development/BENCHMARK_DETAIL_SPEC.md) · [미리보기 동시 처리](PREVIEW_CONCURRENCY.md) · [원본 대조](../guides/RECORD_IMAGE_COMPARISON.md).
+[기록/시간 설계](DATA_AND_VALIDATION.md) · [첫 benchmark 필드 계약](../development/BENCHMARK_DETAIL_SPEC.md) · [미리보기 동시 처리](PREVIEW_CONCURRENCY.md) · [원본 대조](../guides/RECORD_REVIEW.md#image).
 
 `tests/`는 제품 로직과 별도로 실행하는 개발 검사입니다. 정상 앱 실행 중 전체 테스트가 함께 실행되는 구조가 아닙니다. SDK 대역·생성 영상 검사는 실제 모델/장치/정답 정확도 검사와 구분합니다.
 

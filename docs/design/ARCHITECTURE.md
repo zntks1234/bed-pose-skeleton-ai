@@ -5,7 +5,7 @@
 
 [문서 목차](../README.md) · [코드 구성](CODE_DESIGN.md) · [요구사항](../REQUIREMENTS.md)
 
-**기준일: 2026-10-29.** 현재 구현과 목표 구조를 구분합니다. 자세·이탈/복귀의 상태 전이 제안과 실패 사례는 [이전 구조 설계](../archive/ARCHITECTURE_BEFORE_REORGANIZATION.md)에 보존했습니다.
+**기준일: 2026-10-29.** 현재 구현과 목표 구조를 구분합니다. 자세·이탈/복귀의 상태 전이 제안과 실패 사례는 [이전 구조 설계](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/ARCHITECTURE_BEFORE_REORGANIZATION.md)에 보존했습니다.
 
 ## 현재 구현 흐름
 

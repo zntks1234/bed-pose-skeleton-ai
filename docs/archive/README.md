@@ -1,19 +1,24 @@
 # 과거 이력·호환 자료
 
-[전체 문서 목차](../README.md) · [현재 상태](../PROJECT_STATUS.md)
+[문서 목차](../README.md) · [현재 상태](../PROJECT_STATUS.md) · [현재 로드맵](../../ROADMAP.md)
 
-원래 설명과 결정 근거를 보존합니다. 현재 사용법은 guides, 현재 상태는 PROJECT_STATUS를 확인하세요.
+현재 작업에 필요한 계획은 로드맵, 사용법은 guides, 설계는 design에서 관리합니다. 이 폴더에는 현재 문서의 복사본 대신 고유한 과거 이력·이전 판정 규칙만 둡니다.
 
-| 문서 | 확인할 내용 |
+| 문서 | 용도 |
 |---|---|
-| [초기 시스템 구조 · 정리 전 원문](ARCHITECTURE_BEFORE_REORGANIZATION.md) | 당시 설명·결정 근거 보존. 현재 지원 범위와 구분 |
-| [초기 코드 설계 · 정리 전 원문](CODE_DESIGN_BEFORE_REORGANIZATION.md) | 당시 설명·결정 근거 보존. 현재 지원 범위와 구분 |
-| [결정 사항 · 정리 전 원문](DECISIONS_BEFORE_REORGANIZATION.md) | 당시 설명·결정 근거 보존. 현재 지원 범위와 구분 |
-| [구현 이력](IMPLEMENTATION_HISTORY.md) | 이전 README에서 분리한 날짜별 기능 도입 이력 |
-| [측정 작업실 · 정리 전 원문](LIVE_MEASUREMENT_BEFORE_REORGANIZATION.md) | 당시 설명·결정 근거 보존. 현재 지원 범위와 구분 |
-| [어깨·골반 특징의 최종 자세 판정 연결 · 규칙 0.4](LYING_ORIENTATION_RULES.md) | 현재 0.5 이전의 0.4 판정 규칙·검사 근거 |
-| [초기 판정 인터페이스 · 정리 전 원문](POSTURE_INTERFACE_BEFORE_REORGANIZATION.md) | 당시 설명·결정 근거 보존. 현재 지원 범위와 구분 |
-| [진행 현황 · 정리 전 원문](PROJECT_STATUS_BEFORE_REORGANIZATION.md) | 당시 설명·결정 근거 보존. 현재 지원 범위와 구분 |
-| [프로젝트 홈 · 정리 전 원문](README_BEFORE_REORGANIZATION.md) | 당시 설명·결정 근거 보존. 현재 지원 범위와 구분 |
-| [기준 자세 비교 판정 · 실험용](REFERENCE_POSTURE.md) | 기준 자세 등록 방식의 이전 계약·호환 근거 |
-| [로드맵 · 정리 전 원문](ROADMAP_BEFORE_REORGANIZATION.md) | 당시 설명·결정 근거 보존. 현재 지원 범위와 구분 |
+| [구현 이력](IMPLEMENTATION_HISTORY.md) | 초기 구현 과정 |
+| [기준 자세 비교](REFERENCE_POSTURE.md) | 이전 기준 등록 방식의 호환 계약 |
+| [누운 방향 규칙 0.4](LYING_ORIENTATION_RULES.md) | 이전 규칙으로 저장한 결과의 해석 |
+
+## 정리 전 문서 확인
+
+복사본 8개는 아래 고정 Git 버전에서 확인합니다. 현재 파일과 이중으로 관리하지 않습니다. 이 링크는 당시 내용을 보존하며 최신 설계나 남은 계획의 기준이 아닙니다.
+
+- [ROADMAP 원문](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/ROADMAP_BEFORE_REORGANIZATION.md)
+- [ARCHITECTURE 원문](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/ARCHITECTURE_BEFORE_REORGANIZATION.md)
+- [LIVE_MEASUREMENT 원문](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/LIVE_MEASUREMENT_BEFORE_REORGANIZATION.md)
+- [README 원문](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/README_BEFORE_REORGANIZATION.md)
+- [DECISIONS 원문](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/DECISIONS_BEFORE_REORGANIZATION.md)
+- [CODE_DESIGN 원문](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/CODE_DESIGN_BEFORE_REORGANIZATION.md)
+- [PROJECT_STATUS 원문](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/PROJECT_STATUS_BEFORE_REORGANIZATION.md)
+- [POSTURE_INTERFACE 원문](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/POSTURE_INTERFACE_BEFORE_REORGANIZATION.md)

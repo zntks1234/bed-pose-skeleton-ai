@@ -4,7 +4,7 @@
 
 **기준일: 2026-10-29 · 실제 침대 영상 평가 준비 단계**
 
-이 문서는 현재 지원 범위와 검증 상태만 관리합니다. 날짜별 변경 과정은 [개발 이력](archive/IMPLEMENTATION_HISTORY.md)과 [정리 전 기록](archive/PROJECT_STATUS_BEFORE_REORGANIZATION.md)을 참조하세요.
+이 문서는 현재 지원 범위와 검증 상태만 관리합니다. 날짜별 변경 과정은 [개발 이력](archive/IMPLEMENTATION_HISTORY.md)과 [정리 전 기록](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/PROJECT_STATUS_BEFORE_REORGANIZATION.md)을 참조하세요.
 
 ## 현재 지원 범위
 

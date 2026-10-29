@@ -39,7 +39,7 @@
 | 현재 상태와 한계 | [진행 현황](docs/PROJECT_STATUS.md) |
 | 다음 작업 순서 | [로드맵](ROADMAP.md) |
 | 확정·제안·미정 구분 | [결정 사항](docs/DECISIONS.md) · [요구사항](docs/REQUIREMENTS.md) |
-| 사용하기 | [측정 작업실](docs/guides/LIVE_MEASUREMENT.md) · [원본 프레임 대조](docs/guides/RECORD_IMAGE_COMPARISON.md) |
+| 사용하기 | [측정 작업실](docs/guides/LIVE_MEASUREMENT.md) · [원본 프레임 대조](docs/guides/RECORD_REVIEW.md#image) |
 | 구조와 판정 이해 | [코드 구성](docs/design/CODE_DESIGN.md) · [가중 적합도](docs/design/WEIGHTED_POSTURE.md) |
 | 연구·설계·과거 이력 전체 | [문서 목차](docs/README.md) |
 

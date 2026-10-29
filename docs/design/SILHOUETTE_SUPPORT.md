@@ -3,7 +3,7 @@
 [문서 목차](../README.md) · [분야 목차](README.md) · [현재 상태](../PROJECT_STATUS.md)
 
 
-[진행 현황](../PROJECT_STATUS.md) · [기존 판정](WEIGHTED_POSTURE.md) · [기록 조회](../guides/RECORD_BROWSER.md)
+[진행 현황](../PROJECT_STATUS.md) · [기존 판정](WEIGHTED_POSTURE.md) · [기록 조회](../guides/RECORD_REVIEW.md#browse)
 
 ## 범위와 사용법
 

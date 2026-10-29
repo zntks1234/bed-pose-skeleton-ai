@@ -2,7 +2,7 @@
 
 [프로젝트 홈](../README.md) · [문서 목차](README.md) · [현재 구현](PROJECT_STATUS.md) · [요구사항](REQUIREMENTS.md)
 
-**기준일: 2026-10-29.** 합의는 목표/방향이고 구현 완료·성능 검증과 다릅니다. 아래는 기존 결정을 현재 시점으로 정리한 요약입니다. 사용자 발언·당시 제안·변경 순서는 [이전 결정 기록](archive/DECISIONS_BEFORE_REORGANIZATION.md)에 보존했습니다.
+**기준일: 2026-10-29.** 합의는 목표/방향이고 구현 완료·성능 검증과 다릅니다. 아래는 기존 결정을 현재 시점으로 정리한 요약입니다. 사용자 발언·당시 제안·변경 순서는 [이전 결정 기록](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/DECISIONS_BEFORE_REORGANIZATION.md)에 보존했습니다.
 
 ## 합의된 프로젝트 범위
 

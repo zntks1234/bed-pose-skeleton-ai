@@ -88,3 +88,5 @@
 ## 문서 관리
 
 README는 소개·진입점, PROJECT_STATUS는 현재 지원·검증, ROADMAP은 다음 작업, DECISIONS는 합의·미정 항목을 관리합니다. 기능별 사용법은 guides, 기술 계약은 design/development, 연구는 research, 리뷰는 reviews, 과거 과정은 archive에 둡니다. 같은 변경 문단을 여러 문서에 반복해서 추가하지 않습니다.
+
+미완료 목표·연구 과제·후속 검증은 ROADMAP에 단계·의존 조건·완료 기준과 함께 유지합니다. 요약·폴더 정리를 이유로 archive에만 남기지 않습니다. 삭제·보류 전환은 사용자 결정과 근거를 확인합니다.

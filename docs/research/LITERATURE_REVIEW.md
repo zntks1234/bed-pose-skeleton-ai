@@ -109,3 +109,137 @@ ID는 기존 링크와 연결되도록 유지합니다. 표의 짧은 이름을 
 공식 API·라이브러리 문서와 후보 가이드의 추가 연구 S11·S12는 [기술 후보 비교의 출처](TECHNOLOGY_CANDIDATES.md#sources)에 모았습니다. 이 자료들은 위 P01–P37 색인 37편에 포함하지 않습니다.
 
 새 논문은 우선 서지 후보로 등록하며 **본문 확인 전까지 사실 판단과 기술·모델 선정 근거에서 제외**합니다. 원문을 확보한 경우에만 판본·절·표, 입력 장비, 정답 출처, 자료 분할, 결과의 제한을 근거와 함께 기록합니다. 설치·모델 채택·성능 재현 여부는 [진행 현황](../PROJECT_STATUS.md)에서 관리합니다.
+
+
+<a id="new-papers-2026-10-29"></a>
+## 2026-10-29 추가 조사 · MediaPipe·침대 영역·다중 카메라 신규 문헌 8편
+
+사용자 요청에 따라 신규 문헌을 이 문서 아래에 모았습니다. **위 P01–P37의 2026-10-26 집계와 별도로 관리하는 추가 조사 목록**입니다. N01–N08은 이 절의 식별자이며 기존 P 번호를 변경하지 않습니다. 기존 BlazePose(P05), GHUM(P26), MediaPipe 프레임워크(P29), CNN·LSTM 수면 자세 연구(P20)는 중복 등록하지 않았습니다.
+
+SciSpace·Consensus로 후보를 검색하고 공개 원문을 대조한 앞선 조사 결과를 기록합니다. 이번 문서 추가는 새 원문 재검증이나 자체 실험이 아닙니다. **관련 방법 본문을 확인한 공개판 4편, 본문 일부 발췌만 확인한 1편, 본문 미확인 서지 후보 3편**으로 구분합니다. 논문 성능의 재현·모델 채택·침대 환경 적합성 검증은 수행하지 않았습니다.
+
+### 신규 목록 한눈에 보기
+
+| ID | 논문 | 확인 상태 |
+|---|---|---|
+| [N01](#n01) | MediaPipe 스테레오 3D 복원 평가 · Dill 외, 2024 | 출판 본문 §2 일부 발췌 확인; 전체 방법·결과 검증 전 |
+| [N02](#n02) | Learnable Triangulation · Iskakov 외, 2019 | 공개 arXiv PDF 방법·Figure 1·가중 삼각측량 식 확인 |
+| [N03](#n03) | Grounding DINO · Liu 외, 2023 공개 | arXiv v4 §3 확인 |
+| [N04](#n04) | SAM 2 · Ravi 외, 2024 공개 | arXiv v1 §3–4 확인 |
+| [N05](#n05) | 평면 기반 카메라 보정 · Zhang | Microsoft 기술보고서 §2.2·§3 확인; 학술지 최종판 미대조 |
+| [N06](#n06) | 앉은 자세의 MLP·KAN 비교 · Carneros-Prado 외, 2024 | **본문 미확인 · 서지 후보 · 사실 판단 제외** |
+| [N07](#n07) | MediaPipe 자세 평가 비교 · Ferraris 외, 2025 | **본문 미확인 · 서지 후보 · 사실 판단 제외** |
+| [N08](#n08) | MediaPipe 스테레오 복원의 시점 각도 평가 · Dill 외, 2024 | **본문 미확인 · 서지 후보 · 사실 판단 제외** |
+
+<a id="n01"></a>
+### N01 · MediaPipe 스테레오 3D 복원 평가
+
+**제목:** Accuracy Evaluation of 3D Pose Reconstruction Algorithms Through Stereo Camera Information Fusion for Physical Exercises with MediaPipe Pose  
+**서지:** Sebastian Dill 외, 2024, *Sensors*, 24(23), 7772.  
+**링크:** [DOI: 10.3390/s24237772](https://doi.org/10.3390/s24237772) · [출판사](https://www.mdpi.com/1424-8220/24/23/7772) · [PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC11644880/)
+
+**확인 범위:** 앞선 조사에서 검색 도구가 제공한 출판 본문 §2.1–2.4 일부 발췌를 읽었습니다. 원문 직접 열기는 접근 제한이 있었으므로 전체 방법·실험표를 검증한 논문으로 집계하지 않습니다. 성능 수치와 우수성 판단은 제외합니다.
+
+**확인한 발췌 내용:** 두 영상에 각각 MediaPipe를 적용하고 2D 관절과 에피폴라 기하·삼각측량으로 3D를 복원하는 구성, 스쿼트 촬영 및 마커 기반 비교, 단안 3D 등과 비교하는 평가 항목을 설명합니다. 여기까지는 발췌 확인 범위이며 전체 조건의 완결성을 보증하지 않습니다.
+
+**프로젝트 연결 제안:** 현재 양쪽 라벨 일치 방식에서 관절 관측 결합으로 확장하기 위한 우선 원문 확보 대상입니다. 전체 본문 확인 전 기술 선정 근거로 사용하지 않습니다. 스쿼트 결과를 침대 자세 정확도로 전용하지 않으며, 사전 스테레오 보정이 없다는 표현을 시간 정렬·카메라 기하·대응점 확인이 불필요하다는 뜻으로 해석하지 않습니다.
+
+**남은 확인:** 전체 복원 절차, 좌표 스케일과 정답 정렬, 필터의 미래 프레임 사용, 결과표·오차 단위, 코드와 데이터 접근 조건.
+
+<a id="n02"></a>
+### N02 · 관절별·시점별 가중치를 이용한 삼각측량
+
+**제목:** Learnable Triangulation of Human Pose  
+**서지:** Karim Iskakov, Egor Burkov, Victor Lempitsky, Yury Malkov, ICCV 2019, pp. 7718–7727.  
+**링크:** [학회 서지](https://openaccess.thecvf.com/content_ICCV_2019/html/Iskakov_Learnable_Triangulation_of_Human_Pose_ICCV_2019_paper.html) · [확인한 공개 PDF](https://arxiv.org/pdf/1905.05754)
+
+**확인 범위:** 앞선 조사에서 제공된 9쪽 arXiv 공개 PDF의 방법 설명, Figure 1, 식 (3)–(4). URL에 버전이 고정되지 않아 v 번호는 확정하지 않았으며, ICCV 최종판 전체와 동일하다고 주장하지 않습니다. 재현 시 사용 판본을 고정해야 합니다.
+
+**확인한 방법:** 알려진 카메라 파라미터와 여러 시점의 2D 관절을 사용합니다. 단순히 모든 관측을 동일하게 취급하는 대신 카메라·관절별 학습된 가중치를 삼각측량에 반영합니다.
+
+**프로젝트 응용 제안:** 어깨·골반·무릎마다 잘 보이는 카메라가 다른 경우, 관절 단위 품질을 고려하는 결합 방식의 참고 자료입니다. 현재 라벨 일치 기준선과 별도로 비교해야 합니다.
+
+**제약:** MediaPipe 전용 연구가 아닙니다. 학습된 가중치를 MediaPipe visibility로 바꾼 구현은 별도 변형이며 논문 재현으로 부를 수 없습니다. 카메라 보정·동일인 대응·시간 정렬·재투영 오차 검증이 필요합니다. 침대 환경 성능과 실시간 처리 비용은 미검증입니다.
+
+<a id="n03"></a>
+### N03 · 침대 후보 위치 검출을 위한 Grounding DINO
+
+**제목:** Grounding DINO: Marrying DINO with Grounded Pre-Training for Open-Set Object Detection  
+**서지:** Shilong Liu 외, 2023 최초 공개.  
+**링크:** [arXiv 서지](https://arxiv.org/abs/2303.05499) · [확인한 v4 본문](https://arxiv.org/html/2303.05499v4)
+
+**확인 범위:** arXiv v4 §3, 입력 영상·텍스트와 출력 상자·명사구의 관계. 학회 최종판 전체 검증과 구분합니다.
+
+**확인한 방법:** 영상과 텍스트를 입력받아 대상의 상자와 대응하는 텍스트 정보를 출력하는 검출 구조입니다.
+
+**프로젝트 응용 제안:** bed 또는 mattress를 입력해 침대 후보 상자를 구하고, 영역 분할·수동 보정으로 연결하는 실험을 제안합니다. 최초 자동 영역 설정과 재인식의 앞단 후보입니다.
+
+**제약:** 침대 전체 상자는 매트리스 윗면 네 모서리와 다릅니다. 논문의 일반 검출 결과는 우리 침대의 검출 정확도가 아닙니다. 침대·매트리스·이불·사람이 섞이는 사례에서 원하는 영역 정의와 실제 검출 품질을 따로 확인해야 합니다.
+
+<a id="n04"></a>
+### N04 · 침대 경계 분할·보정에 응용할 SAM 2
+
+**제목:** SAM 2: Segment Anything in Images and Videos  
+**서지:** Nikhila Ravi 외, 2024 공개.  
+**링크:** [arXiv 서지](https://arxiv.org/abs/2408.00714) · [확인한 v1 본문](https://arxiv.org/html/2408.00714v1)
+
+**확인 범위:** arXiv v1 §3–4의 프롬프트 기반 영상 분할 과제와 모델 설명. 후속 판본 전체 검증과 구분합니다.
+
+**확인한 방법:** 점·상자·마스크로 대상을 지정하거나 수정하고, 영상의 다른 프레임으로 분할 결과를 전파하는 구조를 제시합니다.
+
+**프로젝트 응용 제안:** 침대 후보 상자 또는 사용자 클릭으로 경계를 분할하고 즉시 수동 보정하는 흐름을 검토할 수 있습니다. 세션 중 카메라가 고정되는 조건에서는 시작 시 설정과 필요 시 재인식을 먼저 비교합니다.
+
+**제약:** 대상 분할은 매트리스 평면의 기하 복원과 다릅니다. 사람이 가린 영역까지 전체 침대가 정확히 복원된다고 가정하지 않습니다. 이불·침대 프레임·매트리스 중 무엇을 영역으로 삼는지 정하고, 분할 마스크와 기존 네 점 영역의 연결을 별도로 검증해야 합니다.
+
+<a id="n05"></a>
+### N05 · 평면과 영상의 좌표 관계·카메라 보정
+
+**제목:** A Flexible New Technique for Camera Calibration  
+**서지:** Zhengyou Zhang. 학술지 서지: *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 22(11), 1330–1334, 2000.  
+**링크:** [학술지 DOI: 10.1109/34.888718](https://doi.org/10.1109/34.888718) · [확인한 Microsoft 기술보고서](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr98-71.pdf)
+
+**확인 판본:** MSR-TR-98-71, 표지의 1998년 작성 및 2008-08-13 최종 수정 표기가 있는 22쪽 공개 PDF. §2.2의 평면 호모그래피, §3의 보정 절차를 확인했습니다. 2000년 학술지 최종판 본문은 별도 대조하지 않았습니다.
+
+**확인한 방법:** 평면 패턴의 영상 관측을 이용해 카메라 내부 파라미터를 구하고 렌즈 왜곡을 고려하는 보정 방법입니다. 평면과 영상 사이의 호모그래피 관계를 설명합니다.
+
+**프로젝트 응용 제안:** 현재 수동 네 점과 단위 정사각형 사이의 변환을 이해하고, 향후 다중 카메라 보정을 설계하는 기초 자료입니다.
+
+**제약:** 자동 침대 검출 논문이 아닙니다. 네 점으로 영상 좌표를 변환한 것만으로 카메라 전체 보정이나 3D 복원이 완료되지 않습니다. 침대 평면 위에 있지 않은 머리·어깨의 영상점을 변환한 값을 실제 침대 위 위치나 높이로 해석하지 않습니다.
+
+<a id="n06"></a>
+### N06 · 앉은 자세 분류 연구 후보 — 본문 미확인
+
+**제목:** A Comparison Between Multilayer Perceptrons and Kolmogorov-Arnold Networks for Multi-Task Classification in Sitting Posture Recognition  
+**서지:** David Carneros-Prado 외, 2024, *IEEE Access*, 12, 180198–180209.  
+**링크:** [DOI: 10.1109/ACCESS.2024.3510034](https://doi.org/10.1109/ACCESS.2024.3510034) · [저자 연구실 안내](https://mamilab.eu/journal_article/a-comparison-between-multilayer-perceptrons-and-kolmogorov-arnold-networks-for-multi-task-classification-in-sitting-posture-recognition/) · [연관 데이터 공개 안내](https://zenodo.org/records/14230872)
+
+**상태:** 서지와 공개 안내만 확인했습니다. 논문 방법·실험 본문은 충분히 확보하지 못했습니다. 초록의 구조·참가자 수·분할·성능 주장은 채택하지 않으며 기술 선정 근거에서 제외합니다. 원문 확보 후 방법·실험 절과 데이터 이용 조건을 확인할 후보입니다.
+
+<a id="n07"></a>
+### N07 · MediaPipe 자세 평가 연구 후보 — 본문 미확인
+
+**제목:** A Deep Dive Into MediaPipe Pose for Postural Assessment: A Comparative Investigation  
+**서지:** Claudia Ferraris, Gianluca Amprimo, Serena Cerfoglio, Luca Vismara, Valentina Cimolin, 2025, *IEEE Access*.  
+**링크:** [DOI: 10.1109/ACCESS.2025.3643126](https://doi.org/10.1109/ACCESS.2025.3643126)
+
+**상태:** SciSpace·Consensus의 서지를 확인했으나 방법·실험 본문을 검증하지 못했습니다. 초록의 2D/3D 성능·모델 복잡도별 결과를 사실 판단이나 모델 선택에 사용하지 않습니다. 저자명 최종 표기와 출판본을 포함해 원문 대조가 필요합니다.
+
+<a id="n08"></a>
+### N08 · MediaPipe 다중 시점 각도 연구 후보 — 본문 미확인
+
+**제목:** Evaluation of Accuracy and Angle Dependency of 3D Pose Estimation through Stereo Camera Information Fusion with MediaPipe Pose  
+**서지:** Sebastian Dill, Maurice Rohr, Gökhan Güney, Christoph Hoog Antink, 2024.  
+**링크:** [DOI: 10.23919/FUSION59988.2024.10706380](https://doi.org/10.23919/FUSION59988.2024.10706380)
+
+**상태:** SciSpace의 서지 후보이며 방법·실험 본문은 미확인입니다. 최적 카메라 각도·자료 구성·성능을 판단 근거로 사용하지 않습니다. N01과 제목·DOI가 다른 연구로 구분하되, 두 연구의 방법과 자료 중복 여부는 원문 확보 후 확인해야 합니다.
+
+### 프로젝트 적용을 검토할 순서
+
+아래는 조사에 따른 **제안**이며 구현 승인·모델 선정·성능 실증 결과가 아닙니다.
+
+1. N01 전체 원문을 확보하고 기존 [GHUM(P26)](SKELETON_TECHNOLOGY_PAPERS.md#p26)과 함께 단안 추정 3D와 다중 시점 복원의 좌표·평가 조건을 정리합니다.
+2. N03·N04의 역할을 침대 후보 검출과 경계 분할로 나누고, 매트리스 윗면 확인·네 점 수동 보정·기존 좌표 변환으로 연결하는 소규모 비교를 설계합니다.
+3. 실제 동시 촬영 자료에서 단일 시점 A/B·현재 라벨 일치·관절 결합을 비교합니다. N02의 관절별 가중치와 N05의 기하는 참고하되 가림·정렬 오차·재투영 오차·보류율도 함께 평가합니다.
+4. N06–N08은 본문 확보 전까지 서지 후보로 유지합니다. 자세 시계열 연구가 필요할 때 기존 [P20](BED_POSTURE_PAPERS.md#p20)을 참고하되 수치 불일치 제한을 유지합니다.
+
+**검증 경계:** 문헌의 공개판과 확인 절만 기록했습니다. 코드 실행, 데이터 다운로드·재현, 실제 카메라 평가, 모델·데이터 이용 허가 검토는 수행하지 않았습니다. 추가 목록은 상단의 기존 37편 검증 집계를 소급 변경하지 않습니다.

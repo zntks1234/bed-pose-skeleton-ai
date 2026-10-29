@@ -98,12 +98,21 @@ def observe(row,rgb,assessment,provider,profile):
     # person's observed joints with 10% padding; do not send a whole room.
     x1=max(0,math.floor(min(xs)-.1*dx));x2=min(w,math.ceil(max(xs)+.1*dx)+1)
     y1=max(0,math.floor(min(ys)-.1*dy));y2=min(h,math.ceil(max(ys)+.1*dy)+1)
+    if profile.get('decision_policy',{}).get('crop_quality'):
+        from .image_quality import inspect_crop
+        points,quality=inspect_crop(row,assessment['candidate_id'],w,h)
+        result['input_quality']=quality
+        if quality['status']!='usable':
+            result.update(status='held',reasons=['body_state_crop_quality_insufficient']);return result
+        x1,y1,x2,y2=quality['bounds']
     local=tuple((p[0]-x1,p[1]-y1) if p is not None else None for p in points)
     try:
         decision=validate_decision(provider.estimate(ImageBodyInput(rgb[y1:y2,x1:x2],row['stream_frame_id'],row['clock_id'],
                                                                  row['received_ns'],assessment['candidate_id'],local,(x1,y1,x2,y2))))
-    except Exception:
-        result.update(status='held',reasons=['body_state_provider_failed']);return result
+    except Exception as exc:
+        result.update(status='held',reasons=['body_state_provider_failed'],
+                      error={'code':'IMAGE_PROVIDER_ERROR','exception_type':type(exc).__name__})
+        return result
     result.update(status='predicted' if decision['state']!='unknown' else 'held',decision=decision,
                   reasons=[] if decision['state']!='unknown' else ['body_state_unknown'])
     return result
@@ -112,12 +121,31 @@ def observe(row,rgb,assessment,provider,profile):
 def validate_observation(value,row,candidate,profile):
     expected={'stream_frame_id':row['stream_frame_id'],'clock_id':row['clock_id'],
               'received_ns':row['received_ns'],'candidate_id':candidate}
-    if (not isinstance(value,dict) or set(value)!={'version',*expected,'provider','status','reasons','decision','verified_gt'}
+    if (not isinstance(value,dict) or set(value)-{'error','input_quality'}!={'version',*expected,'provider','status','reasons','decision','verified_gt'}
             or value.get('version')!=VERSION or value.get('verified_gt') is not False
             or any(value.get(k)!=v or type(value.get(k)) is not type(v) for k,v in expected.items())
             or value.get('provider')!=profile or value.get('status') not in ('unavailable','held','predicted')
             or not isinstance(value.get('reasons'),list) or any(not isinstance(r,str) for r in value['reasons'])):
         raise ValueError('Body-state identity or provider mismatch')
+    if (profile and profile.get('decision_policy',{}).get('crop_quality') and value['decision'] is not None
+            and (not isinstance(value.get('input_quality'),dict) or value['input_quality'].get('status')!='usable')):
+        raise ValueError('Missing CLIP input quality')
+    if 'input_quality' in value:
+        q=value['input_quality']
+        if (not isinstance(q,dict) or set(q)!={'version','status','reasons','bounds','usable_joints','full_body_verified'}
+                or q['version']!='joint-crop-quality-0.1' or q['status'] not in ('usable','held')
+                or q['full_body_verified'] is not False or type(q['usable_joints']) is not int
+                or not 0<=q['usable_joints']<=17 or not isinstance(q['reasons'],list)
+                or q['status']=='held' and (value['decision'] is not None or value['reasons']!=['body_state_crop_quality_insufficient'])
+                or q['status']=='usable' and (q['reasons'] or not isinstance(q['bounds'],list) or len(q['bounds'])!=4)):
+            raise ValueError('Invalid crop quality')
+    if 'error' in value:
+        error=value['error']
+        if (not isinstance(error,dict) or set(error)!={'code','exception_type'}
+                or error['code']!='IMAGE_PROVIDER_ERROR' or not isinstance(error['exception_type'],str)
+                or not error['exception_type'].isidentifier() or value['status']!='held'
+                or value['decision'] is not None or value['reasons']!=['body_state_provider_failed']):
+            raise ValueError('Invalid image provider error')
     decision=validate_decision(value['decision']) if value['decision'] is not None else None
     if profile and profile['model_id']=='openai/clip-vit-base-patch16' and decision is not None:
         from .clip_posture import validate_recorded_decision
@@ -137,6 +165,8 @@ def read_observation(value,row,candidate,profile):
     try:validate_observation(value,row,candidate,profile)
     except (ValueError,TypeError):
         result['reasons']=['body_state_identity_or_provider_mismatch'];return result
+    if 'error' in value:result['error']=deepcopy(value['error'])
+    if 'input_quality' in value:result['input_quality']=deepcopy(value['input_quality'])
     if value.get('status') in ('unavailable','held') and value.get('decision') is None:
         result['reasons']=value.get('reasons') or ['body_state_unknown'];return result
     try:decision=validate_decision(value['decision'])

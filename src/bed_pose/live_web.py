@@ -120,12 +120,14 @@ class WebWorkspace:
                 source, title = SyntheticSource(), '합성 입력 · 실제 인식 아님'
             else:
                 raise ValueError('입력 종류를 선택하세요.')
+            silhouette=values.get('silhouette',False)
+            if type(silhouette) is not bool:raise ValueError('실루엣 분석 사용 여부를 확인하세요.')
             use_clip=values.get('use_clip',self.clip_status['available'] and kind!='demo')
             if type(use_clip) is not bool:raise ValueError('CLIP 사용 여부를 확인하세요.')
             if use_clip and (kind=='demo' or not self.clip_status['available']):
                 raise ValueError(self.clip_status['reason'] or '합성 입력에는 실제 CLIP을 적용하지 않습니다.')
             engine = self.factory(source, model, self.output_root, self.temp_root, demo=kind == 'demo',
-                                  **(self.clip_options if use_clip else {}))
+                                  **(self.clip_options if use_clip else {}), **({'silhouette':True} if silhouette else {}))
             worker = LiveWorker(engine)
             session_id = uuid.uuid4().hex
             state = {'id': session_id, 'title': title, 'kind': kind, 'phase': 'opening',
@@ -136,7 +138,7 @@ class WebWorkspace:
                      'width': None, 'height': None, 'posture': 'not_implemented', 'posture_assessment': None,
                      'posture_model_id':engine.posture_classifier.model_id if engine.posture_classifier else None,
                      'automatic_posture_profile':engine.posture_classifier.profile if engine.posture_classifier else None,
-                     'body_state_provider_profile':engine.body_state_profile}
+                     'body_state_provider_profile':engine.body_state_profile, 'silhouette_enabled':silhouette}
             self.sessions[session_id] = Session(session_id, title, kind, worker, state)
             session=self.sessions[session_id]
             session.preview_worker=PreviewWorker(lambda rgb,quality:encode_preview(rgb,quality),

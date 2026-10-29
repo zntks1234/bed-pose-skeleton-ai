@@ -249,6 +249,12 @@ def _verify(directory, manifest, hashes=True):
                     raise IntegrityError('Missing silhouette observation, assessment or profile')
                 if row['silhouette_assessment']!=assess_silhouette(row,manifest['width'],manifest['height']):
                     raise IntegrityError('Silhouette evidence differs from source samples')
+            if 'previous_processing_ns' in row:unsigned_ns(row['previous_processing_ns'])
+            observation=row.get('body_state_observation') or {}
+            if 'input_quality' in observation:
+                from .image_quality import inspect_crop
+                _,quality=inspect_crop(row,observation['candidate_id'],manifest['width'],manifest['height'])
+                if quality!=observation['input_quality']:raise IntegrityError('Crop quality differs from source joints')
             tracking=row.get('target_tracking')
             if tracking is not None and tracking != {'status':'not_configured','candidate_id':None}:
                 from .target_tracking import TrackingConfig

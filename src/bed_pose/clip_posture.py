@@ -15,7 +15,9 @@ import numpy as np
 from .body_state import VERSION
 from .clip_assets import MODEL_ID, read_assets,validate_manifest
 
-PROVIDER = 'clip-posture-0.1'
+PROVIDER = 'clip-posture-0.2'
+LEGACY_PROVIDER = 'clip-posture-0.1'
+from .image_quality import POLICY as CROP_POLICY
 STATE_NAMES = ('lying', 'sitting', 'standing', 'other')
 DIRECTION_NAMES = ('supine', 'side', 'prone')
 PROMPTS = {
@@ -33,15 +35,18 @@ def policy(state_min=.5, direction_min=.5, device='cpu'):
     if (any(type(v) not in (int, float) or not math.isfinite(v) or not 0<=v<=1 for v in (state_min,direction_min))
             or device not in ('cpu','cuda')):raise ValueError('CLIP 점수 기준 또는 실행 장치를 확인하세요.')
     return {'version':PROVIDER, 'state_min':float(state_min), 'direction_min':float(direction_min),
-            'prompts':deepcopy(PROMPTS), 'score_policy':'group_softmax_uncalibrated_no_runner_up_margin',
+            'crop_quality':deepcopy(CROP_POLICY), 'prompts':deepcopy(PROMPTS), 'score_policy':'group_softmax_uncalibrated_no_runner_up_margin',
             'text_pooling':'mean_normalized_prompt_embeddings_then_normalize', 'device':device,
             'dtype':'float32', 'threshold_validation':'unvalidated_initial_values', 'tie_tolerance':1e-8,
-            'preprocess':'selected_joint_crop_10pct_then_aspect_preserving_square_pad_224_clip_mean_v1'}
+            'preprocess':'quality_joint_crop_10pct_then_aspect_preserving_square_pad_224_clip_mean_v2'}
 
 
 def validate_policy(value):
     if not isinstance(value,dict):raise ValueError('Invalid CLIP decision policy')
     base = policy(value.get('state_min'), value.get('direction_min'), value.get('device'))
+    if value.get('version')==LEGACY_PROVIDER:
+        base.pop('crop_quality')
+        base.update(version=LEGACY_PROVIDER,preprocess='selected_joint_crop_10pct_then_aspect_preserving_square_pad_224_clip_mean_v1')
     if set(value) != set(base)|{'assets_manifest','runtime_versions'}:
         raise ValueError('Invalid CLIP policy fields')
     if any(value[k]!=v for k,v in base.items()):raise ValueError('Unsupported CLIP policy')
@@ -74,7 +79,7 @@ def decide(cosines, logit_scale, configuration):
     elif state=='lying' and direction is None:reasons.append('clip_direction_score_insufficient')
     return {'state':state or 'unknown', 'lying_direction':direction if state=='lying' and direction else 'unknown',
             'scores':states, 'score_semantics':'uncalibrated_probability',
-            'details':{'version':PROVIDER, 'cosine_scores':deepcopy(cosines), 'logit_scale':logit_scale,
+            'details':{'version':configuration['version'], 'cosine_scores':deepcopy(cosines), 'logit_scale':logit_scale,
                        'direction_scores':directions, 'reasons':reasons}}
 
 

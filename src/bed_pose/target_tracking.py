@@ -48,7 +48,7 @@ class PoseMotionTrack:
     def result(self,status,candidate_id,frame_id,reason):
         return {'status':status,'candidate_id':candidate_id,'track_id':self.track_id,
                 'frame_id':frame_id,'segment_start_frame_id':self.segment_start,'seed_candidate_id':self.seed_candidate_id,'reason':reason,
-                'method':'pose_motion_unique_gate_v1','identity_verified':False,'config':asdict(self.config)}
+                'method':'pose_motion_processing_aware_gate_v2','identity_verified':False,'config':asdict(self.config)}
 
     def update(self,snapshot):
         frame=snapshot['frame_id']
@@ -59,7 +59,7 @@ class PoseMotionTrack:
         elapsed=(snapshot['time_ns']-self.last_ns)/1e9
         if (snapshot['width'],snapshot['height'])!=(self.width,self.height):reason='geometry_changed'
         elif elapsed<=0:reason='time_not_increasing'
-        elif elapsed*1000>self.config.max_gap_ms:reason='observation_gap'
+        elif max(0.,elapsed-snapshot.get('previous_processing_ns',0)/1e9)*1000>self.config.max_gap_ms:reason='observation_gap'
         elif snapshot['processing_status']!='ok':reason='processing_failed'
         elif not snapshot['people']:reason='target_missing'
         candidates=[]
@@ -69,7 +69,9 @@ class PoseMotionTrack:
                 shared=self.points.keys()&points.keys()
                 if len(shared)<self.config.min_shared_joints:continue
                 distance=statistics.median(math.dist(self.points[i],points[i]) for i in shared)/math.hypot(self.width,self.height)
-                if distance/elapsed<=self.config.max_speed_diagonals_per_second:
+                # Slow inference must not widen the spatial association gate.
+                gate_elapsed=min(elapsed,self.config.max_gap_ms/1000)
+                if distance/gate_elapsed<=self.config.max_speed_diagonals_per_second:
                     candidates.append((person,points))
             if len(candidates)>1:reason='target_ambiguous'
             elif not candidates:reason='motion_or_visibility_gate_failed'
@@ -78,7 +80,9 @@ class PoseMotionTrack:
         else:
             person,self.points=candidates[0]
             self.last_ns=snapshot['time_ns']
-            self.state=self.result('tracking_provisional',person['candidate_id'],frame,'unique_motion_candidate')
+            slow=elapsed*1000>self.config.max_gap_ms
+            self.state=self.result('tracking_provisional',person['candidate_id'],frame,
+                                   'unique_motion_candidate_after_processing_delay' if slow else 'unique_motion_candidate')
         return dict(self.state)
 
 
@@ -92,6 +96,11 @@ class TargetTracker:
         snapshot={'frame_id':row['stream_frame_id'],'time_ns':int(row.get('source_media',{}).get('relative_time_ns',row['received_ns'])),
                   'people':row['mapped_people'] or [],'width':width,'height':height,
                   'processing_status':row['processing_status']}
+        if 'source_media' not in row and 'previous_processing_ns' in row:
+            value=row['previous_processing_ns']
+            if not isinstance(value,str) or not value.isascii() or not value.isdigit():
+                raise ValueError('Invalid preceding processing duration')
+            snapshot['previous_processing_ns']=int(value)
         with self.lock:
             self.history.append(snapshot)
             return self.track.update(snapshot) if self.track else {'status':'not_configured','candidate_id':None}

@@ -138,7 +138,9 @@ class ClipTests(unittest.TestCase):
                     self.assertIsNone(provider.last_input_preview)
                 row={'stream_frame_id':7,'clock_id':'clock','received_ns':'101'}
                 value=dict(version='camera-body-state-0.1',**row,candidate_id='person',provider=provider.profile,
-                           status='predicted',reasons=[],decision=result,verified_gt=False)
+                           status='predicted',reasons=[],decision=result,verified_gt=False,
+                           input_quality={'version':'joint-crop-quality-0.1','status':'usable','reasons':[],
+                                          'bounds':[0,0,4,3],'usable_joints':17,'full_body_verified':False})
                 validate_observation(value,row,'person',provider.profile)
                 bad=copy.deepcopy(value);bad['decision']['lying_direction']='side'
                 with self.assertRaises(ValueError):validate_observation(bad,row,'person',provider.profile)

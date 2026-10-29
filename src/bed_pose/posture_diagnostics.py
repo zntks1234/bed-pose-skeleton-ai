@@ -14,6 +14,8 @@ class PostureDiagnostics:
         statuses=Counter(s for s,_ in self.rows);reasons=Counter(r for s,rs in self.rows if s=='held' for r in rs)
         self.latest={'window_limit':self.rows.maxlen,'processed_frames':len(self.rows),
                 'predicted':statuses['predicted'],'held':statuses['held'],'unavailable':statuses['unavailable'],
+                'image_provider_errors':reasons['body_state_provider_failed'],
+                'image_input_quality_holds':reasons['body_state_crop_quality_insufficient'],
                 'hold_reason_counts':dict(reasons),'hold_fraction':statuses['held']/len(self.rows),
                 'last_stream_frame_id':assessment['stream_frame_id'],'classifier_id':assessment['classifier_id'],
                 'bed_region_revision':region_revision,'scope':'since_classifier_or_region_change_bounded_processed_frames'}

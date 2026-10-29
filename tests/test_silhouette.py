@@ -139,10 +139,10 @@ class SilhouetteAdapterTests(unittest.TestCase):
         self.assertEqual(len(output.candidates),1);self.assertEqual(output.silhouette_observation['candidates'][0]['reason'],'mask_read_failed')
         enabled.close()
 
-    def test_live_factory_enables_mask_without_adding_a_model(self):
+    def test_live_factory_opt_in_enables_mask_without_adding_a_model(self):
         from bed_pose.live_factory import make_engine
         from bed_pose.live_sources import CameraSource
-        engine=make_engine(CameraSource(0),self.model,self.root/'records',self.root)
+        engine=make_engine(CameraSource(0),self.model,self.root/'records',self.root,silhouette=True)
         self.assertTrue(engine.adapter.silhouette);self.assertEqual(len(engine.settings['assets']),1)
 
 

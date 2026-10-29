@@ -35,6 +35,7 @@ class LiveEngine:
         self.stream_id = uuid.uuid4().hex
         self.clock_id = self.stream_id + ':perf_counter_ns'
         self.next_frame_id, self.last_model_ms = 0, None
+        self.previous_processing_ns = 0
         self.geometry = None
         self.region, self.region_revision = None, 0
         self.region_selection = None
@@ -269,6 +270,7 @@ class LiveEngine:
             row.update(processing_status='failed', error={'code': code, 'exception_type': type(exc).__name__},
                        sdk_call_started=row['sdk_call_started'] or bool(getattr(exc, 'sdk_call_started', False)))
             failure = LiveFailure(code, str(exc))
+        row['previous_processing_ns']=str(self.previous_processing_ns)
         row['target_tracking']=self.target_tracker.observe(row,*geometry)
         from .posture import assess_frame
         if self.posture_classifier and self.posture_classifier.profile['version']=='automatic-posture-rules-0.8':
@@ -297,6 +299,7 @@ class LiveEngine:
         if (not isinstance(image_preview,dict) or image_preview.get('stream_frame_id')!=row['stream_frame_id']
                 or image_preview.get('candidate_id')!=row['posture_assessment']['candidate_id']
                 or (row.get('body_state_observation') or {}).get('decision') is None):image_preview=None
+        self.previous_processing_ns=max(0,self.clock()-received)
         return {'processing_fps':self.processing_rate.observe(self.clock()), 'rgb': rgb, 'row': row, 'silhouette_preview':silhouette_preview,
                 'body_state_input_preview':image_preview,
                 'posture_diagnostics':diagnostics, 'bed_region': self.region, 'bed_revision': self.region_revision,

@@ -21,6 +21,7 @@ def main():
             assert '정답 확률이 아닙니다' in page.locator('#clip-note').inner_text()
             assert '미검증 초기값' in page.locator('#clip-policy').inner_text()
             page.locator('#add-source').click();assert page.locator('#use-clip').is_checked()
+            assert not page.locator('#use-silhouette').is_checked()
             assert not page.locator('#use-clip').is_disabled();page.locator('#dialog-close').click()
             page.locator('#start').click();case.wait(lambda s:s['sessions'][0]['closed'])
             page.wait_for_function("()=>document.getElementById('clip-evidence').hidden")

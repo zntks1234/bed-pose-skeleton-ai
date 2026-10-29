@@ -1,0 +1,113 @@
+"""Independent body-shape and image-region observations, not physical occupancy.
+
+No bed geometry, camera intrinsics or assumed gravity is passed to body_shape.
+Shape candidates are deliberately not confirmed supine/side/sitting postures.
+"""
+import math
+from dataclasses import dataclass
+
+from .weighted_posture import evaluate_weighted,fit
+
+VERSION='body-bed-separation-0.1'
+
+
+@dataclass(frozen=True)
+class BodyInput:
+    points: tuple
+    world_body: dict | None = None
+    world_points: tuple | None = None
+
+
+def _angle(a,b,c):
+    u=tuple(x-y for x,y in zip(a,b));v=tuple(x-y for x,y in zip(c,b))
+    size=math.hypot(*u)*math.hypot(*v)
+    if size<=1e-12:return None
+    return math.degrees(math.acos(max(-1.,min(1.,sum(x*y for x,y in zip(u,v))/size))))
+
+
+def body_shape(obs,cfg):
+    """Use the existing orientation scores without claiming a lying state."""
+    result={'version':VERSION,'status':'held','label':None,'reasons':[],
+            'semantics':'body_shape_candidate_not_gravity_or_support',
+            'bed_used':False,'physical_posture_verified':False,'orientation':None,
+            'seated_shape':{'status':'unavailable','score':None,'reasons':['lower_body_3d_unavailable']}}
+    p=obs.points
+    if len(p)!=17 or any(p[i] is None for i in (5,6,11,12)):
+        result['reasons']=['automatic_torso_joints_missing'];return result
+    try:
+        label,reason,e=evaluate_weighted(obs,cfg,(None,'lying_orientation_ambiguous',{}))
+    except (ValueError,OverflowError,ZeroDivisionError):
+        result['reasons']=['degenerate_body_geometry'];return result
+    decision=e['score_decision'].copy()
+    names={'supine':'front_shape','side':'side_shape','edge_sitting':'seated_shape'}
+    decision['scores']={names[k]:v for k,v in decision['scores'].items()}
+    for key in ('components','eligibility_reasons'):
+        decision[key]={names[k]:v for k,v in decision.get(key,{}).items()}
+    for key in ('label','best_candidate','runner_up'):decision[key]=names.get(decision[key])
+    if decision['status']=='predicted':decision['status']='candidate'
+    decision.update(version='body-shape-score-0.1',score_semantics='independent_body_shape_fit_not_physical_posture')
+    result['orientation']={'label':{'supine':'front_shape','side':'side_shape'}.get(label),
+                           'status':'candidate' if label else 'held','reasons':[reason] if reason else [],
+                           'score_decision':decision}
+    result.update(label=result['orientation']['label'],status=result['orientation']['status'],reasons=result['orientation']['reasons'])
+    if reason in ('body_axis_inconsistent','shoulder_hip_orientation_conflict'):
+        return result
+    xyz=obs.world_points
+    # Flexed hips and knees describe shape only: curled lying can look the same.
+    if (xyz is not None and len(xyz)==17 and all(len(v)==3 and all(type(x) in (int,float) and math.isfinite(x) for x in v) for v in xyz)
+            and all(p[i] is not None for i in (5,6,11,12,13,14,15,16))):
+        hips=[_angle(xyz[s],xyz[h],xyz[k]) for s,h,k in ((5,11,13),(6,12,14))]
+        knees=[_angle(xyz[h],xyz[k],xyz[a]) for h,k,a in ((11,13,15),(12,14,16))]
+        values=hips+knees
+        bent=all(v is not None and cfg['bent_knee_min']<=v<=cfg['bent_knee_max'] for v in values)
+        score=min(fit(v,cfg['score_knee_peak'],cfg['bent_knee_min'] if v<cfg['score_knee_peak'] else cfg['bent_knee_max'],1.) for v in values) if bent else None
+        result['seated_shape']={'status':'candidate' if score is not None and score>=cfg['score_min'] else 'held',
+                                'score':score,'hip_angles':hips,'knee_angles':knees,
+                                'reasons':[] if score is not None and score>=cfg['score_min'] else ['seated_shape_not_established']}
+        if result['seated_shape']['status']=='candidate':
+            result.update(status='candidate',label='seated_shape',reasons=[])
+    return result
+
+
+def bed_relation(points,region,cfg,width,height):
+    """2D projected membership only; no posture prediction is an input."""
+    from .bed_geometry import contains,relative_xy
+    result={'version':VERSION,'status':'unknown','relation':None,'reasons':[],
+            'semantics':'image_region_membership_not_physical_occupancy',
+            'physical_occupancy':'unknown','hip_edge_fraction':None}
+    if region is None:result['reasons']=['bed_region_required'];return result
+    if len(points)!=17 or any(points[i] is None for i in (11,12)):
+        result['reasons']=['bed_relation_hips_missing'];return result
+    try:
+        from .live_recording import validate_region,make_region
+        if isinstance(region,dict):validate_region(region,width,height)
+        else:make_region(region,width,height)
+        hips=[contains(region,points[i]) for i in (11,12)]
+        if not any(hips):result.update(status='observed',relation='outside');return result
+        if not all(hips):result.update(status='observed',relation='boundary');return result
+        mid=tuple(sum(points[i][k] for i in (11,12))/2 for k in (0,1))
+        uv=relative_xy(region,mid)
+        if uv is None:result['reasons']=['bed_coordinate_unavailable'];return result
+        edge=max(0.,min(*uv,1-uv[0],1-uv[1]))
+        result.update(status='observed',relation='edge' if edge<=cfg['edge_fraction'] else 'inside',hip_edge_fraction=edge)
+    except (TypeError,ValueError,KeyError,ZeroDivisionError,OverflowError):
+        result['reasons']=['bed_coordinate_unavailable']
+    return result
+
+
+def evaluate(obs,cfg):
+    # Explicitly remove the region from the body's input contract.
+    body=body_shape(BodyInput(obs.points,obs.world_body,obs.world_points),cfg)
+    relation=bed_relation(obs.points,obs.bed_rectangle,cfg,obs.width,obs.height)
+    candidate=None
+    if body['label'] in ('front_shape','side_shape') and relation['relation'] in ('inside','edge'):
+        candidate={'front_shape':'supine','side_shape':'side'}[body['label']]
+    elif body['label']=='seated_shape' and relation['relation']=='edge':candidate='edge_sitting'
+    context={'candidate_label':candidate,'status':'candidate' if candidate else 'unknown',
+             'physical_posture_verified':False,'physical_occupancy':'unknown',
+             'reasons':['physical_posture_unverified'] if candidate else ['context_candidate_unavailable']}
+    e={'view':'auto','information_path':'independent_body_and_bed_relation',
+       'body_assessment':body,'bed_relation':relation,'context_assessment':context}
+    # Never promote shape + 2D overlap into a confirmed clinical posture/event.
+    reason='physical_posture_unverified' if body['status']=='candidate' else (body['reasons'] or ['posture_scores_unavailable'])[0]
+    return None,reason,e

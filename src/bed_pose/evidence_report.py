@@ -19,7 +19,9 @@ COLUMNS=('measurement_id','frame_id','stream_frame_id','clock_id','received_ns',
          'shoulder_depth_fraction','hip_depth_fraction','normal_world_x','normal_world_y','normal_world_z',
          'combined_status','combined_reasons','decision_source','orientation_2d','orientation_3d',
          'score_supine','score_side','score_edge_sitting','score_minimum','score_gap','score_close_candidates',
-         'silhouette_status','silhouette_reasons','silhouette_inside','silhouette_outside','silhouette_uncertain','silhouette_support_ratio')
+         'silhouette_status','silhouette_reasons','silhouette_inside','silhouette_outside','silhouette_uncertain','silhouette_support_ratio',
+         'body_shape_status','body_shape_label','body_shape_reasons','body_front_shape_score','body_side_shape_score','body_seated_shape_score',
+         'bed_relation','bed_relation_reasons','physical_occupancy','context_candidate_label')
 
 
 def _cells(row,evidence):
@@ -34,6 +36,15 @@ def _cells(row,evidence):
     values.update(decision_source=orientation.get('source'),orientation_2d=orientation.get('orientation_2d'),
                   orientation_3d=orientation.get('orientation_3d'))
     decision=row.get('posture_assessment',{}).get('rule_features',{}).get('score_decision',{})
+    split=row.get('posture_assessment',{}).get('rule_features',{})
+    body_shape=split.get('body_assessment',{});relation=split.get('bed_relation',{});context=split.get('context_assessment',{})
+    shape_scores=(body_shape.get('orientation') or {}).get('score_decision',{}).get('scores',{})
+    values.update(body_shape_status=body_shape.get('status'),body_shape_label=body_shape.get('label'),
+                  body_shape_reasons='|'.join(body_shape.get('reasons',[])),
+                  body_front_shape_score=shape_scores.get('front_shape'),body_side_shape_score=shape_scores.get('side_shape'),
+                  body_seated_shape_score=body_shape.get('seated_shape',{}).get('score'),
+                  bed_relation=relation.get('relation'),bed_relation_reasons='|'.join(relation.get('reasons',[])),
+                  physical_occupancy=relation.get('physical_occupancy'),context_candidate_label=context.get('candidate_label'))
     for name in ('supine','side','edge_sitting'):values['score_'+name]=decision.get('scores',{}).get(name)
     values.update(score_minimum=decision.get('minimum'),score_gap=decision.get('gap'),
                   score_close_candidates=decision.get('close_candidates'))

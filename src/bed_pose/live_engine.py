@@ -46,8 +46,8 @@ class LiveEngine:
         self.target_tracker=TargetTracker()
         from .posture_diagnostics import PostureDiagnostics
         self.posture_diagnostics=PostureDiagnostics()
-        from .automatic_posture import AutomaticClassifier,AUTO_DEFAULTS
-        self.posture_classifier=AutomaticClassifier(AUTO_DEFAULTS) if execution_kind=='model_inference' else None
+        from .automatic_posture import AutomaticClassifier,SEPARATED_DEFAULTS
+        self.posture_classifier=AutomaticClassifier(SEPARATED_DEFAULTS) if execution_kind=='model_inference' else None
 
     def clock(self):
         return self.clock_function() - self.origin
@@ -128,7 +128,9 @@ class LiveEngine:
             self.posture_classifier=ReferenceClassifier(profile)
 
     def start_measurement(self, request=None):
-        if not self.opened or self.geometry is None or self.region is None:
+        from .automatic_posture import SEPARATED_METHOD
+        independent=self.posture_classifier and self.posture_classifier.profile['version']==SEPARATED_METHOD
+        if not self.opened or self.geometry is None or (self.region is None and not independent):
             raise ValueError('영상이 표시된 뒤 침대 영역을 먼저 지정하세요.')
         if self.recorder:
             raise ValueError('이미 측정 중입니다.')
@@ -337,10 +339,11 @@ class LiveWorker(threading.Thread):
                             self.messages.put(('target_selected',{'tracking':tracking,'selection_id':values.get('selection_id')}))
                         elif action == 'posture_mode':
                             if self.engine.recorder:raise ValueError('측정을 종료한 뒤 설정을 바꾸세요.')
-                            from .automatic_posture import AutomaticClassifier,DEFAULTS,AUTO_DEFAULTS
+                            from .automatic_posture import AutomaticClassifier,DEFAULTS,AUTO_DEFAULTS,SEPARATED_DEFAULTS
                             mode=values.get('mode')
-                            if mode not in ('automatic','off') or values.get('view') not in ('auto','oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
-                            self.engine.posture_classifier=AutomaticClassifier(AUTO_DEFAULTS if values['view']=='auto' else dict(DEFAULTS,view=values['view'])) if mode=='automatic' else None
+                            if mode not in ('automatic','off') or values.get('view') not in ('auto','bed_auto','oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
+                            profile=SEPARATED_DEFAULTS if values['view']=='auto' else AUTO_DEFAULTS if values['view']=='bed_auto' else dict(DEFAULTS,view=values['view'])
+                            self.engine.posture_classifier=AutomaticClassifier(profile) if mode=='automatic' else None
                             model=self.engine.posture_classifier
                             self.messages.put(('posture_mode',{'profile':model.profile if model else None,'model_id':model.model_id if model else None}))
                         elif action == 'posture_reference':

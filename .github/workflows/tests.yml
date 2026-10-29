@@ -36,3 +36,4 @@ jobs:
         run: |
           python tests/browser_preview_recovery.py
           python tests/browser_record_comparison.py
+          python tests/browser_posture_separation.py

@@ -320,7 +320,7 @@ class WebWorkspace:
                                       selected_frame_id=selected_id)
             elif action == 'posture_mode':
                 if state['recording']:raise ValueError('측정을 종료한 뒤 판정 설정을 바꾸세요.')
-                if values.get('mode') not in ('automatic','off') or values.get('view','auto') not in ('auto','oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
+                if values.get('mode') not in ('automatic','off') or values.get('view','auto') not in ('auto','bed_auto','oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
                 session.worker.submit('posture_mode',mode=values['mode'],view=values.get('view','auto'))
             elif action == 'posture_reference':
                 if state['recording']:raise ValueError('측정 종료 후 기준을 변경하세요.')
@@ -328,7 +328,9 @@ class WebWorkspace:
                 session.worker.submit('posture_reference',label=values.get('label'),selected_frame_id=values.get('selected_frame_id'),
                     max_distance=values.get('max_distance',.35),min_margin=values.get('min_margin',.10),clear=values.get('clear') is True)
             elif action == 'start':
-                if state['frame_id'] is None or not state['region'] or state['recording']:
+                from .automatic_posture import SEPARATED_METHOD
+                independent=(state.get('automatic_posture_profile') or {}).get('version')==SEPARATED_METHOD
+                if state['frame_id'] is None or (not state['region'] and not independent) or state['recording']:
                     raise ValueError('영상에서 침대 영역을 먼저 지정하세요.')
                 session.worker.submit('start')
             elif action == 'stop':

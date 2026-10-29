@@ -29,6 +29,8 @@
 
 ## 저장할 정보
 
+현재 기본 0.7의 프레임에는 `posture_assessment.rule_features` 아래 `body_assessment`, `bed_relation`, `context_assessment`를 따로 기록합니다. 형태·침대 자세 후보는 확인된 실제 자세나 최종 확정 라벨이 아닙니다. 영상상 영역 밖은 실제 이탈 이벤트가 아니며 실제 점유는 unknown으로 남깁니다. live-0.3-draft의 초기 영역 null은 신체 형태만 기록하는 개별 측정에서 허용합니다. [구체 계약](AUTOMATIC_POSTURE.md).
+
 | 그룹 | 기록 후보 |
 |---|---|
 | 실험·참가자 | 세션/영상 ID, 참가자 비식별 ID, 학습·검증·시험 분할 |

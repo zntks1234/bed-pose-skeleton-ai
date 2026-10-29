@@ -21,6 +21,7 @@
 | 입력별 수명주기 | `live_engine.py`: Worker가 수신·SDK·기록 소유 |
 | 관절·영역·대상 | `mapping.py`, `bed_geometry.py`, `target_tracking.py` |
 | 자세 | `posture.py` 인터페이스, `automatic_posture.py` 버전별 규칙, `weighted_posture.py` 적합도 |
+| 신체·침대 관계 분리 | `separated_posture.py`: 영역 없는 `BodyInput`, 독립 형태 후보, 영상상 영역 관계와 해석 후보 |
 | 2D/추정 3D·실루엣 | `lying_orientation.py`, `posture_evidence.py`, `silhouette.py`, `silhouette_overlay.py` |
 | 그룹·시간·결합 | `group_session.py`, `time_alignment.py`, `fusion_inputs.py`, `group_posture.py`, `reference_posture.py` |
 | 저장·무결성 | `live_recording.py`, benchmark용 `recording.py` |
@@ -50,4 +51,4 @@ python -m unittest discover -s tests -v
 
 현재 개선 과제는 실제 자료 평가, 대상·관절 품질, 장시간 자원 비용과 외부 연동입니다. 이 문서 정리는 런타임 구조나 판정 기준 변경이 아닙니다.
 
-현재 자동 시점 경로는 `viewpoint_posture.py`가 담당합니다. `automatic_posture.py`의 0.6 프로필에서 호출하며 침대 면 추정·동일 후보 3D/2D 대응·자세 점수를 생성합니다. 원본 입력과 추정 모델을 재사용합니다. [현재 계약](AUTOMATIC_POSTURE.md).
+현재 기본 0.7은 `separated_posture.py`에서 형태 후보와 침대 관계를 독립 계산합니다. 비교용 0.6의 `viewpoint_posture.py`는 유지합니다. 원본 입력과 추정 모델을 재사용하며 버전별 기록 재계산 경로를 구분합니다. [현재 계약](AUTOMATIC_POSTURE.md).

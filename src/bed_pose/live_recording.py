@@ -7,8 +7,8 @@ import os
 from .contracts import IntegrityError
 from .io_utils import atomic_json, file_hash, json_text, load_json, strict_loads, object_hash
 
-LIVE_SCHEMA = 'live-0.2-draft'
-SUPPORTED_SCHEMAS = ('live-0.1-draft', LIVE_SCHEMA)
+LIVE_SCHEMA = 'live-0.3-draft'
+SUPPORTED_SCHEMAS = ('live-0.1-draft', 'live-0.2-draft', LIVE_SCHEMA)
 FILES = ('live_frames.jsonl', 'control_events.jsonl')
 
 
@@ -60,7 +60,8 @@ def validate_selection(selection, effective_frame):
 
 
 def _verify(directory, manifest, hashes=True):
-    if (any(type(manifest[k]) is not int or manifest[k] < 1 for k in ('width','height','initial_bed_revision'))
+    if (any(type(manifest[k]) is not int or manifest[k] < 1 for k in ('width','height'))
+            or type(manifest['initial_bed_revision']) is not int or manifest['initial_bed_revision'] < (0 if manifest['schema_version']==LIVE_SCHEMA else 1)
             or type(manifest['recorded_frames']) is not int or manifest['recorded_frames'] < 0
             or type(manifest['recorded_events']) is not int or manifest['recorded_events'] < 2
             or any(type(manifest['counts'][k]) is not int or manifest['counts'][k] < 0 for k in ('ok','failed'))):
@@ -79,9 +80,14 @@ def _verify(directory, manifest, hashes=True):
                 file_hash(directory/name) != manifest['artifact_sha256'][name] for name in FILES):
             raise IntegrityError('Live artifact checksum mismatch')
     region = manifest['initial_bed_region']
-    validate_region(region, manifest['width'], manifest['height'])
+    if region is not None:validate_region(region, manifest['width'], manifest['height'])
+    elif (manifest['schema_version']!=LIVE_SCHEMA
+          or (manifest.get('automatic_posture_profile') or {}).get('version')!='automatic-posture-rules-0.7'):
+        raise IntegrityError('Initial bed region is required by the recorded mode')
     selection = manifest['initial_bed_selection']
-    if (selection['effective_stream_frame_id'] > manifest['first_stream_frame_id']
+    if selection is None:
+        if region is not None or manifest['initial_bed_revision']!=0:raise IntegrityError('Missing initial bed selection')
+    elif (selection['effective_stream_frame_id'] > manifest['first_stream_frame_id']
             or validate_selection(selection, selection['effective_stream_frame_id']) > unsigned_ns(manifest['started_ns'])):
         raise IntegrityError('Initial bed selection occurs after measurement start')
     if 'posture_assessment_profile' in manifest:

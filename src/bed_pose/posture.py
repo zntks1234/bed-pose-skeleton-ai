@@ -57,16 +57,17 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
     try:
         from .bed_geometry import observation_region
         from .reference_posture import ReferenceClassifier
-        from .automatic_posture import AutomaticClassifier,METHOD,WORLD_METHOD,AUTO_METHOD
+        from .automatic_posture import AutomaticClassifier,METHOD,WORLD_METHOD,AUTO_METHOD,SEPARATED_METHOD
         world=None
-        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (WORLD_METHOD,METHOD,AUTO_METHOD):
+        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (WORLD_METHOD,METHOD,AUTO_METHOD,SEPARATED_METHOD):
             from .posture_evidence import world_body_evidence
             world=world_body_evidence(row,candidate)
         pose=None
-        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version']==AUTO_METHOD:
+        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (AUTO_METHOD,SEPARATED_METHOD):
             from .viewpoint_posture import world_points
             pose=world_points(row,candidate)
-        observation=PostureInput(tuple(points),width,height,observation_region(region),world,pose)
+        separated=isinstance(classifier,AutomaticClassifier) and classifier.profile['version']==SEPARATED_METHOD
+        observation=PostureInput(tuple(points),width,height,region if separated else observation_region(region),world,pose)
         if isinstance(classifier,AutomaticClassifier):
             label,reason,evidence=classifier.evaluate(observation)
             result.update(rule_features=evidence,experimental=True)

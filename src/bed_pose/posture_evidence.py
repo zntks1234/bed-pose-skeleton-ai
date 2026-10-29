@@ -133,6 +133,8 @@ def compare_frame(row,width,height,assessment):
     result['combined']={'status':'held' if reasons else 'available','reasons':reasons,
                         'label':None,'classifier_status':'not_configured'}
     decision=assessment.get('rule_features',{}).get('orientation_decision')
+    if assessment.get('rule_features',{}).get('information_path')=='independent_body_and_bed_relation':
+        result['combined']['classifier_status']='used_for_body_shape_only'
     if decision is not None:
         # The bundle is not a separate classifier: reflect the final rule's use
         # without duplicating its label or changing old record calculations.

@@ -131,7 +131,7 @@ class ViewpointWebTests(unittest.TestCase):
         self.assertEqual(self.control(sid,'region',points=obs.bed_rectangle['vertices'],selected_frame_id=0)[0],200)
         self.wait(lambda x:x['sessions'][0]['region'] is not None)
         # No manual view selector is sent.
-        self.assertEqual(self.control(sid,'posture_mode',mode='automatic')[0],200)
+        self.assertEqual(self.control(sid,'posture_mode',mode='automatic',view='bed_auto')[0],200)
         state=self.wait(lambda x:x['sessions'][0]['posture_assessment']['label']=='supine')['sessions'][0]
         self.assertEqual(state['automatic_posture_profile'],AUTO_DEFAULTS)
         self.assertEqual(self.control(sid,'start')[0],200)

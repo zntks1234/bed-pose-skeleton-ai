@@ -17,6 +17,9 @@ DEFAULTS=dict(V4_DEFAULTS,version=METHOD,score_min=.65,score_close_gap=.10,score
               score_shoulder_weight=.5,score_hip_weight=.5,score_2d_weight=.6,score_3d_weight=.4,
               score_sitting_torso_weight=.35,score_sitting_knee_weight=.45,score_sitting_edge_weight=.20,
               score_knee_peak=90.)
+AUTO_METHOD='automatic-posture-rules-0.6'
+AUTO_DEFAULTS=dict(DEFAULTS,version=AUTO_METHOD,view='auto',auto_focal_prior=1.,
+                   auto_plane_orthogonal_max=.15,auto_plane_visible_min=.08,auto_reprojection_max=.08)
 CORE=(5,6,11,12,13,14,15,16)
 
 def midpoint(a,b):return ((a[0]+b[0])/2,(a[1]+b[1])/2)
@@ -30,20 +33,21 @@ class AutomaticClassifier:
     def __init__(self,profile=None):
         self.profile=deepcopy(DEFAULTS if profile is None else profile)
         version=self.profile.get('version')
-        fields=DEFAULTS if version==METHOD else V4_DEFAULTS if version==WORLD_METHOD else OLD_DEFAULTS
-        if set(self.profile)!=set(fields) or version not in (LEGACY_METHOD,PREVIOUS_METHOD,TORSO_METHOD,WORLD_METHOD,METHOD) or self.profile['view'] not in ('oblique','overhead'):raise ValueError('Unknown automatic posture profile')
+        fields=AUTO_DEFAULTS if version==AUTO_METHOD else DEFAULTS if version==METHOD else V4_DEFAULTS if version==WORLD_METHOD else OLD_DEFAULTS
+        if set(self.profile)!=set(fields) or version not in (LEGACY_METHOD,PREVIOUS_METHOD,TORSO_METHOD,WORLD_METHOD,METHOD,AUTO_METHOD) or self.profile['view'] not in (('auto',) if version==AUTO_METHOD else ('oblique','overhead')):raise ValueError('Unknown automatic posture profile')
         for k in set(fields)-{'version','view'}:
             v=self.profile[k]
             if type(v) not in (float,int) or not math.isfinite(v) or v<=0:raise ValueError('Invalid automatic threshold')
         if not (self.profile['lying_cos']<self.profile['upright_cos']<=1 and self.profile['side_span_max']<self.profile['front_span_min'] and
                 self.profile['bent_knee_min']<self.profile['bent_knee_max']<self.profile['straight_knee_min']<=180 and self.profile['edge_fraction']<.5):raise ValueError('Inconsistent automatic thresholds')
-        if version in (WORLD_METHOD,METHOD) and not (self.profile['body_axial_max']<1 and self.profile['body_line_angle_max']<90
+        if version in (WORLD_METHOD,METHOD,AUTO_METHOD) and not (self.profile['body_axial_max']<1 and self.profile['body_line_angle_max']<90
                 and self.profile['world_front_depth_max']<self.profile['world_side_depth_min']<=1
                 and self.profile['world_depth_difference_max']<=1):raise ValueError('Inconsistent orientation thresholds')
-        if version==METHOD and not (self.profile['score_min']<=1 and self.profile['score_close_gap']<=1
+        if version in (METHOD,AUTO_METHOD) and not (self.profile['score_min']<=1 and self.profile['score_close_gap']<=1
                 and self.profile['score_overlap_scale']>=1
                 and self.profile['bent_knee_min']<self.profile['score_knee_peak']<self.profile['bent_knee_max']):
             raise ValueError('Invalid score thresholds')
+        if version==AUTO_METHOD and (not .25<=self.profile['auto_focal_prior']<=5 or any(self.profile[k]>1 for k in ('auto_plane_orthogonal_max','auto_plane_visible_min','auto_reprojection_max'))):raise ValueError('Invalid registration thresholds')
         self.model_id=self.profile['version']+':'+object_hash(self.profile)
 
     def _evaluate_v1(self,obs):
@@ -200,6 +204,9 @@ class AutomaticClassifier:
         return label,reason,evidence
 
     def evaluate(self,obs):
+        if self.profile['version']==AUTO_METHOD:
+            from .viewpoint_posture import evaluate
+            return evaluate(obs,self.profile)
         if self.profile['version']!=METHOD:return self._evaluate_v4(obs)
         from .weighted_posture import evaluate_weighted
         return evaluate_weighted(obs,self.profile,self._evaluate_v3(obs))

@@ -137,5 +137,5 @@ def compare_frame(row,width,height,assessment):
         # The bundle is not a separate classifier: reflect the final rule's use
         # without duplicating its label or changing old record calculations.
         result['combined']['classifier_status']=('used_by_automatic_rules'
-            if decision['source']=='body_2d_world_3d' else 'not_used_by_automatic_rules')
+            if decision['source'] in ('body_2d_world_3d','bed_registered_model_3d') else 'not_used_by_automatic_rules')
     return result

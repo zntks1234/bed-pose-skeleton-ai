@@ -15,7 +15,7 @@
 | 확정된 범위·미정 사항 확인 | [결정 사항](DECISIONS.md) · [요구사항](REQUIREMENTS.md) |
 | 카메라 연결·화질·영역 설정 | [카메라 설정](guides/CAMERA_CAPTURE.md) · [표시 화질](guides/PREVIEW_QUALITY.md) · [침대 영역](guides/BED_REGION.md) |
 | 기록의 잘못된 판정 확인 | [기록 조회](guides/RECORD_REVIEW.md#browse) → [시간축](guides/RECORD_REVIEW.md#timeline) → [원본 프레임 대조](guides/RECORD_REVIEW.md#image) |
-| 자세 점수가 계산되는 방식 이해 | [가중 적합도 0.5](design/WEIGHTED_POSTURE.md) · [자동 판정 조건](design/AUTOMATIC_POSTURE.md) |
+| 자세 점수가 계산되는 방식 이해 | [자동 판정 0.6](design/AUTOMATIC_POSTURE.md) · [이전 가중 적합도 0.5](design/WEIGHTED_POSTURE.md) |
 | 두 카메라의 현재 결합 방식 확인 | [그룹 설계](design/MULTI_CAMERA_DESIGN.md) · [통합 관측 계약](design/TWO_VIEW_INPUTS.md) |
 | 코드를 수정하거나 검수 | [현재 코드 구성](design/CODE_DESIGN.md) · [시스템 구조](design/ARCHITECTURE.md) · [검수 기록](reviews/README.md) |
 | 실제 영상 평가 준비 | [측정 절차 초안](design/MEASUREMENT_PROTOCOL.md) · [데이터·평가 설계](design/DATA_AND_VALIDATION.md) · [비교 실험 계획](research/POSE_BENCHMARK_PLAN.md) |

@@ -46,8 +46,8 @@ class LiveEngine:
         self.target_tracker=TargetTracker()
         from .posture_diagnostics import PostureDiagnostics
         self.posture_diagnostics=PostureDiagnostics()
-        from .automatic_posture import AutomaticClassifier
-        self.posture_classifier=AutomaticClassifier() if execution_kind=='model_inference' else None
+        from .automatic_posture import AutomaticClassifier,AUTO_DEFAULTS
+        self.posture_classifier=AutomaticClassifier(AUTO_DEFAULTS) if execution_kind=='model_inference' else None
 
     def clock(self):
         return self.clock_function() - self.origin
@@ -337,10 +337,10 @@ class LiveWorker(threading.Thread):
                             self.messages.put(('target_selected',{'tracking':tracking,'selection_id':values.get('selection_id')}))
                         elif action == 'posture_mode':
                             if self.engine.recorder:raise ValueError('측정을 종료한 뒤 설정을 바꾸세요.')
-                            from .automatic_posture import AutomaticClassifier,DEFAULTS
+                            from .automatic_posture import AutomaticClassifier,DEFAULTS,AUTO_DEFAULTS
                             mode=values.get('mode')
-                            if mode not in ('automatic','off') or values.get('view') not in ('oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
-                            self.engine.posture_classifier=AutomaticClassifier(dict(DEFAULTS,view=values['view'])) if mode=='automatic' else None
+                            if mode not in ('automatic','off') or values.get('view') not in ('auto','oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
+                            self.engine.posture_classifier=AutomaticClassifier(AUTO_DEFAULTS if values['view']=='auto' else dict(DEFAULTS,view=values['view'])) if mode=='automatic' else None
                             model=self.engine.posture_classifier
                             self.messages.put(('posture_mode',{'profile':model.profile if model else None,'model_id':model.model_id if model else None}))
                         elif action == 'posture_reference':

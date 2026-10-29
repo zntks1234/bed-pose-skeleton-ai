@@ -49,3 +49,5 @@ python -m unittest discover -s tests -v
 ```
 
 현재 개선 과제는 실제 자료 평가, 대상·관절 품질, 장시간 자원 비용과 외부 연동입니다. 이 문서 정리는 런타임 구조나 판정 기준 변경이 아닙니다.
+
+현재 자동 시점 경로는 `viewpoint_posture.py`가 담당합니다. `automatic_posture.py`의 0.6 프로필에서 호출하며 침대 면 추정·동일 후보 3D/2D 대응·자세 점수를 생성합니다. 원본 입력과 추정 모델을 재사용합니다. [현재 계약](AUTOMATIC_POSTURE.md).

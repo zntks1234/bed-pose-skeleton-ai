@@ -320,8 +320,8 @@ class WebWorkspace:
                                       selected_frame_id=selected_id)
             elif action == 'posture_mode':
                 if state['recording']:raise ValueError('측정을 종료한 뒤 판정 설정을 바꾸세요.')
-                if values.get('mode') not in ('automatic','off') or values.get('view','oblique') not in ('oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
-                session.worker.submit('posture_mode',mode=values['mode'],view=values.get('view','oblique'))
+                if values.get('mode') not in ('automatic','off') or values.get('view','auto') not in ('auto','oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
+                session.worker.submit('posture_mode',mode=values['mode'],view=values.get('view','auto'))
             elif action == 'posture_reference':
                 if state['recording']:raise ValueError('측정 종료 후 기준을 변경하세요.')
                 if values.get('clear') is not True and values.get('confirmed') is not True:raise ValueError('실제 자세를 확인한 뒤 등록하세요.')

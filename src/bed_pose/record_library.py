@@ -92,6 +92,7 @@ class OpenRecord:
                     'candidate_count':row['candidate_count'],'assessment':assessment,
                     'score_decision':(a or {}).get('rule_features',{}).get('score_decision'),
                     'body_assessment':(a or {}).get('rule_features',{}).get('body_assessment'),
+                    'body_state':(a or {}).get('rule_features',{}).get('body_state'),
                     'bed_relation':(a or {}).get('rule_features',{}).get('bed_relation'),
                     'context_assessment':(a or {}).get('rule_features',{}).get('context_assessment'),
                     'silhouette_assessment':row.get('silhouette_assessment'),

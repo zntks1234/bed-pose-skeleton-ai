@@ -76,10 +76,20 @@ def main(argv=None):
     evidence=commands.add_parser('posture-evidence',help='Export same-frame body 2D and estimated 3D features; not accuracy')
     evidence.add_argument('--run',type=Path,required=True)
     evidence.add_argument('--output',type=Path,required=True)
+    posture_eval=commands.add_parser('posture-evaluate',help='Evaluate saved posture predictions against separate reviewed annotations')
+    posture_eval.add_argument('--run',type=Path,required=True)
+    posture_eval.add_argument('--annotations',type=Path)
+    posture_eval.add_argument('--output',type=Path,required=True)
     group_inspect=commands.add_parser('group-inspect',help='Verify original records, alignment and two-view input features')
     group_inspect.add_argument('--run',type=Path,required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == 'posture-evaluate':
+            from .posture_accuracy import evaluate as evaluate_posture
+            path,report=evaluate_posture(args.run,args.output,args.annotations)
+            print(json.dumps({'report_directory':str(path),'evaluation_status':report['evaluation_status'],
+                              'human_accuracy_validated':report['human_accuracy_validated']},ensure_ascii=False))
+            return 0
         if args.command == 'posture-evidence':
             from .evidence_report import export_evidence
             path,report=export_evidence(args.run,args.output)

@@ -82,7 +82,7 @@ def _verify(directory, manifest, hashes=True):
     region = manifest['initial_bed_region']
     if region is not None:validate_region(region, manifest['width'], manifest['height'])
     elif (manifest['schema_version']!=LIVE_SCHEMA
-          or (manifest.get('automatic_posture_profile') or {}).get('version')!='automatic-posture-rules-0.7'):
+          or (manifest.get('automatic_posture_profile') or {}).get('version') not in ('automatic-posture-rules-0.7','automatic-posture-rules-0.8')):
         raise IntegrityError('Initial bed region is required by the recorded mode')
     selection = manifest['initial_bed_selection']
     if selection is None:
@@ -101,6 +101,15 @@ def _verify(directory, manifest, hashes=True):
         if manifest['silhouette_profile']!=SILHOUETTE_PROFILE:raise IntegrityError('Unsupported silhouette profile')
     from .posture import load_classifier
     reference_model=load_classifier(manifest)
+    state_mode=(manifest.get('automatic_posture_profile') or {}).get('version')=='automatic-posture-rules-0.8'
+    if state_mode and 'body_state_provider_profile' not in manifest:
+        raise IntegrityError('Missing body-state provider profile')
+    provider_profile=manifest.get('body_state_provider_profile')
+    if provider_profile is not None:
+        from .body_state import validate_profile
+        if not state_mode:raise IntegrityError('Unexpected body-state provider profile')
+        try:validate_profile(provider_profile,manifest['execution_kind'])
+        except ValueError as exc:raise IntegrityError('Invalid body-state provider profile') from exc
     revision = manifest['initial_bed_revision']
     regions={manifest['initial_bed_revision']:manifest['initial_bed_region']}
     changes = []
@@ -199,6 +208,17 @@ def _verify(directory, manifest, hashes=True):
             if not collision:
                 previous_model_ms = model_ms
             from .posture import assess_frame
+            if state_mode != ('body_state_observation' in row):
+                raise IntegrityError('Missing or unexpected independent body-state observation')
+            if state_mode:
+                from .body_state import validate_observation
+                selection=assess_frame(row,manifest['width'],manifest['height'],None)
+                try:validate_observation(row['body_state_observation'],row,selection['candidate_id'],provider_profile)
+                except (ValueError,TypeError) as exc:raise IntegrityError('Invalid body-state observation provenance') from exc
+                start=unsigned_ns(row['body_state_started_ns']);finish=unsigned_ns(row['body_state_finished_ns'])
+                lower=unsigned_ns(row['mapping_finished_ns'] or row['inference_finished_ns'] or row['received_ns'])
+                if not lower<=start<=finish<=unsigned_ns(row['record_started_ns']):
+                    raise IntegrityError('Invalid body-state processing interval')
             expected_assessment=assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']],reference_model) if reference_model else None
             expected_prediction=({'status':'experimental' if expected_assessment['label'] else 'held','label':expected_assessment['label']} if reference_model else {'status':'not_implemented','label':None})
             if (row['posture_prediction'] != expected_prediction

@@ -21,7 +21,8 @@ COLUMNS=('measurement_id','frame_id','stream_frame_id','clock_id','received_ns',
          'score_supine','score_side','score_edge_sitting','score_minimum','score_gap','score_close_candidates',
          'silhouette_status','silhouette_reasons','silhouette_inside','silhouette_outside','silhouette_uncertain','silhouette_support_ratio',
          'body_shape_status','body_shape_label','body_shape_reasons','body_front_shape_score','body_side_shape_score','body_seated_shape_score',
-         'bed_relation','bed_relation_reasons','physical_occupancy','context_candidate_label')
+         'bed_relation','bed_relation_reasons','physical_occupancy','context_candidate_label',
+         'body_state_status','body_state','lying_direction','body_state_reasons','body_state_score_semantics')
 
 
 def _cells(row,evidence):
@@ -38,6 +39,10 @@ def _cells(row,evidence):
     decision=row.get('posture_assessment',{}).get('rule_features',{}).get('score_decision',{})
     split=row.get('posture_assessment',{}).get('rule_features',{})
     body_shape=split.get('body_assessment',{});relation=split.get('bed_relation',{});context=split.get('context_assessment',{})
+    body_state=split.get('body_state',{})
+    values.update(body_state_status=body_state.get('status'),body_state=body_state.get('state'),
+                  lying_direction=body_state.get('lying_direction'),body_state_reasons='|'.join(body_state.get('reasons',[])),
+                  body_state_score_semantics=body_state.get('score_semantics'))
     shape_scores=(body_shape.get('orientation') or {}).get('score_decision',{}).get('scores',{})
     values.update(body_shape_status=body_shape.get('status'),body_shape_label=body_shape.get('label'),
                   body_shape_reasons='|'.join(body_shape.get('reasons',[])),
@@ -85,7 +90,7 @@ def export_evidence(directory,output):
         frames_hash=file_hash(directory/'live_frames.jsonl')
         if frames_hash!=manifest['artifact_sha256']['live_frames.jsonl'] or file_hash(directory/'manifest.json')!=manifest_hash:
             raise IntegrityError('Source record changed while exporting evidence')
-        summary={'version':'posture-evidence-report-0.4','profile':PROFILE,'run_directory':str(directory),
+        summary={'version':'posture-evidence-report-0.5','profile':PROFILE,'run_directory':str(directory),
                  'measurement_id':manifest['measurement_id'],'execution_kind':manifest['execution_kind'],
                  'source_manifest_sha256':manifest_hash,'source_frames_sha256':frames_hash,
                  'frame_count':frames,'counts':{k:dict(v) for k,v in counts.items()},

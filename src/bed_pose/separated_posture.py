@@ -111,3 +111,18 @@ def evaluate(obs,cfg):
     # Never promote shape + 2D overlap into a confirmed clinical posture/event.
     reason='physical_posture_unverified' if body['status']=='candidate' else (body['reasons'] or ['posture_scores_unavailable'])[0]
     return None,reason,e
+
+
+def evaluate_with_body_state(obs,cfg):
+    """A prediction can be emitted without being declared verified ground truth."""
+    from .body_state import compose
+    _,_,e=evaluate(obs,cfg)
+    state=obs.body_state or {'status':'unavailable','state':'unknown','lying_direction':'unknown',
+                             'reasons':['body_state_provider_not_configured']}
+    label,reason=compose(state,e['bed_relation'])
+    e['body_state']=state
+    e['context_assessment'].update(status='predicted' if label else 'held',label=label,candidate_label=label,
+                                    reasons=[reason] if reason else [],
+                                    evidence_source='independent_camera_image_state',
+                                    physical_posture_verified=False)
+    return label,reason,e

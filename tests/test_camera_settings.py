@@ -60,7 +60,10 @@ class CameraWebTests(unittest.TestCase):
         with patch.object(CameraSource,'open',return_value={'kind':'camera','driver_reported_fps':25.,'requested_capture':{'resolution':[1920,1080],'fps':60}}),patch.object(CameraSource,'read',receive),patch.object(CameraSource,'close'):
             status,data=self.request('/api/inputs',{'kind':'camera','camera':0,'camera_settings':{'resolution':[1920,1080],'fps':60}})
             self.assertEqual(status,200)
-            state=self.wait(lambda x:x['sessions'][0].get('processing_fps') is not None)['sessions'][0]
+            # Processing completes before the asynchronous preview publishes its
+            # frame identity/geometry. Wait for both observations, not a race.
+            state=self.wait(lambda x:x['sessions'][0].get('processing_fps') is not None
+                            and x['sessions'][0]['frame_id'] is not None)['sessions'][0]
             self.assertEqual((state['width'],state['height']),(640,480))
             self.assertEqual(state['source_profile']['driver_reported_fps'],25.)
             self.assertGreater(state['processing_fps'],0)

@@ -156,3 +156,41 @@ Chromium에서 제어한 SDK 출력으로 자세/보류/실루엣 충돌이 섞�
 ### 개발 검사
 
 생성 FFV1 영상과 SDK 대역으로 측정 시작 전 프레임과 기록 프레임의 번호 차이, 첫/끝 프레임의 PTS/픽셀 대응, 저장 근거 보존, 무추론·기록 해시 불변, 잘못된 원본/번호/자산/인증/변경 기록 거부를 확인한다. 원본 없는 기록은 조회가 계속되는지 검사한다. Chromium에서 원본 선택·프레임 선택·근거 상세·좁은/넓은 화면·창 닫기를 확인한다. 실제 사람의 자세 성능을 검증한 결과는 아니다.
+
+
+<a id="posture-accuracy"></a>
+## 자세 정확도 평가 · 별도 검토 주석이 있을 때
+
+`posture-evaluate`는 저장 당시 예측을 재분류하지 않고 별도 주석과 비교합니다. **목표 자세·센서 결과·신체 형태 후보를 정답으로 사용하지 않습니다.** 실제 영상 분류 모델과 정답 영상은 이번에 제공하지 않았습니다.
+
+```powershell
+# 정답 주석이 없으면 미평가 상태와 기록 수만 보고합니다.
+& .\.venv\Scripts\python.exe -m bed_pose posture-evaluate --run "recordings/live/<measurement_id>" --output "reports/posture_check"
+
+# 실제 수행을 따로 검토한 주석이 있는 경우
+& .\.venv\Scripts\python.exe -m bed_pose posture-evaluate --run "recordings/live/<measurement_id>" --annotations "annotations/reviewed.json" --output "reports/posture_accuracy"
+```
+
+출력 폴더는 새 경로여야 하고 원본 측정 폴더 내부는 허용하지 않습니다. 원본 무결성을 검사하고 원본·주석의 SHA-256을 보고서에 기록합니다. 명령 성공은 보고서 작성 성공이며 실제 정확도 검증 완료를 뜻하지 않습니다.
+
+주석 파일 구조는 다음과 같습니다. 아래는 **빈 형식 예시이며 실제 정답 자료가 아닙니다.** `measurement_id`를 해당 기록의 ID로 바꾸고, 검토한 입력 프레임만 추가합니다.
+
+```json
+{
+  "version": "posture-annotations-0.1",
+  "measurement_id": "해당 측정 ID",
+  "label_source": "reviewed_video",
+  "review_protocol_id": "사용한 검토 절차 ID",
+  "frames": []
+}
+```
+
+`frames`의 각 항목은 `stream_frame_id`(정수), `label`, `annotation_id`(검토 이력 ID), `uncertainty_reason`을 갖습니다. **입력 프레임 번호**를 사용하며 기록 행 번호·원본 파일 프레임 번호와 혼동하지 않습니다. 중복 번호·측정 ID 불일치·기록에 없는 프레임은 거부합니다.
+
+- `label`: `supine`, `side`, `edge_sitting`, `sitting`, `standing`, `other`, `uncertain` 중 하나.
+- 확실한 라벨의 `uncertainty_reason`은 null입니다. `uncertain`은 구체적인 불확실 사유 문자열이 필요하며 평가에서 제외하고 제외 수를 보고합니다.
+- `reviewed_video`는 작성자의 검토 절차 선언입니다. 프로그램이 검토자의 판단이나 실제 정답성을 인증하지 않습니다. 가능하면 AI 예측을 보지 않고 먼저 검토합니다.
+
+보고서는 초기 세 자세의 confusion·클래스별 precision/recall/F1, 판정 보류를 누락에 포함한 recall과 전체 정답 비율, 출력한 구간만의 정확도와 coverage를 구분합니다. 서 있음·일반 앉음 등 범위 밖에 세 라벨을 출력한 비율도 별도 보고합니다. 0.8 신체 상태의 confusion은 최종 세 자세와 별도입니다. 참가자/세션/시점별 분리는 자료 준비 단계에서 수행하며 이 명령이 임의로 분할하지 않습니다.
+
+검토 주석이 없거나 전부 불확실하면 `metrics=null`, `evaluation_status=not_evaluated_no_reviewed_labels`입니다. 세 자세 중 일부 정답만 있으면 `full_three_class_macro_f1`은 null이고, 관측된 클래스의 평균과 대상 목록을 따로 제공합니다. 합성 입력 결과는 합성 검사로 표시하며 실제 사람 성능으로 보고하지 않습니다.

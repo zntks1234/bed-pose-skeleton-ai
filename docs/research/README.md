@@ -7,6 +7,7 @@
 | 문서 | 확인할 내용 |
 |---|---|
 | [침대 위 자세 구분을 위한 논문](BED_POSTURE_PAPERS.md) | 침대 자세·가림·이탈 관련 논문 24편 |
+| [자세 판정 재구성의 근거 · 2026-10-29](LITERATURE_REVIEW.md#posture-architecture-evidence-2026-10-29) | 단계형 판단·품질·기권·시간 안정화의 관련 본문 5편, 미확인 후보 3편 |
 | [논문 안내와 색인](LITERATURE_REVIEW.md) | 37편 색인·판본·본문 확인 범위와 근거 사용 규칙 |
 | [누운 자세의 어깨·골반 특징 탐색 · 2026-10-28](LYING_SHOULDER_FEATURE_REVIEW.md) | 공개 예시에서 검토한 어깨/골반 특징과 한계 |
 | [스켈레톤 기술 비교 실험 계획 (1단계)](POSE_BENCHMARK_PLAN.md) | 동일 영상·관절·분할·실패·지연 비교 계획 |

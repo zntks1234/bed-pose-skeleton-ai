@@ -243,3 +243,85 @@ SciSpace·Consensus로 후보를 검색하고 공개 원문을 대조한 앞선 
 4. N06–N08은 본문 확보 전까지 서지 후보로 유지합니다. 자세 시계열 연구가 필요할 때 기존 [P20](BED_POSTURE_PAPERS.md#p20)을 참고하되 수치 불일치 제한을 유지합니다.
 
 **검증 경계:** 문헌의 공개판과 확인 절만 기록했습니다. 코드 실행, 데이터 다운로드·재현, 실제 카메라 평가, 모델·데이터 이용 허가 검토는 수행하지 않았습니다. 추가 목록은 상단의 기존 37편 검증 집계를 소급 변경하지 않습니다.
+
+<a id="posture-architecture-evidence-2026-10-29"></a>
+## 2026-10-29 · 자세 판정 재구성의 근거 조사
+
+**질문:** 관측 품질 → 신체/침대 관계 → 정보 부족·충돌 처리 → 시간적 안정화라는 구성을 논문이 어디까지 뒷받침하는가?
+
+**결론:** 모듈별 근거는 있으나 이 전체 조합이나 현재 0.6 구현의 우월성을 검증한 논문은 확인하지 못했습니다. 규칙과 가중 점수는 함께 사용할 수 있고, 규칙으로 교체하면 성능이 좋아진다는 결론은 유보합니다. 카메라 자유 시점·누락 정보 처리·새 각도 경계는 프로젝트 실험 과제입니다.
+
+### 조사·검증 범위
+
+Consensus와 SciSpace로 후보를 찾고 원문 서비스로 관련 본문을 대조했습니다. 아래 E01–E05는 **관련 방법·제한 절을 이번에 직접 확인한 논문**이며 전체 정독·최종 출판판 전체 대조·재현 실험을 뜻하지 않습니다. E06–E08은 이번 본문 미확인/부분 확인 후보로서 새 설계의 근거에서 제외합니다. 기존 P/N 번호와 집계는 변경하지 않습니다.
+
+Consensus 자동 보고서는 별도 검색 산출물입니다. 그 보고서의 임의 근거 점수, 본문 미확인 논문의 방법 주장, 검증하지 않은 서지는 이 절의 근거로 채택하지 않았습니다. 외부 도구의 요약을 그대로 원문 검증으로 간주하지 않았습니다. [Consensus 조사 기록](https://consensus.app/search/find-evidence-supporting-or-challenging-a-proposed/DabZ0wplQh-9L_esYjaorQ/).
+
+### 확인한 핵심 논문
+
+| ID | 서지와 확인 판본 | 설계 연결과 경계 |
+|---|---|---|
+| E01 | Liang-Bi Chen, Wan-Jung Chang, Tzu-Chin Yang. **BedEye: A Bed Exit and Bedside Fall Warning System Based on Skeleton Recognition Technology for Elderly Patients.** IEEE Access, 2025, 13:60403–60423. [DOI](https://doi.org/10.1109/ACCESS.2025.3558004) · [저자 공개 본문](https://www.researchgate.net/publication/390513208_BedEye_A_Bed_Exit_and_Bedside_Fall_Warning_System_Based_on_Skeleton_Recognition_Technology_for_Elderly_Patients) | **직접 침대 과제.** 기존 P03을 새로 본문 대조. 단계형 관절/침대 관계 판단의 참고이며 자유 시점과 바로/옆누움 구분 전체를 검증한 자료는 아님 |
+| E02 | Vandad Davoodnia, Saeed Ghorbani, Marc-André Carbonneau, Alexandre Messier, Ali Etemad. **UPose3D: Uncertainty-Aware 3D Human Pose Estimation with Cross-View and Temporal Cues.** 2024. [arXiv v3 본문](https://arxiv.org/html/2404.14634v3) · [DOI](https://doi.org/10.48550/arXiv.2404.14634) | **관절 품질의 간접 방법론.** 위치와 불확실성을 별도로 추정. 학습·알려진 카메라 파라미터를 사용하는 다중 시점 관절 연구 |
+| E03 | Yonatan Geifman, Ran El-Yaniv. **SelectiveNet: A Deep Neural Network with an Integrated Reject Option.** ICML/PMLR 97, 2019, pp.2151–2159. [학회 본문](https://proceedings.mlr.press/v97/geifman19a/geifman19a.pdf) · [공식 서지](https://proceedings.mlr.press/v97/geifman19a.html) | **판정·기권 분리의 간접 방법론.** 학습 기반 분류/회귀 연구이며 침대 규칙의 특정 보류 조건을 검증하지 않음 |
+| E04 | Géry Casiez, Nicolas Roussel, Daniel Vogel. **1 € Filter: A Simple Speed-based Low-pass Filter for Noisy Input in Interactive Systems.** CHI 2012, pp.2527–2530. [DOI](https://doi.org/10.1145/2207676.2208639) · [저자 공개 원고](https://www.researchgate.net/publication/254005010_1_Filter_A_Simple_Speed-based_Low-pass_Filter_for_Noisy_Input_in_Interactive_Systems) | **인과적 수치 안정화의 간접 근거.** 확인 원고는 HAL-00670496 v1, 2012-02-17. 자세 라벨 상태 전이 자체를 검증한 연구가 아님 |
+| E05 | Ivan Grishchenko, Valentin Bazarevsky 외. **BlazePose GHUM Holistic: Real-time 3D Human Landmarks and Pose Estimation.** 2022. [arXiv v1 본문](https://arxiv.org/html/2206.11678v1) · [DOI](https://doi.org/10.48550/arXiv.2206.11678) | **단안 3D 해석의 제한.** 기존 P26의 해당 공개판 재확인. 추정 3D를 침대 법선·중력·지지 상태의 실측값으로 해석할 근거는 없음 |
+
+### 본문에서 확인한 내용과 프로젝트 해석
+
+**E01 · 단계형 판단과 침대 관계**
+
+- **확인 절:** §III-F의 신체 중심/단계형 좌표 판단, 식 (3)–(12) 주변; §III-G의 시간 모델; §IV-B/C의 비교·시험 조건.
+- **논문 내용:** 관절 중심과 침대 경계로 단계를 나누고, 좌표 방식과 시계열 방식을 비교합니다. 일부 누움 규칙은 어깨·골반의 영상 y 관계를 사용합니다.
+- **적용 제안:** 자세·침대 관계·단계를 분리하는 구조의 참고로 사용합니다. 화면 방향을 쓰는 세부 규칙은 우리 자유 시점에 그대로 옮기지 않습니다.
+- **제한:** RGB/야간 영상의 침대 이탈 과제입니다. 바로/옆누움 분류와 다른 라벨이며, 기존 P03의 수치 불일치 경고를 유지합니다. 본문 3,943/4,000과 97.4%는 산술적으로 일치하지 않아 관련 정확도 수치는 선정 근거에서 제외합니다. 자체 재현 없음.
+
+**E02 · 관절 위치와 불확실성의 분리**
+
+- **확인 절:** §3.1–3.4, §4.1–4.2, §5.2–5.3. Human3.6m·RICH 등의 관절 위치 평가이며 자세 분류 정확도가 아닙니다.
+- **논문 내용:** 위치와 불확실성을 추정하고 시간/시점 정보를 이용해 정제합니다. §3.2는 알려진 내부·외부 카메라 파라미터를 사용합니다.
+- **적용 제안:** 좌표가 존재한다는 사실과 신뢰할 만하다는 판단을 분리합니다.
+- **제한:** 학습을 쓰는 다중 시점 방법입니다. MediaPipe visibility를 논문의 학습된 불확실성과 동일하게 사용할 수 없습니다. 27프레임 문맥을 곧바로 과거 프레임만 쓰는 실시간 방식이라고 간주하지 않습니다. 침대 분류·무보정 단안 성능 근거에서 제외합니다.
+
+**E03 · 자세 예측과 판정 가능 여부의 분리**
+
+- **확인 절:** §2의 선택 함수/예측 함수와 risk–coverage 정의, §4.1의 구조, §5의 coverage 보정, §6.1의 일반 분류/회귀 자료.
+- **논문 내용:** 예측과 선택을 분리하고, 출력한 표본의 오류와 출력 비율을 함께 평가합니다.
+- **적용 제안:** 보류를 많이 해서 얻은 높은 정확도와 실제 사용 가능한 비율을 함께 봅니다. 판정 모듈에 출력 가능 여부를 명시적으로 둡니다.
+- **제한:** SelectiveNet은 학습된 모델입니다. 수작업 기권 규칙이나 현재 0.65에 논문의 통계적 보장이 생기는 것은 아닙니다. ‘얼굴 누락이면 다른 자세를 선택하지 않는다’는 구체 정책은 우리의 결측 처리 제안이며 이 논문의 실증 결과가 아닙니다.
+
+**E04 · 시간적 안정화와 지연의 동시 평가**
+
+- **확인 절:** THE 1 € FILTER, 식 (4)–(7), 비교 실험, Appendix A Algorithm 1.
+- **논문 내용:** 현재·이전 표본과 시간 간격을 사용하는 속도 적응 저역통과 필터입니다. 흔들림 감소와 지연의 상충을 다룹니다. 비교는 커서 신호 등에 기반합니다.
+- **적용 제안:** 관절/각도 수치의 안정화 후보로 비교하되 자세 전환 지연도 측정합니다. 원본·필터 출력·확정 상태 시각을 구분합니다.
+- **제한:** 침대 분류·이탈 시점·라벨 히스테리시스의 효과를 직접 입증하지 않습니다. 기존 오검출을 평활화하면 잘못된 상태가 오래 남을 수 있습니다. 필터 파라미터와 상태 확인 시간은 별도 검증합니다.
+
+**E05 · 추정 3D와 실제 공간의 구분**
+
+- **확인 절:** §2의 3D data acquisition, Model, Experiments.
+- **논문 내용:** 동일 2D 관측에 여러 깊이 배치가 가능함을 논의하며, 모델은 골반 중심 상대 3D를 예측합니다. 요가/피트니스/댄스 등 일반 자세를 사용합니다.
+- **적용 제안:** 단안 3D를 보조 관측으로 사용하되 카메라/침대 관계 추정의 가정을 드러냅니다.
+- **제한:** 우리 누운 자세의 정확도나 임의 설치 시점의 공간 정합성을 보증하지 않습니다. 현재 0.6의 핀홀 내부값 가정과 PnP 결과는 별도 평가 대상입니다.
+
+### 추가 후보 · 이번 본문 미확인, 새 판단 근거에서 제외
+
+| ID | 서지 | 확인 상태 |
+|---|---|---|
+| E06 | Shuangjun Liu, Sarah Ostadabbas. **A Vision-Based System for In-Bed Posture Tracking.** ICCV Workshops, 2017, pp.1373–1382. [DOI](https://doi.org/10.1109/ICCVW.2017.163) · [학회 PDF](https://openaccess.thecvf.com/content_ICCV_2017_workshops/papers/w22/Liu_A_Vision-Based_System_ICCV_2017_paper.pdf) | SciSpace 검색·공식 서지 확인. 이번 본문 접근은 403으로 실패. 계층 구조의 구체 방법·성능은 근거에서 제외 |
+| E07 | Chia-Feng Juang, Wei-En Ni. **Human Posture Classification Using Interpretable 3-D Fuzzy Body Voxel Features and Hierarchical Fuzzy Classifiers.** IEEE Transactions on Fuzzy Systems, 2022 온라인 공개 서지(최종 권호 미대조). [DOI](https://doi.org/10.1109/TFUZZ.2022.3177028) | SciSpace 중복 2건은 DOI로 합침. 저자/DOI 서지 확인, 공개 페이지는 원문 요청 상태. 초록의 구조·우수성 주장은 채택하지 않음 |
+| E08 | Jui-Chiu Chiang 외. **Posture Monitoring for Health Care of Bedridden Elderly Patients Using 3D Human Skeleton Analysis via Machine Learning Approach.** Applied Sciences, 2022, 12(6):3087. [DOI](https://doi.org/10.3390/app12063087) | 기존 P02와 동일. 이번 직접 원문 접근은 429로 실패했고 Consensus 본문 발췌만 확보. 기존 확인 기록을 변경하지 않지만 이번 새 설계의 직접 검증 근거에서는 제외 |
+
+SciSpace에서 나온 가속도계/압력센서 논문은 카메라 판정 구조의 직접 근거로 사용하지 않았습니다. ConfidNet은 이번에 본문을 확인하지 못해 채택하지 않았습니다.
+
+### 구성에 적용할 결론 · 연구 결과와 구분한 설계 제안
+
+| 구성 | 근거 수준과 남은 작업 |
+|---|---|
+| 대상·관절 품질 확인 | E02의 간접 근거. 우리 모델의 오류와 품질 지표 관계를 확인해야 함 |
+| 신체/침대 관계의 단계형 판정 | E01의 직접 관련 근거. 자유 시점·세 자세의 구체 경계는 미검증 |
+| 불확실/정보 부족 상태 | E03의 방법론 근거. 결측·충돌·범위 밖 사유와 실제 보류 정책은 자체 설계 |
+| 시간적 안정화 | E04의 수치 필터 근거. 상태 전이/전환 지연/이탈 시점은 별도 평가 |
+| 임의 시점 3D 판단 | E05는 한계를 설명하는 근거. 현재 구현의 성능을 뒷받침하는 근거로 전용하지 않음 |
+
+규칙·가중 점수·가벼운 학습 분류기를 같은 사람/세션/설치 조건 분할에서 비교합니다. 오분류·보류율·유효 구간·전환 지연을 함께 보고하고, 근거 없이 특정 방법이나 수치 경계를 최종 확정하지 않습니다. 이번 조사는 자세 코드·점수·판정 조건을 변경하지 않습니다.

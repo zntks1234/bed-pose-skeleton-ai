@@ -2,7 +2,7 @@
 
 [프로젝트 홈](../README.md) · [문서 목차](README.md) · [현재 구현](PROJECT_STATUS.md) · [요구사항](REQUIREMENTS.md)
 
-**기준일: 2026-10-29.** 합의는 목표/방향이고 구현 완료·성능 검증과 다릅니다. 아래는 기존 결정을 현재 시점으로 정리한 요약입니다. 사용자 발언·당시 제안·변경 순서는 [이전 결정 기록](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/DECISIONS_BEFORE_REORGANIZATION.md)에 보존했습니다.
+**기준일: 2026-10-30.** 합의는 목표/방향이고 구현 완료·성능 검증과 다릅니다. 아래는 기존 결정을 현재 시점으로 정리한 요약입니다. 사용자 발언·당시 제안·변경 순서는 [이전 결정 기록](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/DECISIONS_BEFORE_REORGANIZATION.md)에 보존했습니다.
 
 ## 합의된 프로젝트 범위
 
@@ -30,6 +30,8 @@
 | 2026-10-29 | 신체 자세와 침대 관계 판단을 먼저 분리 | 사용자 요청. 영역 미지정/오류가 신체 형태 후보를 막지 않도록 독립 계산·기록. 실제 누움·점유 확정 근거는 후속이며 후보를 확정 라벨로 대체하지 않음. [0.7 계약](design/AUTOMATIC_POSTURE.md) |
 
 MediaPipe는 현재 실험용 어댑터입니다. 최종 모델 선정이나 다른 후보 대비 우월성의 합의가 아닙니다. [후보 비교](research/TECHNOLOGY_CANDIDATES.md)와 동일 조건 실험 원칙을 유지합니다.
+
+2026-10-30 사용자는 CLIP으로 구현하도록 요청했습니다. **CLIP ViT-B/16을 첫 실험용으로 연결**하며 최종 모델 선정이나 침대 정확도 우월성의 합의는 아닙니다. 추가 학습 없이 RGB를 사용하고 실루엣은 보조 유지, 초기 상태/방향 점수 정책은 미검증으로 기록합니다. 사전학습 자산과 실제 영상 평가는 별도입니다. [구현 계약](design/AUTOMATIC_POSTURE.md).
 
 ## 제안·운영 해석
 

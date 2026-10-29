@@ -5,7 +5,7 @@
 
 [프로젝트 홈](../../README.md) · [문서 목차](../README.md) · [현재 지원 범위](../PROJECT_STATUS.md)
 
-**2026-10-29 · 로컬 HTML 작업실.** 실제 자세 정확도 검증은 남아 있습니다. 기술적 기록/시간 규약과 이전 실행 사례는 [정리 전 상세 기록](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/LIVE_MEASUREMENT_BEFORE_REORGANIZATION.md)에 보존했습니다.
+**2026-10-30 · 로컬 HTML 작업실.** 실제 자세 정확도 검증은 남아 있습니다. 기술적 기록/시간 규약과 이전 실행 사례는 [정리 전 상세 기록](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/LIVE_MEASUREMENT_BEFORE_REORGANIZATION.md)에 보존했습니다.
 
 ## 설치와 실행
 
@@ -23,6 +23,28 @@ py -3.12 -m venv .venv
 MediaPipe 모델 파일 `checkpoints/pose_landmarker_full.task`가 없으면 입력 추가 창에서 `.task` 파일을 선택합니다. SDK와 모델 자산은 별개입니다. [어댑터·모델 안내](../development/MEDIAPIPE_ADAPTER.md)를 확인하세요.
 
 실행 후 열린 브라우저와 Python 터미널을 유지합니다. 업데이트할 때는 작업실 종료 → GitHub Desktop Pull → 재실행 순서입니다.
+
+<a id="clip"></a>
+## CLIP 이미지 자세 분석 준비
+
+기존 MediaPipe는 관절·실루엣, CLIP은 사람 RGB의 신체 상태/누운 방향을 예측합니다. 아래 명령 블록은 프로젝트 폴더의 PowerShell에서 실행합니다. GPU는 필수가 아니며 기본은 CPU입니다.
+
+```powershell
+& .\.venv\Scripts\python.exe -m pip install -e ".[live,clip]"
+& .\.venv\Scripts\python.exe -m bed_pose clip-setup
+& .\.venv\Scripts\python.exe -m bed_pose live
+```
+
+- `clip-setup`은 인터넷으로 `openai/clip-vit-base-patch16`의 약 600MB PyTorch 가중치와 토크나이저/구성을 `checkpoints/clip-vit-base-patch16`에 준비합니다. 요청 revision을 고정 commit으로 해석하고 각 파일 SHA-256을 저장합니다. 준비 중 실패하면 미완성 폴더를 정리하고 기존 모델 폴더는 덮어쓰지 않습니다. 새 모델 준비 후 작업실을 재실행하세요.
+- 인터넷 연결이 제한됐고 HF 형식의 원본 파일 폴더를 이미 가지고 있다면 `python -m bed_pose clip-setup --source "D:\models\clip-vit-base-patch16" --output checkpoints/clip-vit-base-patch16`으로 반입할 수 있습니다. 로컬 반입은 공식 revision을 확인했다고 표시하지 않습니다. `--source`는 CLIP 가중치/구성 폴더이며 마네킹 사진 폴더가 아닙니다.
+- **입력 추가 → CLIP 이미지 자세 분석**을 선택하고 카메라/영상을 엽니다. 준비됐으면 기본 체크, 준비되지 않으면 비활성 및 준비 명령을 표시합니다. 체크를 끄면 기존 관절 기반 0.7입니다. `.task` 모델 변경 버튼은 MediaPipe용이며 CLIP 폴더를 선택하는 버튼이 아닙니다.
+- CLIP은 입력 연결 중 해당 작업 스레드에서 로딩합니다. 누락·손상·라이브러리 오류는 입력 오류로 표시하고 모의 결과로 대체하지 않습니다. 일반 분석 중에는 모델을 다운로드하지 않으며 이미지를 외부 추론 API에 보내지 않습니다.
+- **CLIP 이미지 판단 근거**를 펼치면 상태·방향의 상대점수와 실제 224×224 입력을 봅니다. 세로/가로 비율은 유지하고 여백을 넣습니다. 관절 crop에서 이미 잘린 팔다리는 복원하지 않습니다. 이 미리보기는 일시 표시이며 측정 파일에 이미지 자체를 저장하지 않습니다.
+- 누움/방향은 침대 영역 없이 예측합니다. 앉음만 확인됐을 때는 ‘앉음’을 표시하고, 침대 가장자리 관계까지 있을 때 걸터앉음을 예측합니다. 서 있음·기타·엎드림을 초기 세 자세에 강제 배정하지 않습니다. 사람 후보가 없으면 CLIP도 호출하지 않습니다.
+- 상태·방향 각각 상대점수 0.5 이상은 **미검증 초기값**입니다. 필요하면 `live --clip-state-min 0.5 --clip-direction-min 0.5`로 지정합니다. 기존 관절 점수 0.65를 재사용하지 않으며 상대점수는 정답 확률이 아닙니다. 가까운 2위 점수 때문에 추가로 보류하지 않고 동점은 보류합니다.
+- 다른 모델 폴더는 `live --clip-model "D:\models\prepared-clip"`, CUDA 사용 가능 환경은 `live --clip-device cuda`로 명시합니다. CUDA 실패 시 CPU로 조용히 전환하지 않습니다. 여러 입력은 각각 모델을 유지하므로 실제 메모리·처리 지연을 확인해야 합니다.
+
+**검증 한계:** 개발 환경의 사전학습 모델 다운로드는 프록시 403으로 차단됐습니다. 작은 무작위 CLIP 모델로 실제 로딩/추론 API를 검사하고 대역으로 UI·기록을 검사했습니다. 사전학습 가중치의 마네킹/실제 사람 자세 정확도·카메라 FPS·자유 시점 성능은 미검증입니다. [상세 정책과 기록](../design/AUTOMATIC_POSTURE.md).
 
 ## 카메라로 측정
 

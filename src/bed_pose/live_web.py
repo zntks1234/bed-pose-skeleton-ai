@@ -41,7 +41,8 @@ class Session:
 
 
 class WebWorkspace:
-    def __init__(self, model=None, output_root=Path('recordings/live'), *, engine_factory=make_engine):
+    def __init__(self, model=None, output_root=Path('recordings/live'), *, engine_factory=make_engine,
+                 clip_model=None, clip_device='cpu', clip_state_min=.5, clip_direction_min=.5):
         self.model = Path(model or 'checkpoints/pose_landmarker_full.task').resolve()
         self.output_root = Path(output_root).resolve()
         from .record_library import RecordLibrary
@@ -49,6 +50,19 @@ class WebWorkspace:
         self.temp = tempfile.TemporaryDirectory(prefix='bed-pose-browser-')
         self.temp_root = Path(self.temp.name)
         self.factory = engine_factory
+        from .clip_assets import DEFAULT_DIRECTORY,read_assets
+        from .clip_posture import policy
+        from importlib.metadata import version,PackageNotFoundError
+        policy(clip_state_min,clip_direction_min,clip_device)
+        self.clip_model=Path(clip_model or DEFAULT_DIRECTORY).expanduser().resolve()
+        self.clip_options={'clip_model':self.clip_model,'clip_device':clip_device,
+                           'clip_state_min':clip_state_min,'clip_direction_min':clip_direction_min}
+        try:
+            read_assets(self.clip_model)
+            for package in ('torch','transformers','Pillow'):version(package)
+            self.clip_status={'available':True,'reason':None}
+        except (ValueError,OSError,PackageNotFoundError):
+            self.clip_status={'available':False,'reason':'CLIP 준비 필요: python -m pip install -e ".[clip]" 후 python -m bed_pose clip-setup 실행'}
         self.sessions, self.assets = {}, {}
         self.groups = {}
         self.target_tickets = {}
@@ -106,7 +120,12 @@ class WebWorkspace:
                 source, title = SyntheticSource(), '합성 입력 · 실제 인식 아님'
             else:
                 raise ValueError('입력 종류를 선택하세요.')
-            engine = self.factory(source, model, self.output_root, self.temp_root, demo=kind == 'demo')
+            use_clip=values.get('use_clip',self.clip_status['available'] and kind!='demo')
+            if type(use_clip) is not bool:raise ValueError('CLIP 사용 여부를 확인하세요.')
+            if use_clip and (kind=='demo' or not self.clip_status['available']):
+                raise ValueError(self.clip_status['reason'] or '합성 입력에는 실제 CLIP을 적용하지 않습니다.')
+            engine = self.factory(source, model, self.output_root, self.temp_root, demo=kind == 'demo',
+                                  **(self.clip_options if use_clip else {}))
             worker = LiveWorker(engine)
             session_id = uuid.uuid4().hex
             state = {'id': session_id, 'title': title, 'kind': kind, 'phase': 'opening',
@@ -132,7 +151,8 @@ class WebWorkspace:
                                          'groups': [g.public() for g in self.groups.values()],
                                          'scan': self.scan_state, 'closing': self.stop_requested.is_set(),
                                          'preview_quality': self.preview_quality,
-                                         'model': self.model.name, 'model_available': self.model.is_file()}))
+                                         'model': self.model.name, 'model_available': self.model.is_file(),
+                                         'clip':self.clip_status}))
 
     def set_preview_quality(self, quality):
         if not isinstance(quality,str) or quality not in PREVIEW_PROFILES:
@@ -486,6 +506,8 @@ class WebWorkspace:
                         'posture_evidence':row.get('posture_evidence'),
                         'silhouette_assessment':row.get('silhouette_assessment'),
                         'silhouette_preview':frame.get('silhouette_preview'),
+                        'body_state_input_preview':frame.get('body_state_input_preview'),
+                        'body_state_ms':(int(row['body_state_finished_ns'])-int(row['body_state_started_ns']))/1e6 if 'body_state_finished_ns' in row else None,
                         'candidate_count': row['candidate_count'],
                         'inference_ms': (int(row['inference_finished_ns'])-int(row['inference_started_ns']))/1e6,
                         'read_ms': (int(row['received_ns'])-int(row['read_started_ns']))/1e6,
@@ -699,8 +721,10 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
 
 
 def launch_browser(model=None, camera=None, output_root=Path('recordings/live'), demo=False,
-                   video=None, *, port=0, open_browser=True):
-    workspace = WebWorkspace(model, output_root)
+                   video=None, *, port=0, open_browser=True,clip_model=None,clip_device='cpu',
+                   clip_state_min=.5,clip_direction_min=.5):
+    workspace = WebWorkspace(model, output_root,clip_model=clip_model,clip_device=clip_device,
+                             clip_state_min=clip_state_min,clip_direction_min=clip_direction_min)
     server = None
     try:
         server = WorkspaceHTTPServer(workspace, port)

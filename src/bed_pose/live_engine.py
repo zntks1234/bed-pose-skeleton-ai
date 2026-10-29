@@ -65,6 +65,8 @@ class LiveEngine:
             raise ValueError('새 스트림은 새 LiveEngine과 연속 실행 모드로 시작해야 합니다.')
         self.ever_opened = True
         try:
+            if self.body_state_provider is not None and callable(getattr(self.body_state_provider,'open',None)):
+                self.body_state_provider.open()
             self.adapter_profile = self.adapter.open(self.settings)
             if self.adapter_profile.get('execution_kind') != self.execution_kind:
                 raise ValueError('Live adapter execution kind mismatch')
@@ -291,7 +293,12 @@ class LiveEngine:
         diagnostics=self.posture_diagnostics.observe(row['posture_assessment'],self.region_revision)
         if failure:
             raise failure
+        image_preview=getattr(self.body_state_provider,'last_input_preview',None)
+        if (not isinstance(image_preview,dict) or image_preview.get('stream_frame_id')!=row['stream_frame_id']
+                or image_preview.get('candidate_id')!=row['posture_assessment']['candidate_id']
+                or (row.get('body_state_observation') or {}).get('decision') is None):image_preview=None
         return {'processing_fps':self.processing_rate.observe(self.clock()), 'rgb': rgb, 'row': row, 'silhouette_preview':silhouette_preview,
+                'body_state_input_preview':image_preview,
                 'posture_diagnostics':diagnostics, 'bed_region': self.region, 'bed_revision': self.region_revision,
                 'recorded_frames': self.recorder.manifest['recorded_frames'] if self.recorder else 0}
 

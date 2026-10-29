@@ -71,6 +71,14 @@ def main(argv=None):
     live_source.add_argument('--camera', type=int)
     live_source.add_argument('--video', type=Path)
     live.add_argument('--output-root', type=Path, default=Path('recordings/live'))
+    live.add_argument('--clip-model',type=Path,help='Prepared CLIP folder; defaults to checkpoints/clip-vit-base-patch16')
+    live.add_argument('--clip-device',choices=('cpu','cuda'),default='cpu')
+    live.add_argument('--clip-state-min',type=float,default=.5,help='Unvalidated initial relative state score threshold')
+    live.add_argument('--clip-direction-min',type=float,default=.5,help='Unvalidated initial relative lying-direction threshold')
+    clip_setup=commands.add_parser('clip-setup',help='Explicitly download or import CLIP ViT-B/16 and record asset hashes')
+    clip_setup.add_argument('--output',type=Path,default=Path('checkpoints/clip-vit-base-patch16'))
+    clip_setup.add_argument('--source',type=Path,help='Offline Hugging Face-format folder instead of downloading')
+    clip_setup.add_argument('--revision',default='main',help='HF revision; resolved to an immutable commit before downloading')
     live_inspect = commands.add_parser('live-inspect', help='Verify the separate live measurement record contract')
     live_inspect.add_argument('--run', type=Path, required=True)
     evidence=commands.add_parser('posture-evidence',help='Export same-frame body 2D and estimated 3D features; not accuracy')
@@ -84,6 +92,12 @@ def main(argv=None):
     group_inspect.add_argument('--run',type=Path,required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command=='clip-setup':
+            from .clip_assets import setup_assets
+            path,assets=setup_assets(args.output,source=args.source,revision=args.revision)
+            print(json.dumps({'model_directory':str(path),'model_id':assets['model_id'],'revision':assets['revision'],
+                              'weights_sha256':assets['files']['pytorch_model.bin'],'accuracy_validated':False},ensure_ascii=False))
+            return 0
         if args.command == 'posture-evaluate':
             from .posture_accuracy import evaluate as evaluate_posture
             path,report=evaluate_posture(args.run,args.output,args.annotations)
@@ -104,7 +118,9 @@ def main(argv=None):
             if args.camera is not None and args.camera < 0:
                 raise ValueError('카메라 번호를 확인하세요. 합성 모드는 카메라 번호를 사용하지 않습니다.')
             from .live_gui import launch_live
-            return launch_live(args.model, args.camera, args.output_root, args.demo, args.video)
+            return launch_live(args.model, args.camera, args.output_root, args.demo, args.video,
+                               clip_model=args.clip_model,clip_device=args.clip_device,
+                               clip_state_min=args.clip_state_min,clip_direction_min=args.clip_direction_min)
         if args.command == 'live-inspect':
             from .live_recording import verify_live
             print(json.dumps(verify_live(args.run), ensure_ascii=False))

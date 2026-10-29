@@ -343,6 +343,6 @@ class LiveWindow:
         self.update_controls()
 
 
-def launch_live(model=None, camera=None, output_root=Path('recordings/live'), demo=False, video=None):
+def launch_live(model=None, camera=None, output_root=Path('recordings/live'), demo=False, video=None,**options):
     from .live_web import launch_browser
-    return launch_browser(model, camera, output_root, demo, video)
+    return launch_browser(model, camera, output_root, demo, video,**options)

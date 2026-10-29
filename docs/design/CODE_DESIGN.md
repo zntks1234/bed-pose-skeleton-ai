@@ -22,7 +22,8 @@
 | 관절·영역·대상 | `mapping.py`, `bed_geometry.py`, `target_tracking.py` |
 | 자세 | `posture.py` 인터페이스, `automatic_posture.py` 버전별 규칙, `weighted_posture.py` 적합도 |
 | 신체·침대 관계 분리 | `separated_posture.py`: 영역 없는 `BodyInput`, 독립 형태 후보, 영상상 영역 관계와 해석 후보 |
-| 독립 영상 근거 연결 | `body_state.py`: 대상 crop·근거 제공자 계약·현재 프레임 검증·0.8 조합. 실제 영상 모델은 미선정/미탑재 |
+| 독립 영상 근거 연결 | `body_state.py`: 대상 crop·근거 제공자 계약·현재 프레임 검증·0.8 조합. CLIP은 별도 제공자이며 사전학습 자산/정확도 검증은 별도 |
+| CLIP 자산·실행 | `clip_assets.py`: 명시적 준비·해시 검사, `clip_posture.py`: 로컬 로딩·RGB 여백·문장 캐시·상태/방향 점수 및 저장 정책 재계산 |
 | 정답 기반 자세 평가 | `posture_accuracy.py`: 별도 검토 주석과 저장 예측의 confusion·coverage·F1. 정답 없으면 미평가 |
 | 2D/추정 3D·실루엣 | `lying_orientation.py`, `posture_evidence.py`, `silhouette.py`, `silhouette_overlay.py` |
 | 그룹·시간·결합 | `group_session.py`, `time_alignment.py`, `fusion_inputs.py`, `group_posture.py`, `reference_posture.py` |

@@ -39,11 +39,20 @@ def validate_profile(profile,execution_kind):
         if strict_loads(json_text(profile['decision_policy']))!=profile['decision_policy']:
             raise ValueError('Decision policy must use JSON values')
     except (ValueError,TypeError) as exc:raise ValueError('Invalid body-state decision policy') from exc
+    if profile['model_id']=='openai/clip-vit-base-patch16':
+        from .clip_posture import validate_policy
+        validate_policy(profile['decision_policy'])
+        assets=profile['decision_policy']['assets_manifest']
+        if (profile['execution_kind']!='model_inference' or assets.get('model_id')!=profile['model_id']
+                or assets.get('files',{}).get('pytorch_model.bin')!=profile['model_sha256']
+                or profile['preprocess_id']!=profile['decision_policy']['preprocess']):
+            raise ValueError('CLIP provider asset identity mismatch')
     return deepcopy(profile)
 
 
 def validate_decision(value):
-    if not isinstance(value,dict) or set(value)!={'state','lying_direction','scores','score_semantics'}:
+    if not isinstance(value,dict) or set(value) not in ({'state','lying_direction','scores','score_semantics'},
+            {'state','lying_direction','scores','score_semantics','details'}):
         raise ValueError('Invalid independent image-state output')
     if value['state'] not in STATES or value['lying_direction'] not in DIRECTIONS:
         raise ValueError('Unsupported body-state label')
@@ -55,6 +64,8 @@ def validate_decision(value):
             or (value['score_semantics']=='not_reported' and value['scores'])
             or (value['score_semantics']=='uncalibrated_probability' and any(not 0<=x<=1 for x in value['scores'].values()))):
         raise ValueError('Invalid body-state score semantics')
+    if 'details' in value and (not isinstance(value['details'],dict) or strict_loads(json_text(value['details']))!=value['details']):
+        raise ValueError('Invalid image evidence details')
     return deepcopy(value)
 
 
@@ -108,6 +119,9 @@ def validate_observation(value,row,candidate,profile):
             or not isinstance(value.get('reasons'),list) or any(not isinstance(r,str) for r in value['reasons'])):
         raise ValueError('Body-state identity or provider mismatch')
     decision=validate_decision(value['decision']) if value['decision'] is not None else None
+    if profile and profile['model_id']=='openai/clip-vit-base-patch16' and decision is not None:
+        from .clip_posture import validate_recorded_decision
+        validate_recorded_decision(decision,profile)
     if ((profile is None and (decision is not None or value['status']!='unavailable'))
             or (value['status']=='predicted' and (decision is None or decision['state']=='unknown' or value['reasons']))
             or (value['status']!='predicted' and (not value['reasons'] or decision is not None and decision['state']!='unknown'))):
@@ -127,6 +141,8 @@ def read_observation(value,row,candidate,profile):
         result['reasons']=value.get('reasons') or ['body_state_unknown'];return result
     try:decision=validate_decision(value['decision'])
     except (KeyError,ValueError,TypeError):return result
+    if 'details' in decision:
+        result.update(details=decision['details'],scores=decision['scores'],score_semantics=decision['score_semantics'])
     if value.get('status')!='predicted' or decision['state']=='unknown':
         result['reasons']=['body_state_unknown'];return result
     result.update(status='predicted',state=decision['state'],lying_direction=decision['lying_direction'],

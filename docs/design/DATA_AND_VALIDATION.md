@@ -31,7 +31,7 @@
 
 현재 기본 0.7의 프레임에는 `posture_assessment.rule_features` 아래 `body_assessment`, `bed_relation`, `context_assessment`를 따로 기록합니다. 형태·침대 자세 후보는 확인된 실제 자세나 최종 확정 라벨이 아닙니다. 영상상 영역 밖은 실제 이탈 이벤트가 아니며 실제 점유는 unknown으로 남깁니다. live-0.3-draft의 초기 영역 null은 신체 형태만 기록하는 개별 측정에서 허용합니다. [구체 계약](AUTOMATIC_POSTURE.md).
 
-선택적 0.8은 `body_state_observation`·제공자 프로필·처리 시각을 추가하며 이 실험 예측도 실제 정답으로 승격하지 않습니다. 실제 제공 모델은 미탑재입니다. `posture-evaluate`는 원본과 분리된 검토 주석만 사용하고 목표·센서 결과를 정답으로 채우지 않습니다. 주석 출처는 검토자 선언이며 소프트웨어가 실제 검토를 인증하지 않습니다. [주석 형식·산식·미평가 처리](../guides/RECORD_REVIEW.md#posture-accuracy).
+선택적 0.8은 `body_state_observation`·제공자 프로필·처리 시각을 추가하며 이 실험 예측도 실제 정답으로 승격하지 않습니다. CLIP 제공자는 구현했으며 자산은 별도 준비합니다. CLIP 관측에는 상태/방향 원점수·모델 scale·선택 정책을 보존해 당시 판정을 재계산합니다. 사전학습 실행/정확도는 미검증입니다. `posture-evaluate`는 원본과 분리된 검토 주석만 사용하고 목표·센서 결과를 정답으로 채우지 않습니다. 주석 출처는 검토자 선언이며 소프트웨어가 실제 검토를 인증하지 않습니다. [주석 형식·산식·미평가 처리](../guides/RECORD_REVIEW.md#posture-accuracy).
 
 | 그룹 | 기록 후보 |
 |---|---|

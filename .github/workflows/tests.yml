@@ -33,4 +33,6 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Check browser preview recovery
         if: runner.os == 'Linux'
-        run: python tests/browser_preview_recovery.py
+        run: |
+          python tests/browser_preview_recovery.py
+          python tests/browser_record_comparison.py

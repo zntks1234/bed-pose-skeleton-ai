@@ -67,6 +67,7 @@ class OpenRecord:
         self.check()
         self.timeline_cache=OrderedDict()
         self.timeline_lock=threading.Lock()
+        self.image_lock=threading.Lock()
 
     def check(self):
         confined_files(self.directory)
@@ -95,6 +96,49 @@ class OpenRecord:
         self.check()
         return {'record_id':self.meta['record_id'],'offset':offset,'limit':limit,
                 'total':len(self.offsets),'frames':rows}
+
+    def image(self,frame_id,video):
+        with self.image_lock:return self._image(frame_id,video)
+
+    def _image(self,frame_id,video):
+        from .live_sources import VideoFileSource
+        from .preview_quality import encode_preview
+        if type(frame_id) is not int or not 0<=frame_id<len(self.offsets):
+            raise ValueError('기록 프레임 번호를 확인하세요.')
+        if self.meta['source_kind']!='video_file':
+            raise ValueError('원본 시각이 기록된 영상 파일 측정만 대조할 수 있습니다. 카메라 원본 영상은 저장되지 않았습니다.')
+        self.check()
+        with (self.directory/'live_frames.jsonl').open('rb') as stream:
+            stream.seek(self.offsets[frame_id]);row=strict_loads(stream.readline().decode('utf-8'))
+        media=row.get('source_media')
+        if not media or type(media.get('source_frame_id')) is not int or media['source_frame_id']<0:
+            raise ValueError('이 기록에는 원본 프레임 식별 정보가 없습니다.')
+        source=VideoFileSource(video)
+        try:
+            profile=source.open()
+            if profile['sha256']!=self.manifest['source_profile'].get('sha256'):
+                raise ValueError('측정에 사용한 원본 영상과 파일 해시가 다릅니다. 원본을 다시 선택하세요.')
+            for _ in range(media['source_frame_id']+1):rgb=source.read()
+            if source.media!=media or rgb.shape[:2]!=(self.manifest['height'],self.manifest['width']):
+                raise ValueError('원본 프레임의 시각·픽셀·크기가 기록과 다릅니다. 현재 디코더로 대조할 수 없습니다.')
+            image,preview=encode_preview(rgb,'high')
+        except StopIteration as exc:
+            raise ValueError('기록에 대응하는 원본 프레임을 찾지 못했습니다.') from exc
+        finally:source.close()
+        region=self.manifest['initial_bed_region']
+        with (self.directory/'control_events.jsonl').open(encoding='utf-8') as stream:
+            for line in stream:
+                event=strict_loads(line)
+                if event['type']=='bed_region_changed' and event['revision']==row['bed_region_revision']:region=event['region']
+        self.check()
+        return {'record_id':self.meta['record_id'],'frame_id':frame_id,
+                'stream_frame_id':row['stream_frame_id'],'source_media':media,
+                'width':self.manifest['width'],'height':self.manifest['height'],
+                'image':image,'preview':preview,'people':row.get('mapped_people') or [],
+                'bed_region':region,'posture_assessment':row.get('posture_assessment'),
+                'silhouette_assessment':row.get('silhouette_assessment'),
+                'verification':'source_sha256_pts_pixels_geometry_verified',
+                'inference_performed':False,'full_silhouette_available':False}
 
     def timeline(self,basis,bins):
         from .record_timeline import summarize
@@ -171,3 +215,9 @@ class RecordLibrary:
         if record is None:raise ValueError('기록 목록에서 측정을 먼저 여세요.')
         if basis is None:basis='media' if record.meta['source_kind']=='video_file' else 'receive'
         return record.timeline(basis,bins)
+
+    def image(self,record_id,frame_id,video):
+        self.directory(record_id)
+        with self.lock:record=self.opened.get(record_id)
+        if record is None:raise ValueError('기록 목록에서 측정을 먼저 여세요.')
+        return record.image(frame_id,video)

@@ -658,6 +658,12 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 result = workspace.add(values)
             elif url.path == '/api/preview-quality':
                 result=workspace.set_preview_quality(values.get('quality'))
+            elif url.path == '/api/records/image':
+                with workspace.lock:
+                    asset=workspace.assets.get(values.get('video_asset'))
+                    if not asset or asset['kind']!='video':raise ValueError('대조할 원본 영상 파일을 선택하세요.')
+                    video=asset['path']
+                result=workspace.records.image(values.get('record_id'),values.get('frame_id'),video)
             elif url.path == '/api/records/open':
                 result=workspace.records.open(values.get('record_id'))
             elif url.path == '/api/target-select':

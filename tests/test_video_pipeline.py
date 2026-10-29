@@ -285,8 +285,8 @@ class PipelineTests(unittest.TestCase):
             validated = validate_run(self.config)
         finally:
             os.chdir(old)
-        self.assertEqual(Path(resolved['output_root']), self.root / 'runs')
-        self.assertEqual(validated.video_path, self.video)
+        self.assertEqual(Path(resolved['output_root']), (self.root / 'runs').resolve())
+        self.assertEqual(validated.video_path, self.video.resolve())
 
     def test_cli_demo_run_and_inspect(self):
         output = io.StringIO()

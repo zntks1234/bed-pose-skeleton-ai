@@ -136,7 +136,7 @@ class PostprocessingTests(unittest.TestCase):
         self.assertEqual(report['runs'][2]['integrity'], 'invalid')
         self.assertFalse(report['runs'][1]['eligible_for_comparison'])
         self.assertNotEqual(report['runs'][0]['comparison_group'], report['runs'][3]['comparison_group'])
-        self.assertIn(str(missing), (out / 'report.md').read_text(encoding='utf-8'))
+        self.assertIn(str(missing.resolve()), (out / 'report.md').read_text(encoding='utf-8'))
         self.assertFalse(missing.exists())
         with self.assertRaises(FileExistsError):
             compare_runs([good], out)

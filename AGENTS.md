@@ -1,6 +1,6 @@
 # AI 작업 지침
 
-[프로젝트 홈](README.md) · [복사해서 쓰는 작업 프롬프트](docs/AI_TASK_PROMPT.md) · [진행 현황](docs/PROJECT_STATUS.md)
+[프로젝트 홈](README.md) · [복사해서 쓰는 작업 프롬프트](docs/development/AI_TASK_PROMPT.md) · [진행 현황](docs/PROJECT_STATUS.md)
 
 이 문서는 이 저장소에서 작업하는 Codex 등 AI에게 프로젝트 맥락과 공통 작업 원칙을 전달합니다. **실제로 수행할 작업은 사용자의 이번 요청으로 정합니다.** 예시나 로드맵을 읽었다는 이유로 모든 기능을 구현하지 않습니다.
 
@@ -12,14 +12,14 @@
 
 | 작업 | 추가로 읽을 문서 |
 |---|---|
-| 기술 후보 비교·선정 | [기술 후보 비교](docs/TECHNOLOGY_CANDIDATES.md), [재현 실험 계획](docs/POSE_BENCHMARK_PLAN.md), 관련 논문 항목 |
-| 코드·구조 설계 | [시스템 구조](docs/ARCHITECTURE.md), [코드 구성](docs/CODE_DESIGN.md), [첫 러너 세부 설계](docs/BENCHMARK_DETAIL_SPEC.md), [데이터·평가 기준](docs/DATA_AND_VALIDATION.md) |
-| 측정·녹화·운영 | [측정 절차](docs/MEASUREMENT_PROTOCOL.md), [데이터·평가 기준](docs/DATA_AND_VALIDATION.md) |
-| 논문 조사·검증 | [논문 안내](docs/LITERATURE_REVIEW.md), [침대 자세 논문](docs/BED_POSTURE_PAPERS.md), [스켈레톤 논문](docs/SKELETON_TECHNOLOGY_PAPERS.md)의 관련 항목 |
+| 기술 후보 비교·선정 | [기술 후보 비교](docs/research/TECHNOLOGY_CANDIDATES.md), [재현 실험 계획](docs/research/POSE_BENCHMARK_PLAN.md), 관련 논문 항목 |
+| 코드·구조 설계 | [시스템 구조](docs/design/ARCHITECTURE.md), [코드 구성](docs/design/CODE_DESIGN.md), [첫 러너 세부 설계](docs/development/BENCHMARK_DETAIL_SPEC.md), [데이터·평가 기준](docs/design/DATA_AND_VALIDATION.md) |
+| 측정·녹화·운영 | [측정 절차](docs/design/MEASUREMENT_PROTOCOL.md), [데이터·평가 기준](docs/design/DATA_AND_VALIDATION.md) |
+| 논문 조사·검증 | [논문 안내](docs/research/LITERATURE_REVIEW.md), [침대 자세 논문](docs/research/BED_POSTURE_PAPERS.md), [스켈레톤 논문](docs/research/SKELETON_TECHNOLOGY_PAPERS.md)의 관련 항목 |
 
 문서를 읽은 뒤 실제 파일, 실행 환경, 기존 변경 사항을 확인합니다. 접근하지 못한 파일은 읽었다고 주장하지 않습니다. 과거 대화에 접근할 수 있다고 가정하지 않습니다.
 
-**2026-10-26 작성 시점:** 기획·문헌 정리 단계이며 구현·학습·자체 성능 실험은 시작 전입니다. 언어·라이브러리·모델·장비·실행 및 테스트 명령은 아직 정해지지 않았습니다. 이후 작업에서는 최신 진행 현황과 실제 저장소 내용을 다시 확인합니다.
+**현재 상태는 진행 현황을 기준으로 합니다.** 문서 목차는 [docs/README.md](docs/README.md)입니다. 과거 구현 과정은 archive에 보존하며 현재 지원 기능으로 해석하지 않습니다.
 
 ## 2. 프로젝트의 핵심 경계
 
@@ -47,7 +47,7 @@
 - 최소 실증에서 수동 침대 영역 지정과 단순 조작부터 시작할 수 있습니다. 구현 순서를 뒤로 미룬 것을 합의된 목표의 삭제로 처리하지 않습니다.
 - 녹화를 꺼도 분석과 결과 기록은 계속되어야 합니다.
 - 스마트폰을 **카메라 입력**으로 쓰는 후보와 **웹 원격 조작** 보류 기능을 혼동하지 않습니다.
-- 기술 후보는 침대 환경의 인식 품질·실험 결과를 근거로 비교하며, 코드 최적화·모듈 분리·지연 측정은 별도로 고려합니다. AI 추론의 실행 위치·방식은 아직 정하지 않았습니다.
+- 기술 후보는 침대 환경의 인식 품질·실험 결과를 근거로 비교하며, 코드 최적화·모듈 분리·지연 측정은 별도로 고려합니다. 현재 구현은 로컬 Python 추론이며 최종 실행 플랫폼 선정과 성능 실증은 별도입니다.
 - MediaPipe Pose Landmarker·YOLO Pose·RTMPose의 우선 비교와 MoveNet 대안은 제안입니다. 실험 없이 채택 기술이나 성능 순위로 바꾸지 않습니다.
 
 ## 4. 자료와 검증 원칙
@@ -83,4 +83,8 @@
 - 실제 수행한 검증과 그 결과
 - 실행하지 못한 부분, 남은 미정 사항, 다음 작업
 
-실제 커밋·업로드가 성공한 경우에만 반영 완료라고 보고합니다. 요청 프롬프트 예시는 [AI 작업 요청 문서](docs/AI_TASK_PROMPT.md)에 있습니다.
+실제 커밋·업로드가 성공한 경우에만 반영 완료라고 보고합니다. 요청 프롬프트 예시는 [AI 작업 요청 문서](docs/development/AI_TASK_PROMPT.md)에 있습니다.
+
+## 문서 관리
+
+README는 소개·진입점, PROJECT_STATUS는 현재 지원·검증, ROADMAP은 다음 작업, DECISIONS는 합의·미정 항목을 관리합니다. 기능별 사용법은 guides, 기술 계약은 design/development, 연구는 research, 리뷰는 reviews, 과거 과정은 archive에 둡니다. 같은 변경 문단을 여러 문서에 반복해서 추가하지 않습니다.

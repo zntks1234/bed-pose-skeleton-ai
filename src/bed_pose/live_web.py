@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
+from .pose_display import display_people
 import json
 import hashlib
 from copy import deepcopy
@@ -567,7 +568,7 @@ class WebWorkspace:
         state['posture_diagnostics']=frame.get('posture_diagnostics')
         state['posture']=row['posture_assessment']['label'] or ('held' if row['posture_assessment']['classifier_id'] else 'not_implemented')
         session.view = {'sequence': session.sequence, 'frame_id': row['stream_frame_id'],
-                        'width': width, 'height': height, 'people': row['mapped_people'],
+                        'width': width, 'height': height, 'people': display_people(row, width, height),
                         'clock_id':row['clock_id'],'received_ns':row['received_ns'],
                         'target_tracking':row['target_tracking'],
                         'posture_assessment':row['posture_assessment'],

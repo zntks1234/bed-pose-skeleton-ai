@@ -2,6 +2,7 @@
 from array import array
 from collections import OrderedDict
 from pathlib import Path
+from .pose_display import display_people
 import re
 import threading
 
@@ -138,7 +139,7 @@ class OpenRecord:
         return {'record_id':self.meta['record_id'],'frame_id':frame_id,
                 'stream_frame_id':row['stream_frame_id'],'source_media':media,
                 'width':self.manifest['width'],'height':self.manifest['height'],
-                'image':image,'preview':preview,'people':row.get('mapped_people') or [],
+                'image':image,'preview':preview,'people':display_people(row,self.manifest['width'],self.manifest['height']),
                 'bed_region':region,'posture_assessment':row.get('posture_assessment'),
                 'silhouette_assessment':row.get('silhouette_assessment'),
                 'verification':'source_sha256_pts_pixels_geometry_verified',

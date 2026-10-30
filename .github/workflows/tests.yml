@@ -53,3 +53,4 @@ jobs:
           python tests/browser_clip_posture.py
           python tests/browser_camera_decoupling.py
           python tests/browser_multiview_posture.py
+          python tests/browser_multicamera_setup.py

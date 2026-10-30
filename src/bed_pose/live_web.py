@@ -153,6 +153,7 @@ class WebWorkspace:
             worker = LiveWorker(engine)
             session_id = uuid.uuid4().hex
             state = {'id': session_id, 'title': title, 'kind': kind, 'phase': 'opening',
+                     'camera_index':getattr(source,'index',None) if kind=='camera' else None,
                      'closed': False, 'recording': False, 'pending': None, 'region': None,
                      'paused': kind == 'video_file', 'frame_id': None, 'sequence': 0,
                      'candidate_count': None, 'recorded_frames': 0, 'elapsed': 0,

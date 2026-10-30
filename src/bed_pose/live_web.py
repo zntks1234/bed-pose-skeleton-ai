@@ -53,7 +53,8 @@ class Session:
 
 class WebWorkspace:
     def __init__(self, model=None, output_root=Path('recordings/live'), *, engine_factory=make_engine,
-                 clip_model=None, clip_device='auto', clip_state_min=.5, clip_direction_min=.5):
+                 clip_model=None, clip_device='auto', clip_state_min=.5, clip_direction_min=.5,
+                 clip_precision='fp32',clip_shared=True,clip_batch_size=1,clip_batch_wait_ms=2.):
         self.model = Path(model or 'checkpoints/pose_landmarker_full.task').resolve()
         self.output_root = Path(output_root).resolve()
         from .record_library import RecordLibrary
@@ -66,9 +67,15 @@ class WebWorkspace:
         from importlib.metadata import version,PackageNotFoundError
         if clip_device not in ('auto','cpu','cuda','mps'):raise ValueError('CLIP 실행 장치를 확인하세요.')
         policy(clip_state_min,clip_direction_min,'cpu' if clip_device=='auto' else clip_device)
+        from .clip_pool import validate_options
+        validate_options(clip_batch_size,clip_batch_wait_ms)
+        if not clip_shared and clip_batch_size!=1:raise ValueError('Batching requires shared CLIP execution')
+        if clip_precision not in ('fp32','amp-fp16'):raise ValueError('Invalid CLIP precision')
         self.clip_model=Path(clip_model or DEFAULT_DIRECTORY).expanduser().resolve()
         self.clip_options={'clip_model':self.clip_model,'clip_device':clip_device,
-                           'clip_state_min':clip_state_min,'clip_direction_min':clip_direction_min}
+                           'clip_state_min':clip_state_min,'clip_direction_min':clip_direction_min,
+                           'clip_precision':clip_precision,'clip_shared':clip_shared,
+                           'clip_batch_size':clip_batch_size,'clip_batch_wait_ms':clip_batch_wait_ms}
         try:
             read_assets(self.clip_model)
             for package in ('torch','transformers','Pillow'):version(package)
@@ -76,6 +83,8 @@ class WebWorkspace:
             self.clip_status={'available':True,'reason':None}
         except (ValueError,OSError,ImportError,PackageNotFoundError):
             self.clip_status={'available':False,'reason':'CLIP 준비 필요: python -m pip install -e ".[clip]" 후 python -m bed_pose clip-setup 실행'}
+        if self.clip_status['available']:
+            policy(clip_state_min,clip_direction_min,self.clip_options['clip_device'],precision=clip_precision)
         self.sessions, self.assets = {}, {}
         self.groups = {}
         self.target_tickets = {}
@@ -547,6 +556,7 @@ class WebWorkspace:
         state['processing_fps']=frame.get('processing_fps')
         state['processing_ms']=frame.get('processing_ms')
         state['image_runtime']=frame.get('image_runtime')
+        state['image_runtime_metrics']=frame.get('image_runtime_metrics')
         session.preview_worker.submit(self._preview_job(session))
 
     def _publish_preview(self,session,frame,result,error):
@@ -580,6 +590,7 @@ class WebWorkspace:
                         'body_state_input_preview':frame.get('body_state_input_preview'),
                         'body_state_ms':(int(row['body_state_finished_ns'])-int(row['body_state_started_ns']))/1e6 if 'body_state_finished_ns' in row else None,
                         'candidate_count': row['candidate_count'],
+                        'image_runtime_metrics':row.get('image_runtime_metrics'),
                         'inference_ms': (int(row['inference_finished_ns'])-int(row['inference_started_ns']))/1e6,
                         'read_ms': (int(row['received_ns'])-int(row['read_started_ns']))/1e6,
                         'media_seconds': int(media['relative_time_ns'])/1e9 if media else None,
@@ -619,6 +630,8 @@ class WebWorkspace:
             provider=session.worker.engine.body_state_provider
             if provider is not None:provider.input_preview_enabled=clip_preview
             result=session.view
+            if result is not None:
+                result=dict(result,age_ms=max(0,session.worker.engine.clock()-int(result['received_ns']))/1e6)
             if result is not None and not clip_preview:return dict(result,body_state_input_preview=None)
             if result is not None and callable(getattr(provider,'input_preview',None)):
                 return dict(result,body_state_input_preview=provider.input_preview(result['frame_id']))
@@ -812,9 +825,12 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
 
 def launch_browser(model=None, camera=None, output_root=Path('recordings/live'), demo=False,
                    video=None, *, port=0, open_browser=True,clip_model=None,clip_device='auto',
-                   clip_state_min=.5,clip_direction_min=.5):
+                   clip_state_min=.5,clip_direction_min=.5,clip_precision='fp32',clip_shared=True,
+                   clip_batch_size=1,clip_batch_wait_ms=2.):
     workspace = WebWorkspace(model, output_root,clip_model=clip_model,clip_device=clip_device,
-                             clip_state_min=clip_state_min,clip_direction_min=clip_direction_min)
+                             clip_state_min=clip_state_min,clip_direction_min=clip_direction_min,
+                             clip_precision=clip_precision,clip_shared=clip_shared,
+                             clip_batch_size=clip_batch_size,clip_batch_wait_ms=clip_batch_wait_ms)
     server = None
     try:
         server = WorkspaceHTTPServer(workspace, port)

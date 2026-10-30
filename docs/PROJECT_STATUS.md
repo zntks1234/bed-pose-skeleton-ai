@@ -2,7 +2,7 @@
 
 [프로젝트 홈](../README.md) · [문서 목차](README.md) · [다음 작업](../ROADMAP.md)
 
-**기준일: 2026-10-30 · 실제 침대 영상 평가 준비 단계**
+**기준일: 2026-10-31 · 실제 침대 영상 평가 준비 단계**
 
 이 문서는 현재 지원 범위와 검증 상태만 관리합니다. 날짜별 변경 과정은 [개발 이력](archive/IMPLEMENTATION_HISTORY.md)과 [정리 전 기록](https://github.com/zntks1234/bed-pose-skeleton-ai/blob/98b1529bfea26f4679f9b19d3744d5c4f122d0da/docs/archive/PROJECT_STATUS_BEFORE_REORGANIZATION.md)을 참조하세요.
 
@@ -84,3 +84,8 @@ MediaPipe 원본 33개 관절을 분석 화면·여러 화면·저장 영상 대
 ## 얼굴·발 보조 특징
 
 MediaPipe 원본의 얼굴 치우침·상대 폭과 각 발의 정강이 대비 각도·길이 특징을 계산·표시·기록하고 원본으로 재검사합니다. 결측/낮은 신뢰도/대상 보류를 구분하며 기존 자세 점수는 유지합니다. 실제 자세 구분 효과는 미검증입니다. [정의와 한계](design/AUTOMATIC_POSTURE.md#mediapipe-얼굴발-보조-특징--2026-10-30).
+
+
+## CLIP 실행 최적화 · 2026-10-31
+
+처리 구간·GPU allocator 메모리·분석 화면 전달 진단, 선택적 CUDA 혼합 정밀도, 참조 수 기반 모델 공유와 선택적 준비 요청 묶음 추론을 연결했습니다. 기본 FP32·묶음 크기 1과 CPU/Mac 경로를 유지합니다. 동일 이미지 FP32/후보 비교 명령을 추가했으며 실제 GPU/Mac 실행·다중 카메라 지연·자세 정확도 유지 검증은 남아 있습니다. 새 추론 엔진은 비교 근거 확보 후 검토합니다. [사용법과 한계](guides/LIVE_MEASUREMENT.md#clip-최적화--2026-10-31).

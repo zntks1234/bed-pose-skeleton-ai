@@ -291,6 +291,8 @@ class LiveEngine:
             row['body_state_started_ns']=str(self.clock())
             row['body_state_observation']=observe(row,rgb,selection,self.body_state_provider,self.body_state_profile)
             row['body_state_finished_ns']=str(self.clock())
+        from copy import deepcopy
+        row['image_runtime_metrics']=deepcopy(getattr(getattr(self.body_state_provider,'runtime',None),'last_metrics',None)) if (row.get('body_state_observation') or {}).get('decision') is not None else None
         row['posture_assessment']=assess_frame(row,*geometry,self.region,self.posture_classifier)
         from .native_pose_cues import assess as assess_native
         row['native_pose_cues']=assess_native(row,*geometry)
@@ -323,7 +325,8 @@ class LiveEngine:
                        'total':(finished-read_started)/1e6}
         return {'processing_fps':self.processing_rate.observe(self.clock()), 'rgb': rgb, 'row': row, 'silhouette_preview':silhouette_preview,
                 'body_state_input_preview':image_preview, 'processing_ms':processing_ms,
-                'image_runtime':getattr(getattr(self.body_state_provider,'runtime',None),'execution_info',None),
+                'image_runtime':deepcopy(getattr(getattr(self.body_state_provider,'runtime',None),'execution_info',None)),
+                'image_runtime_metrics':row.get('image_runtime_metrics'),
                 'posture_diagnostics':diagnostics, 'bed_region': self.region, 'bed_revision': self.region_revision,
                 'recorded_frames': self.recorder.manifest['recorded_frames'] if self.recorder else 0}
 

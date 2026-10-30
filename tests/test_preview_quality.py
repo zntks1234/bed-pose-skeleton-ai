@@ -88,7 +88,9 @@ class QualityWebTests(unittest.TestCase):
         self.assertGreater(after['sequence'],before['sequence'])
         self.assertEqual(after['preview']['jpeg_quality'],85)
         self.assertEqual(engine.next_frame_id,next_frame)
-        excluded=('image','preview','sequence')
+        # Frame age is a response-time diagnostic and advances while paused.
+        self.assertGreaterEqual(after['age_ms'],before['age_ms'])
+        excluded=('image','preview','sequence','age_ms')
         self.assertEqual({k:v for k,v in before.items() if k not in excluded},
                          {k:v for k,v in after.items() if k not in excluded})
         self.assertTrue(self.workspace.sessions[sid].state['paused'])

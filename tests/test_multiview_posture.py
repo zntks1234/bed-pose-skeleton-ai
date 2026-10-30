@@ -26,6 +26,10 @@ def evaluate(v,**kw):
 
 
 class MultiviewTests(unittest.TestCase):
+    def test_mixed_precision_views_are_not_fused(self):
+        v=views();v[1]['image_profile']['decision_policy']['dtype']='cuda_amp_fp16_float32_scores'
+        self.assertIn('fusion_provider_mismatch',evaluate(v)['reasons'])
+
     def test_direction_complements_held_local_prediction_without_bed_or_pixel_averaging(self):
         v=views();v[1]['assessment']['rule_features']['body_state']['details']['direction_scores']={'supine':.9,'side':.05,'prone':.05}
         a=evaluate(v);self.assertEqual(a['label'],'supine');self.assertEqual(a['fusion_evidence']['mode'],'two_view_fusion')

@@ -3,6 +3,8 @@
 No bed coordinates, goals, sensors, silhouette overlays or ground truth inputs.
 Relative softmax scores are not calibrated posture probabilities.
 """
+from contextlib import nullcontext
+import time
 import base64
 from copy import deepcopy
 from importlib.metadata import version, PackageNotFoundError
@@ -62,19 +64,22 @@ PROMPTS = {
 }
 
 
-def policy(state_min=.5, direction_min=.5, device='cpu'):
+def policy(state_min=.5, direction_min=.5, device='cpu', *, precision='fp32'):
     if (any(type(v) not in (int, float) or not math.isfinite(v) or not 0<=v<=1 for v in (state_min,direction_min))
             or device not in ('cpu','cuda','mps')):raise ValueError('CLIP 점수 기준 또는 실행 장치를 확인하세요.')
-    return {'version':PROVIDER, 'state_min':float(state_min), 'direction_min':float(direction_min),
+    if precision not in ('fp32','amp-fp16') or precision=='amp-fp16' and device!='cuda':
+        raise ValueError('amp-fp16은 CUDA에서만 사용할 수 있습니다.')
+    return {'version':PROVIDER if precision=='fp32' else 'clip-posture-0.3', 'state_min':float(state_min), 'direction_min':float(direction_min),
             'crop_quality':deepcopy(CROP_POLICY), 'prompts':deepcopy(PROMPTS), 'score_policy':'group_softmax_uncalibrated_no_runner_up_margin',
             'text_pooling':'mean_normalized_prompt_embeddings_then_normalize', 'device':device,
-            'dtype':'float32', 'threshold_validation':'unvalidated_initial_values', 'tie_tolerance':1e-8,
+            'dtype':'float32' if precision=='fp32' else 'cuda_amp_fp16_float32_scores', 'threshold_validation':'unvalidated_initial_values', 'tie_tolerance':1e-8,
             'preprocess':'quality_joint_crop_10pct_then_aspect_preserving_square_pad_224_clip_mean_v2'}
 
 
 def validate_policy(value):
     if not isinstance(value,dict):raise ValueError('Invalid CLIP decision policy')
-    base = policy(value.get('state_min'), value.get('direction_min'), value.get('device'))
+    base = policy(value.get('state_min'), value.get('direction_min'), value.get('device'),
+                  precision='amp-fp16' if value.get('version')=='clip-posture-0.3' else 'fp32')
     if value.get('version')==LEGACY_PROVIDER:
         base.pop('crop_quality')
         base.update(version=LEGACY_PROVIDER,preprocess='selected_joint_crop_10pct_then_aspect_preserving_square_pad_224_clip_mean_v1')
@@ -137,15 +142,19 @@ def square_image(rgb):
 
 class ClipRuntime:
     """Real Transformers CLIP graph; tiny random graphs can test this boundary."""
-    def __init__(self,directory,device):
+    def __init__(self,directory,device,precision='fp32'):
         import torch
         from transformers import CLIPModel, CLIPProcessor
         if device=='cuda' and not torch.cuda.is_available():raise ValueError('CUDA를 사용할 수 없습니다. CPU를 선택하세요.')
         if device=='mps' and not getattr(getattr(torch,'backends',None),'mps',None):raise ValueError('MPS를 지원하는 PyTorch가 필요합니다.')
         if device=='mps' and not torch.backends.mps.is_available():raise ValueError('MPS를 사용할 수 없습니다. CPU를 선택하세요.')
+        policy(device=device,precision=precision)
+        self.precision=precision;self.last_metrics=None;self._pinned=None
+        self._resource_at=0.;self._resources={}
         self.torch=torch;self.device=device
         threads=configure_cpu_threads(torch) if device=='cpu' else torch.get_num_threads()
-        self.execution_info={'device':device,'torch_intraop_threads':threads}
+        self.execution_info={'device':device,'torch_intraop_threads':threads,'precision':precision,
+                             'score_dtype':'float32','weights_dtype':'float32','runtime_backend':'transformers'}
         self.model=CLIPModel.from_pretrained(directory,local_files_only=True,weights_only=True).float().to(device).eval()
         self.processor=CLIPProcessor.from_pretrained(directory,local_files_only=True,use_fast=False)
         texts=[p for name in STATE_NAMES+DIRECTION_NAMES for p in PROMPTS[name]]
@@ -164,23 +173,67 @@ class ClipRuntime:
         self.model.text_projection=None
         self.execution_info['text_encoder_released']=True
 
-    def similarities(self,image):
+    def resources(self):
+        # Process-wide allocator counters, not memory attributable to one camera.
+        now=time.monotonic()
+        if now-self._resource_at>=1:
+            t=self.torch
+            try:
+                if self.device=='cuda':
+                    self._resources={'scope':'process_cuda_allocator','allocated_bytes':t.cuda.memory_allocated(),
+                        'reserved_bytes':t.cuda.memory_reserved(),'peak_allocated_bytes':t.cuda.max_memory_allocated()}
+                elif self.device=='mps' and hasattr(t.mps,'current_allocated_memory'):
+                    self._resources={'scope':'process_mps_allocator','allocated_bytes':t.mps.current_allocated_memory()}
+                else:self._resources={'scope':'not_available','allocated_bytes':None}
+            except Exception as exc:
+                self._resources={'scope':'not_available','allocated_bytes':None,'error':type(exc).__name__}
+            self._resource_at=now
+        return dict(self._resources)
+
+    def similarities_many(self,images):
+        if not images:raise ValueError('CLIP batch must not be empty')
         torch=self.torch
-        pixels=self.processor.image_processor(images=image,do_resize=False,do_center_crop=False,return_tensors='pt')['pixel_values']
+        started=time.perf_counter_ns()
+        pixels=self.processor.image_processor(images=images,do_resize=False,do_center_crop=False,return_tensors='pt')['pixel_values']
+        prepared=time.perf_counter_ns()
         with torch.inference_mode():
-            feature=self.model.get_image_features(pixel_values=pixels.to(self.device))
+            if self.device=='cuda':
+                if self._pinned is None or self._pinned.shape!=pixels.shape:
+                    self._pinned=torch.empty(pixels.shape,dtype=pixels.dtype,pin_memory=True)
+                self._pinned.copy_(pixels)
+                device_pixels=self._pinned.to(self.device,non_blocking=True)
+            else:device_pixels=pixels.to(self.device)
+            transferred=time.perf_counter_ns()
+            context=torch.autocast(device_type='cuda',dtype=torch.float16) if self.precision=='amp-fp16' else nullcontext()
+            with context:
+                feature=self.model.get_image_features(pixel_values=device_pixels)
+            # Normalization, similarities and all decisions remain float32.
+            feature=feature.float()
             feature=feature/feature.norm(dim=-1,keepdim=True)
-            values=(feature@self.text_features.T)[0].cpu().tolist()
-        return dict(zip(STATE_NAMES+DIRECTION_NAMES,values)),self.scale
+            values=(feature@self.text_features.T).cpu().tolist()
+        finished=time.perf_counter_ns()
+        self.last_metrics={'scope':'host_wall_batch','batch_size':len(images),
+            'preprocess_ms':(prepared-started)/1e6,'transfer_enqueue_ms':(transferred-prepared)/1e6,
+            'inference_scores_readback_ms':(finished-transferred)/1e6,'total_ms':(finished-started)/1e6,
+            'resources':self.resources()}
+        return [(dict(zip(STATE_NAMES+DIRECTION_NAMES,value)),self.scale) for value in values]
+
+    def similarities(self,image):
+        return self.similarities_many([image])[0]
 
     def close(self):
-        self.model=self.processor=self.text_features=None
+        self.model=self.processor=self.text_features=self._pinned=None
 
 
 class ClipBodyStateProvider:
-    def __init__(self,directory,*,device='cpu',state_min=.5,direction_min=.5):
+    def __init__(self,directory,*,device='cpu',state_min=.5,direction_min=.5,
+                 precision='fp32',shared=False,batch_size=1,batch_wait_ms=2.):
         self.directory=Path(directory).expanduser().resolve();self.assets=read_assets(self.directory)
-        configuration=policy(state_min,direction_min,device)
+        configuration=policy(state_min,direction_min,device,precision=precision)
+        from .clip_pool import validate_options
+        validate_options(batch_size,batch_wait_ms)
+        if type(shared) is not bool or not shared and batch_size!=1:raise ValueError('Invalid shared CLIP configuration')
+        self.precision=precision;self.shared=shared;self.batch_size=batch_size;self.batch_wait_ms=batch_wait_ms
         versions={}
         for package in ('torch','transformers','Pillow'):
             try:versions[package]=version(package)
@@ -197,7 +250,18 @@ class ClipBodyStateProvider:
         if read_assets(self.directory,verify=True)!=self.assets:raise ValueError('CLIP 모델 구성이 변경됐습니다.')
         if any(v is None for v in self.profile['decision_policy']['runtime_versions'].values()):
             raise ValueError('CLIP 설치 필요: python -m pip install -e ".[clip]"')
-        try:self.runtime=ClipRuntime(self.directory,self.profile['decision_policy']['device'])
+        try:
+            device=self.profile['decision_policy']['device']
+            def create():
+                return ClipRuntime(self.directory,device) if self.precision=='fp32' else ClipRuntime(self.directory,device,self.precision)
+            if self.shared:
+                from .clip_pool import acquire
+                from .io_utils import object_hash
+                key=(str(self.directory),object_hash(self.assets),device,self.precision,self.batch_size,self.batch_wait_ms)
+                self.runtime=acquire(key,create,batch_size=self.batch_size,batch_wait_ms=self.batch_wait_ms)
+            else:
+                if self.batch_size!=1:raise ValueError('Batching requires shared CLIP execution')
+                self.runtime=create()
         except ImportError as exc:raise ValueError('CLIP 설치 필요: python -m pip install -e ".[clip]"') from exc
 
     def estimate(self,observation):

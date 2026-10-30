@@ -22,7 +22,7 @@ def compatible(profiles):
     if any(not isinstance(p.get('decision_policy'),dict) or not isinstance(p.get('model_sha256'),str) or len(p['model_sha256'])!=64 for p in profiles):return False
     if any(type(p['decision_policy'].get(k)) not in (int,float) or not math.isfinite(p['decision_policy'][k]) or not 0<=p['decision_policy'][k]<=1 for p in profiles for k in ('state_min','direction_min')):return False
     return all(a.get(k)==b.get(k) for k in ('model_id','model_sha256','preprocess_id')) and all(
-        a['decision_policy'].get(k)==b['decision_policy'].get(k) for k in ('prompts','score_policy','text_pooling'))
+        a['decision_policy'].get(k)==b['decision_policy'].get(k) for k in ('prompts','score_policy','text_pooling','dtype'))
 
 
 def scores_valid(scores,names):

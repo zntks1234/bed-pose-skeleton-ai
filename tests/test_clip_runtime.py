@@ -44,6 +44,21 @@ class ClipRuntimeTests(unittest.TestCase):
                 expected=(expected@runtime.text_features.T)[0].tolist()
             actual,_=runtime.similarities(square_image(np.zeros((96,160,3),np.uint8)))
             self.assertEqual(list(actual.values()),expected)
+            batch=runtime.similarities_many([square_image(np.zeros((96,160,3),np.uint8))]*2)
+            for values,_ in batch:
+                np.testing.assert_allclose(list(values.values()),list(actual.values()),rtol=1e-6,atol=1e-6)
+            self.assertEqual(runtime.last_metrics['batch_size'],2)
+            self.assertGreaterEqual(runtime.last_metrics['preprocess_ms'],0)
+            self.assertEqual(runtime.execution_info['score_dtype'],'float32')
+            from bed_pose.clip_posture import policy,validate_policy
+            with self.assertRaises(ValueError):ClipRuntime(path,'cpu','amp-fp16')
+            if torch.cuda.is_available():
+                gpu=ClipRuntime(path,'cuda','amp-fp16')
+                try:
+                    gpu_values,_=gpu.similarities(square_image(np.zeros((96,160,3),np.uint8)))
+                    np.testing.assert_allclose(list(gpu_values.values()),list(actual.values()),rtol=2e-3,atol=2e-3)
+                    self.assertEqual(gpu.last_metrics['resources']['scope'],'process_cuda_allocator')
+                finally:gpu.close()
             del reference
             if torch.backends.mps.is_available():
                 apple=ClipRuntime(path,'mps')
@@ -62,6 +77,23 @@ class ClipRuntimeTests(unittest.TestCase):
                 self.assertEqual(text.call_count,0);self.assertEqual(image.call_count,2)
                 self.assertTrue(all(p.grad is None for p in runtime.model.parameters()))
             runtime.close()
+            from bed_pose.clip_pool import acquire
+            from concurrent.futures import ThreadPoolExecutor
+            import threading
+            a=acquire(('tiny-local-graph',),lambda:ClipRuntime(path,'cpu'),batch_size=2,batch_wait_ms=10)
+            b=acquire(('tiny-local-graph',),lambda:self.fail('duplicate model'),batch_size=2,batch_wait_ms=10)
+            barrier=threading.Barrier(2)
+            def shared_call(lease):
+                barrier.wait()
+                return lease.similarities(square_image(np.zeros((96,160,3),np.uint8)))
+            try:
+                with ThreadPoolExecutor(2) as executor:
+                    jobs=[executor.submit(shared_call,lease) for lease in (a,b)]
+                    for job in jobs:
+                        values,_=job.result(timeout=10)
+                        np.testing.assert_allclose(list(values.values()),list(actual.values()),rtol=1e-6,atol=1e-6)
+                self.assertIs(a.entry,b.entry)
+            finally:a.close();b.close()
 
 
 if __name__=='__main__':unittest.main()

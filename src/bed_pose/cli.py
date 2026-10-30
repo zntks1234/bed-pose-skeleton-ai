@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 from jsonschema import ValidationError
 from .contracts import IntegrityError, SourceError
-from .io_utils import file_hash, load_json
+from .io_utils import atomic_json, file_hash, load_json
 from .pose.fake import FakeOptions
 from .recording import verify_records
 from .runner import run_benchmark, validate_run
@@ -73,8 +73,20 @@ def main(argv=None):
     live.add_argument('--output-root', type=Path, default=Path('recordings/live'))
     live.add_argument('--clip-model',type=Path,help='Prepared CLIP folder; defaults to checkpoints/clip-vit-base-patch16')
     live.add_argument('--clip-device',choices=('auto','cpu','cuda','mps'),default='auto',help='auto: CUDA, then Apple MPS when available, otherwise CPU')
+    live.add_argument('--clip-precision',choices=('fp32','amp-fp16'),default='fp32',help='Optional CUDA mixed precision; scores stay float32')
+    live.add_argument('--no-clip-share',action='store_true',help='Use separate CLIP models for comparison')
+    live.add_argument('--clip-batch-size',type=int,choices=range(1,5),default=1,help='Optional shared runtime batching, 1 disables batching')
+    live.add_argument('--clip-batch-wait-ms',type=float,default=2.,help='Maximum ready-request batch collection wait, 0..10 ms')
     live.add_argument('--clip-state-min',type=float,default=.5,help='Unvalidated initial relative state score threshold')
     live.add_argument('--clip-direction-min',type=float,default=.5,help='Unvalidated initial relative lying-direction threshold')
+    clip_bench=commands.add_parser('clip-benchmark',help='Compare FP32 and candidate on identical local images; not posture accuracy')
+    clip_bench.add_argument('--model',type=Path,default=Path('checkpoints/clip-vit-base-patch16'))
+    clip_bench.add_argument('--images',type=Path,nargs='+',required=True)
+    clip_bench.add_argument('--device',choices=('auto','cpu','cuda','mps'),default='auto')
+    clip_bench.add_argument('--precision',choices=('fp32','amp-fp16'),default='fp32')
+    clip_bench.add_argument('--batch-size',type=int,choices=range(1,5),default=1)
+    clip_bench.add_argument('--iterations',type=int,default=20)
+    clip_bench.add_argument('--output',type=Path,required=True)
     clip_setup=commands.add_parser('clip-setup',help='Explicitly download or import CLIP ViT-B/16 and record asset hashes')
     clip_setup.add_argument('--output',type=Path,default=Path('checkpoints/clip-vit-base-patch16'))
     clip_setup.add_argument('--source',type=Path,help='Offline Hugging Face-format folder instead of downloading')
@@ -114,13 +126,23 @@ def main(argv=None):
             from .fusion_inputs import inspect_group
             print(json.dumps(inspect_group(args.run),ensure_ascii=False))
             return 0
+        if args.command == 'clip-benchmark':
+            from .clip_benchmark import run
+            if args.output.exists():raise ValueError('Choose a new benchmark output path')
+            report=run(args.model,args.images,device=args.device,precision=args.precision,
+                       batch_size=args.batch_size,iterations=args.iterations)
+            atomic_json(args.output,report)
+            print(json.dumps(report,ensure_ascii=False))
+            return 0
         if args.command == 'live':
             if args.camera is not None and args.camera < 0:
                 raise ValueError('카메라 번호를 확인하세요. 합성 모드는 카메라 번호를 사용하지 않습니다.')
             from .live_gui import launch_live
             return launch_live(args.model, args.camera, args.output_root, args.demo, args.video,
                                clip_model=args.clip_model,clip_device=args.clip_device,
-                               clip_state_min=args.clip_state_min,clip_direction_min=args.clip_direction_min)
+                               clip_state_min=args.clip_state_min,clip_direction_min=args.clip_direction_min,
+                               clip_precision=args.clip_precision,clip_shared=not args.no_clip_share,
+                               clip_batch_size=args.clip_batch_size,clip_batch_wait_ms=args.clip_batch_wait_ms)
         if args.command == 'live-inspect':
             from .live_recording import verify_live
             print(json.dumps(verify_live(args.run), ensure_ascii=False))

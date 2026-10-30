@@ -50,11 +50,23 @@ def main():
             page.locator('#live-picture').wait_for(state='visible')
             page.wait_for_function("()=>document.getElementById('live-picture').naturalWidth===640")
             assert '관절 오버레이 없음' in page.locator('#live-age').inner_text()
+            page.locator('#live-bed-overlay').wait_for(state='visible')
+            page.wait_for_function("()=>{const c=document.getElementById('live-bed-overlay'),a=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let blue=0,green=0;for(let i=0;i<a.length;i+=4){if(a[i+2]>150&&a[i+2]>a[i]*1.5&&a[i+2]>a[i+1]*1.2)blue++;if(a[i+1]>150&&a[i+1]>a[i]*1.4&&a[i+1]>a[i+2]*1.1)green++}return blue>10&&green===0}")
+            assert page.evaluate("()=>{const g=rawGeometry;rawGeometry={...g,source_width:g.source_width+1};drawLiveBed();const hidden=document.getElementById('live-bed-overlay').hidden;rawGeometry=g;drawLiveBed();return hidden}")
+            for width in (390,1920):
+                page.set_viewport_size({'width':width,'height':900})
+                page.wait_for_function("()=>!document.getElementById('live-bed-overlay').hidden")
+            page.set_viewport_size({'width':1280,'height':900})
+
             first=c.workspace.raw_view(sid)['capture_frame_id']
             page.wait_for_function("()=>document.getElementById('live-picture').complete")
             c.wait(lambda x:(x['sessions'][0].get('frame_id') or 0)>1)
             c.wait(lambda _:c.workspace.raw_view(sid)['capture_frame_id']>first)
+            _,captured=c.request('/api/view/'+sid)
+            assert c.control(sid,'region',box=None,selected_frame_id=captured['frame_id'])[0]==200
+            page.wait_for_function("()=>document.getElementById('live-bed-overlay').hidden")
             page.locator('#analysis-mode').click();assert page.locator('#live-picture').is_hidden()
+            assert page.locator('#live-bed-overlay').is_hidden()
             assert page.locator('#overlay').is_enabled()
             assert not errors,errors
             browser.close()

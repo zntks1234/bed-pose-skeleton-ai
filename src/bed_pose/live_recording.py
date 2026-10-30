@@ -160,6 +160,10 @@ def _verify(directory, manifest, hashes=True):
     previous_id, previous_time, previous_model_ms = -1, 0, None
     previous_media_id, media_origin = None, None
     previous_capture_id=None
+    latest_capture=manifest['source_profile'].get('capture_policy')=='latest_camera_frame_v1'
+    if latest_capture and manifest['source_profile']['kind']!='camera':
+        raise IntegrityError('Latest capture timing requires a camera source')
+    previous_fields={}
     with (directory/'live_frames.jsonl').open(encoding='utf-8') as stream:
         for index, line in enumerate(stream):
             row = strict_loads(line)
@@ -182,12 +186,22 @@ def _verify(directory, manifest, hashes=True):
                     expected_revision = change_revision
             if row['bed_region_revision'] != expected_revision:
                 raise IntegrityError('Live frame references the wrong bed revision')
+            previous_record_time=previous_time
+            if latest_capture:previous_time=0  # Capture may overlap the preceding analysis.
             for field in ('read_started_ns', 'received_ns', 'inference_started_ns', 'inference_finished_ns', 'mapping_finished_ns', 'record_started_ns'):
                 value = row[field]
                 if value is not None:
                     value = unsigned_ns(value)
                     if value < previous_time:
                         raise IntegrityError('Live frame timing is not monotonic')
+                    if latest_capture:
+                        if value < previous_fields.get(field,0):
+                            raise IntegrityError('Live stage timing moved backwards')
+                        if field=='read_started_ns' and value < previous_fields.get('received_ns',0):
+                            raise IntegrityError('Camera read overlaps a preceding camera read')
+                        if field=='inference_started_ns' and value < previous_record_time:
+                            raise IntegrityError('Sequential analyses overlap')
+                        previous_fields[field]=value
                     previous_time = value
             unsigned_ns(row['received_utc_ns'])
             if row['camera_exposure_ns'] is not None or row['timestamp_source'] != 'received_after_read':

@@ -74,3 +74,46 @@ class CameraDecouplingTests(unittest.TestCase):
 
             finally:
                 s.stop.set();c.requests.release();e.close()
+
+    def test_overlapping_capture_finalizes_and_invalid_timing_is_still_rejected(self):
+        import itertools
+        import json
+        from pathlib import Path
+        from bed_pose.live_recording import verify_live,_verify
+        from bed_pose.contracts import IntegrityError
+        c=Camera();s=LatestCameraSource(c)
+        class Adapter(FakeAdapter):
+            pump=False
+            def open(self,settings):return dict(super().open(settings),execution_kind='model_inference')
+            def estimate(self,value):
+                if self.pump:
+                    self.pump=False
+                    expected=s.sequence+1;c.requests.release()
+                    with s.condition:
+                        if not s.condition.wait_for(lambda:s.sequence>=expected,timeout=1):
+                            raise RuntimeError('Concurrent capture did not complete')
+                return super().estimate(value)
+        adapter=Adapter();ticks=itertools.count(0,10_000_000)
+        with tempfile.TemporaryDirectory() as d:
+            e=LiveEngine(s,adapter,{'execution_mode':'ordered_sequence'},d,clock=lambda:next(ticks))
+            e.open()
+            try:
+                c.requests.release();e.step()
+                path=e.start_measurement()
+                adapter.pump=True;c.requests.release();e.step();e.step()
+                e.stop_measurement()
+                self.assertEqual(verify_live(path)['integrity'],'verified')
+                path=Path(path);m=json.loads((path/'manifest.json').read_text(encoding='utf-8'))
+                file=path/'live_frames.jsonl';original=file.read_text(encoding='utf-8');rows=[json.loads(l) for l in original.splitlines()]
+                self.assertLess(int(rows[1]['received_ns']),int(rows[0]['record_started_ns']))
+                changes=[('read_started_ns',int(rows[1]['received_ns'])+1),
+                         ('inference_started_ns',int(rows[1]['received_ns'])),
+                         ('received_ns',int(rows[0]['received_ns'])-1)]
+                for field,value in changes:
+                    mutated=json.loads(json.dumps(rows));mutated[1][field]=str(value)
+                    file.write_text(''.join(json.dumps(x)+'\n' for x in mutated),encoding='utf-8')
+                    with self.assertRaises(IntegrityError):_verify(path,m,hashes=False)
+                file.write_text(original,encoding='utf-8')
+                self.assertEqual(verify_live(path)['integrity'],'verified')
+            finally:
+                s.stop.set();c.requests.release();e.close()

@@ -151,6 +151,7 @@ class LiveEngine:
         from .posture import PROFILE
         from .posture_evidence import PROFILE as EVIDENCE_PROFILE
         from .silhouette import PROFILE as SILHOUETTE_PROFILE
+        from .native_pose_cues import PROFILE as NATIVE_PROFILE
         width, height = self.geometry
         measurement_id = uuid.uuid4().hex
         manifest = {'measurement_id': measurement_id, 'stream_id': self.stream_id,
@@ -175,6 +176,7 @@ class LiveEngine:
                     'posture_assessment_profile':dict(PROFILE),
                     'posture_evidence_profile':dict(EVIDENCE_PROFILE),
                     'silhouette_profile':dict(SILHOUETTE_PROFILE),
+                    'native_pose_cues_profile':dict(NATIVE_PROFILE),
                     'reference_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version']=='reference-posture-0.1' else None,
                     'automatic_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version'].startswith('automatic-posture') else None,
                     'target_policy': 'none', 'posture_classifier': self.posture_classifier.model_id if self.posture_classifier else 'not_implemented', 'event_analyzer': 'not_implemented'}
@@ -290,6 +292,8 @@ class LiveEngine:
             row['body_state_observation']=observe(row,rgb,selection,self.body_state_provider,self.body_state_profile)
             row['body_state_finished_ns']=str(self.clock())
         row['posture_assessment']=assess_frame(row,*geometry,self.region,self.posture_classifier)
+        from .native_pose_cues import assess as assess_native
+        row['native_pose_cues']=assess_native(row,*geometry)
         from .posture_evidence import compare_frame
         row['posture_evidence']=compare_frame(row,*geometry,row['posture_assessment'])
         from .silhouette import assess as assess_silhouette

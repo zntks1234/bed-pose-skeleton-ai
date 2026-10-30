@@ -97,6 +97,9 @@ def _verify(directory, manifest, hashes=True):
     if 'posture_evidence_profile' in manifest:
         from .posture_evidence import PROFILE as EVIDENCE_PROFILE
         if manifest['posture_evidence_profile']!=EVIDENCE_PROFILE:raise IntegrityError('Unsupported posture evidence profile')
+    if 'native_pose_cues_profile' in manifest:
+        from .native_pose_cues import PROFILE as NATIVE_PROFILE
+        if manifest['native_pose_cues_profile']!=NATIVE_PROFILE:raise IntegrityError('Unsupported native pose cues profile')
     if 'silhouette_profile' in manifest:
         from .silhouette import PROFILE as SILHOUETTE_PROFILE
         if manifest['silhouette_profile']!=SILHOUETTE_PROFILE:raise IntegrityError('Unsupported silhouette profile')
@@ -256,6 +259,13 @@ def _verify(directory, manifest, hashes=True):
                 from .posture import assess_frame
                 if not equivalent(row['posture_assessment'],assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']],reference_model)):
                     raise IntegrityError('Posture assessment differs from source frame')
+            if 'native_pose_cues_profile' in manifest or 'native_pose_cues' in row:
+                from .native_pose_cues import PROFILE as NATIVE_PROFILE, assess as assess_native
+                if 'posture_assessment' not in row:raise IntegrityError('Missing posture assessment for native cues')
+                if manifest.get('native_pose_cues_profile') != NATIVE_PROFILE or 'native_pose_cues' not in row:
+                    raise IntegrityError('Missing or unsupported native pose cues profile')
+                if not equivalent(row['native_pose_cues'],assess_native(row,manifest['width'],manifest['height'])):
+                    raise IntegrityError('Native pose cues differ from source frame')
             if 'posture_evidence_profile' in manifest or 'posture_evidence' in row:
                 from .posture_evidence import compare_frame
                 if 'posture_evidence_profile' not in manifest or 'posture_evidence' not in row:

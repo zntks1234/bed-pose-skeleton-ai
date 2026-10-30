@@ -564,6 +564,7 @@ class WebWorkspace:
         state['target_tracking']=row['target_tracking']
         state['posture_assessment']=row['posture_assessment']
         state['posture_evidence']=row.get('posture_evidence')
+        state['native_pose_cues']=row.get('native_pose_cues')
         state['silhouette_assessment']=row.get('silhouette_assessment')
         state['posture_diagnostics']=frame.get('posture_diagnostics')
         state['posture']=row['posture_assessment']['label'] or ('held' if row['posture_assessment']['classifier_id'] else 'not_implemented')
@@ -573,6 +574,7 @@ class WebWorkspace:
                         'target_tracking':row['target_tracking'],
                         'posture_assessment':row['posture_assessment'],
                         'posture_evidence':row.get('posture_evidence'),
+                        'native_pose_cues':row.get('native_pose_cues'),
                         'silhouette_assessment':row.get('silhouette_assessment'),
                         'silhouette_preview':frame.get('silhouette_preview'),
                         'body_state_input_preview':frame.get('body_state_input_preview'),

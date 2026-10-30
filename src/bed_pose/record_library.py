@@ -140,6 +140,7 @@ class OpenRecord:
                 'stream_frame_id':row['stream_frame_id'],'source_media':media,
                 'width':self.manifest['width'],'height':self.manifest['height'],
                 'image':image,'preview':preview,'people':display_people(row,self.manifest['width'],self.manifest['height']),
+                'native_pose_cues':row.get('native_pose_cues'),
                 'bed_region':region,'posture_assessment':row.get('posture_assessment'),
                 'silhouette_assessment':row.get('silhouette_assessment'),
                 'verification':'source_sha256_pts_pixels_geometry_verified',

@@ -8,7 +8,36 @@ from copy import deepcopy
 from importlib.metadata import version, PackageNotFoundError
 from io import BytesIO
 import math
+import os
+import threading
 from pathlib import Path
+
+_THREAD_LOCK = threading.Lock()
+_CPU_THREADS = None
+
+def configure_cpu_threads(torch):
+    """Set the process-wide intra-op budget once, before any CLIP graph runs."""
+    global _CPU_THREADS
+    with _THREAD_LOCK:
+        if _CPU_THREADS is None:
+            requested = os.environ.get("BEDPOSE_CLIP_CPU_THREADS")
+            if requested is not None:
+                if not requested.isascii() or not requested.isdecimal() or not 1 <= int(requested) <= 64:
+                    raise ValueError("BEDPOSE_CLIP_CPU_THREADS는 1~64 정수여야 합니다.")
+                count = int(requested)
+            else:
+                count = min(4, torch.get_num_threads(), os.cpu_count() or 1)
+            torch.set_num_threads(count)
+            _CPU_THREADS = count
+        return _CPU_THREADS
+
+
+def resolve_device(device):
+    if device not in ("auto", "cpu", "cuda"):
+        raise ValueError("CLIP 실행 장치를 확인하세요.")
+    if device != "auto":return device
+    import torch
+    return "cuda" if torch.cuda.is_available() else "cpu"
 
 import numpy as np
 
@@ -110,6 +139,8 @@ class ClipRuntime:
         from transformers import CLIPModel, CLIPProcessor
         if device=='cuda' and not torch.cuda.is_available():raise ValueError('CUDA를 사용할 수 없습니다. CPU를 선택하세요.')
         self.torch=torch;self.device=device
+        threads=configure_cpu_threads(torch) if device=='cpu' else torch.get_num_threads()
+        self.execution_info={'device':device,'torch_intraop_threads':threads}
         self.model=CLIPModel.from_pretrained(directory,local_files_only=True,weights_only=True).float().to(device).eval()
         self.processor=CLIPProcessor.from_pretrained(directory,local_files_only=True,use_fast=False)
         texts=[p for name in STATE_NAMES+DIRECTION_NAMES for p in PROMPTS[name]]

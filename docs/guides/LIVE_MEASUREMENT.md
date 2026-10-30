@@ -113,3 +113,23 @@ MediaPipe 모델 파일 `checkpoints/pose_landmarker_full.task`가 없으면 입
 CLIP 입력 부족은 어깨/골반/하체 관측 부족을 표시합니다. 입력 검사는 전신 정확도의 인증이 아니며 부분 가림에서 보류될 수 있습니다. **이미지 분석 오류**는 불확실한 자세와 달리 모델 실행 실패입니다. 관절 분석과 기록은 계속되며 오류 코드/예외 종류를 남깁니다. 기록의 processing_status/ok는 관절 처리 상태이므로 CLIP 성공률로 해석하지 마세요.
 
 대상 지정 후 느린 처리로 관측 간격이 벌어져도, 측정된 직전 처리 시간과 공간 대응 조건을 충족하면 잠정 추적을 유지합니다. 화면의 **처리 지연** 표시는 동일인 검증이나 실시간 성능 보장이 아닙니다. 사람 소실·후보 혼동·입력 공백은 여전히 재지정이 필요합니다. 파일 입력은 영상 PTS 기준을 유지합니다.
+
+
+## 처리 속도 확인과 실행 장치
+
+기본 실행은 준비된 CLIP에 대해 설치된 PyTorch가 CUDA를 지원하면 GPU, 그렇지 않으면 CPU를 선택합니다. MediaPipe는 기존 CPU 실행을 유지합니다. NVIDIA GPU가 있어도 CPU 전용 PyTorch 설치에서는 CPU로 동작합니다. GPU 로딩 실패를 성공이나 CPU 전환으로 숨기지 않습니다.
+
+CPU CLIP의 PyTorch 연산 스레드는 최초 로딩 때 기본 최대 4개(기존 설정·논리 CPU 수가 더 작으면 그 수)로 제한합니다. 여러 입력·MediaPipe·미리보기와의 CPU 경쟁을 줄이기 위한 초기 설정이며, 모든 PC에서 가장 빠른 값은 아닙니다. 프로세스 공통 설정이므로 변경 후 작업실을 다시 실행합니다.
+
+```powershell
+# CPU로 고정하고 2개 연산 스레드로 비교할 때
+$env:BEDPOSE_CLIP_CPU_THREADS = "2"
+& .\.venv\Scripts\python.exe -m bed_pose live --clip-device cpu
+# 기본 자동 설정으로 되돌릴 때
+Remove-Item Env:BEDPOSE_CLIP_CPU_THREADS -ErrorAction SilentlyContinue
+& .\.venv\Scripts\python.exe -m bed_pose live
+```
+
+AI 자세 판정 카드의 `최근 처리`에서 읽기·관절·이미지·전체 시간을 ms로 확인합니다. FPS는 최근 처리율, 시간은 마지막 처리 프레임 기준이며 카메라 노출 FPS·브라우저 표시 FPS와 다릅니다. 이미지 시간에는 입력 품질 검사와 표시용 입력 이미지 준비도 포함됩니다. 전체 시간은 읽기부터 기록/진단까지이며 별도 브라우저 인코딩·전송 시간은 제외합니다. 측정 메타데이터의 `image_runtime`은 실제 CLIP 장치·스레드 설정을 보존합니다.
+
+이번 최적화는 프레임 생략, 이전 자세 재사용, 입력 해상도 축소, 모델·점수 기준 변경을 하지 않습니다. 실제 장비의 처리율 개선과 CUDA/CPU 결과의 수치 차이는 별도 확인해야 합니다.

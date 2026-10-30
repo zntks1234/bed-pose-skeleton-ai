@@ -42,7 +42,7 @@ class Session:
 
 class WebWorkspace:
     def __init__(self, model=None, output_root=Path('recordings/live'), *, engine_factory=make_engine,
-                 clip_model=None, clip_device='cpu', clip_state_min=.5, clip_direction_min=.5):
+                 clip_model=None, clip_device='auto', clip_state_min=.5, clip_direction_min=.5):
         self.model = Path(model or 'checkpoints/pose_landmarker_full.task').resolve()
         self.output_root = Path(output_root).resolve()
         from .record_library import RecordLibrary
@@ -51,17 +51,19 @@ class WebWorkspace:
         self.temp_root = Path(self.temp.name)
         self.factory = engine_factory
         from .clip_assets import DEFAULT_DIRECTORY,read_assets
-        from .clip_posture import policy
+        from .clip_posture import policy,resolve_device
         from importlib.metadata import version,PackageNotFoundError
-        policy(clip_state_min,clip_direction_min,clip_device)
+        if clip_device not in ('auto','cpu','cuda'):raise ValueError('CLIP 실행 장치를 확인하세요.')
+        policy(clip_state_min,clip_direction_min,'cpu' if clip_device=='auto' else clip_device)
         self.clip_model=Path(clip_model or DEFAULT_DIRECTORY).expanduser().resolve()
         self.clip_options={'clip_model':self.clip_model,'clip_device':clip_device,
                            'clip_state_min':clip_state_min,'clip_direction_min':clip_direction_min}
         try:
             read_assets(self.clip_model)
             for package in ('torch','transformers','Pillow'):version(package)
+            self.clip_options['clip_device']=resolve_device(clip_device)
             self.clip_status={'available':True,'reason':None}
-        except (ValueError,OSError,PackageNotFoundError):
+        except (ValueError,OSError,ImportError,PackageNotFoundError):
             self.clip_status={'available':False,'reason':'CLIP 준비 필요: python -m pip install -e ".[clip]" 후 python -m bed_pose clip-setup 실행'}
         self.sessions, self.assets = {}, {}
         self.groups = {}
@@ -480,6 +482,8 @@ class WebWorkspace:
             state['recorded_frames']=frame['recorded_frames']
             state['elapsed']=(int(frame['row']['received_ns'])-int(state['started_ns']))/1e9
         state['processing_fps']=frame.get('processing_fps')
+        state['processing_ms']=frame.get('processing_ms')
+        state['image_runtime']=frame.get('image_runtime')
         session.preview_worker.submit(self._preview_job(session))
 
     def _publish_preview(self,session,frame,result,error):
@@ -723,7 +727,7 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
 
 
 def launch_browser(model=None, camera=None, output_root=Path('recordings/live'), demo=False,
-                   video=None, *, port=0, open_browser=True,clip_model=None,clip_device='cpu',
+                   video=None, *, port=0, open_browser=True,clip_model=None,clip_device='auto',
                    clip_state_min=.5,clip_direction_min=.5):
     workspace = WebWorkspace(model, output_root,clip_model=clip_model,clip_device=clip_device,
                              clip_state_min=clip_state_min,clip_direction_min=clip_direction_min)

@@ -72,7 +72,7 @@ def main(argv=None):
     live_source.add_argument('--video', type=Path)
     live.add_argument('--output-root', type=Path, default=Path('recordings/live'))
     live.add_argument('--clip-model',type=Path,help='Prepared CLIP folder; defaults to checkpoints/clip-vit-base-patch16')
-    live.add_argument('--clip-device',choices=('cpu','cuda'),default='cpu')
+    live.add_argument('--clip-device',choices=('auto','cpu','cuda'),default='auto',help='auto: CUDA when supported by installed PyTorch, otherwise CPU')
     live.add_argument('--clip-state-min',type=float,default=.5,help='Unvalidated initial relative state score threshold')
     live.add_argument('--clip-direction-min',type=float,default=.5,help='Unvalidated initial relative lying-direction threshold')
     clip_setup=commands.add_parser('clip-setup',help='Explicitly download or import CLIP ViT-B/16 and record asset hashes')

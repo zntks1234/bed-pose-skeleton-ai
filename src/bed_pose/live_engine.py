@@ -178,6 +178,7 @@ class LiveEngine:
                     'target_policy': 'none', 'posture_classifier': self.posture_classifier.model_id if self.posture_classifier else 'not_implemented', 'event_analyzer': 'not_implemented'}
         if self.posture_classifier and self.posture_classifier.profile['version']=='automatic-posture-rules-0.8':
             manifest['body_state_provider_profile']=self.body_state_profile
+            manifest['image_runtime']=getattr(getattr(self.body_state_provider,'runtime',None),'execution_info',None)
         self.recorder = LiveRecorder(self.output_root/measurement_id, manifest, self.clock)
         self.recorder.event('measurement_started', effective_stream_frame_id=self.next_frame_id, request=request)
         return self.recorder.directory
@@ -299,9 +300,17 @@ class LiveEngine:
         if (not isinstance(image_preview,dict) or image_preview.get('stream_frame_id')!=row['stream_frame_id']
                 or image_preview.get('candidate_id')!=row['posture_assessment']['candidate_id']
                 or (row.get('body_state_observation') or {}).get('decision') is None):image_preview=None
-        self.previous_processing_ns=max(0,self.clock()-received)
+        finished=self.clock()
+        self.previous_processing_ns=max(0,finished-received)
+        def duration(start,end):
+            return (int(row[end])-int(row[start]))/1e6 if row.get(start) is not None and row.get(end) is not None else None
+        processing_ms={'read':(received-read_started)/1e6,
+                       'pose':duration('inference_started_ns','inference_finished_ns'),
+                       'image':duration('body_state_started_ns','body_state_finished_ns'),
+                       'total':(finished-read_started)/1e6}
         return {'processing_fps':self.processing_rate.observe(self.clock()), 'rgb': rgb, 'row': row, 'silhouette_preview':silhouette_preview,
-                'body_state_input_preview':image_preview,
+                'body_state_input_preview':image_preview, 'processing_ms':processing_ms,
+                'image_runtime':getattr(getattr(self.body_state_provider,'runtime',None),'execution_info',None),
                 'posture_diagnostics':diagnostics, 'bed_region': self.region, 'bed_revision': self.region_revision,
                 'recorded_frames': self.recorder.manifest['recorded_frames'] if self.recorder else 0}
 

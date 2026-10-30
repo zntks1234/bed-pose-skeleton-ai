@@ -17,6 +17,15 @@ def main():
             page.goto(case.server.url)
             page.wait_for_function("()=>document.getElementById('posture-value').textContent==='정면 신체 형태'")
             assert page.locator('#separated-results').is_visible()
+            # Long reasons must not collapse metric labels into word/character columns.
+            for width in (390, 1024, 1280, 1920):
+                page.set_viewport_size({'width':width,'height':900})
+                page.evaluate("document.getElementById('body-state-value').textContent='독립 영상 판단 근거가 연결되지 않았습니다. 촬영 시점 또는 몸통 방향 불확실'")
+                sizes=page.locator('#separated-results dt').evaluate_all('(nodes)=>nodes.map(n=>n.getBoundingClientRect().width)')
+                assert all(w>=105 for w in sizes),sizes
+                assert page.locator('#separated-results').evaluate('(n)=>n.scrollWidth<=n.clientWidth')
+            page.set_viewport_size({'width':1280,'height':900})
+
             assert '영역 미지정' in page.locator('#bed-relation-value').inner_text()
             assert page.locator('#start').is_enabled()
             page.locator('#start').click()

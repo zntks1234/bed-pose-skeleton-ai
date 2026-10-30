@@ -30,17 +30,35 @@ def main():
             browser=p.chromium.launch(executable_path=os.environ.get('BEDPOSE_CHROMIUM') or shutil.which('chromium'),headless=True,args=['--no-sandbox'])
             page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(c.server.url)
+            page.locator('#analysis-mode').wait_for(state='visible')
+            assert page.locator('#analysis-mode').get_attribute('aria-pressed')=='true'
+            assert page.locator('#live-picture').is_hidden()
+            assert page.locator('#overlay').is_checked() and page.locator('#overlay').is_enabled()
+            c.wait(lambda x:x['sessions'][0].get('frame_id') is not None)
+            _,captured=c.request('/api/view/'+sid)
+            status,result=c.control(sid,'region',box=[50,40,300,250],selected_frame_id=captured['frame_id'])
+            assert status==200,result
+            page.wait_for_function("()=>current()?.region!=null && picture!=null")
+            # Visible canvas contains both blue bed geometry and green skeleton pixels.
+            page.wait_for_function('''()=>{const c=document.getElementById('canvas'),a=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let blue=0,green=0;for(let i=0;i<a.length;i+=4){if(a[i+2]>150&&a[i+2]>a[i]*1.5&&a[i+2]>a[i+1]*1.2)blue++;if(a[i+1]>150&&a[i+1]>a[i]*1.4&&a[i+2]>80)green++}return blue>10&&green>10}''')
+            for width in (390,1280,1920):
+                page.set_viewport_size({'width':width,'height':900})
+                assert page.locator('#analysis-mode').is_visible()
+                assert page.locator('#live-picture').is_hidden()
+            page.set_viewport_size({'width':1280,'height':900})
+            page.locator('#latest-mode').click()
             page.locator('#live-picture').wait_for(state='visible')
-            page.wait_for_function("document.getElementById('live-picture').naturalWidth===640")
+            page.wait_for_function("()=>document.getElementById('live-picture').naturalWidth===640")
             assert '관절 오버레이 없음' in page.locator('#live-age').inner_text()
             first=c.workspace.raw_view(sid)['capture_frame_id']
-            page.wait_for_function("document.getElementById('live-picture').complete")
+            page.wait_for_function("()=>document.getElementById('live-picture').complete")
             c.wait(lambda x:(x['sessions'][0].get('frame_id') or 0)>1)
             c.wait(lambda _:c.workspace.raw_view(sid)['capture_frame_id']>first)
-            page.locator('#live-mode').uncheck();assert page.locator('#live-picture').is_hidden()
+            page.locator('#analysis-mode').click();assert page.locator('#live-picture').is_hidden()
+            assert page.locator('#overlay').is_enabled()
             assert not errors,errors
             browser.close()
-        print('PASS: camera capture continues during slow inference, independent live image, no stale skeleton overlay, analysis toggle')
+        print('PASS: camera capture continues during slow inference, independent live image, no stale skeleton overlay, default skeleton/bed pixels, visible mode buttons, responsive layouts and analysis toggle')
     finally:c.cleanup();c.temp.cleanup()
 
 if __name__=='__main__':main()

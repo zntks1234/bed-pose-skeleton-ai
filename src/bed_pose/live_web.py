@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 import json
+import hashlib
+from copy import deepcopy
 import math
 from pathlib import Path
 import queue
@@ -40,6 +42,11 @@ class Session:
     raw_worker: object | None = None
     raw_view: object | None = None
     raw_sequence: int = -1
+    raw_requested_until: float = 0
+    raw_quality: str | None = None
+    settings_sources: tuple | None = None
+    settings_bundle: dict | None = None
+    settings_key: str | None = None
     preview_rgb: object | None = None  # One current frame per input, RAM only.
 
 
@@ -154,15 +161,29 @@ class WebWorkspace:
             worker.start()
             return {'id': session_id}
 
-    def snapshot(self):
+    def snapshot(self, compact=False, known_profiles=()):
         with self.lock:
-            # Detach mutable nested dictionaries before handing them to HTTP serialization.
-            return json.loads(json.dumps({'sessions': [s.state for s in self.sessions.values()],
-                                         'groups': [g.public() for g in self.groups.values()],
-                                         'scan': self.scan_state, 'closing': self.stop_requested.is_set(),
-                                         'preview_quality': self.preview_quality,
-                                         'model': self.model.name, 'model_available': self.model.is_file(),
-                                         'clip':self.clip_status}))
+            sessions=[];profiles={}
+            fixed=('automatic_posture_profile','body_state_provider_profile','posture_reference_profile')
+            for session in self.sessions.values():
+                if not compact:
+                    sessions.append(session.state)
+                    continue
+                sources=tuple((k in session.state,session.state.get(k)) for k in fixed)
+                if session.settings_sources is None or any(a[0]!=b[0] or a[1] is not b[1] for a,b in zip(sources,session.settings_sources)):
+                    from .io_utils import object_hash
+                    session.settings_sources=sources
+                    session.settings_bundle=deepcopy({k:session.state[k] for k in fixed if k in session.state})
+                    session.settings_key=object_hash(session.settings_bundle)
+                sessions.append(dict({k:v for k,v in session.state.items() if k not in fixed},settings_key=session.settings_key))
+                if session.settings_key not in known_profiles:profiles[session.settings_key]=session.settings_bundle
+            result={'sessions':sessions,'groups':[g.public() for g in self.groups.values()],
+                    'scan':self.scan_state,'closing':self.stop_requested.is_set(),
+                    'preview_quality':self.preview_quality,'model':self.model.name,
+                    'model_available':self.model.is_file(),'clip':self.clip_status}
+            if compact:result['profiles']=profiles
+            # Detach mutable values once; HTTP performs the single JSON serialization.
+            return deepcopy(result)
 
     def set_preview_quality(self, quality):
         if not isinstance(quality,str) or quality not in PREVIEW_PROFILES:
@@ -482,10 +503,23 @@ class WebWorkspace:
         with self.lock:
             session=self.sessions[session_id]
             if session.state['closed'] or session.state['phase']=='error':return None
+            session.raw_requested_until=time.monotonic()+1.0
+            self._refresh_raw(session)
             view=session.raw_view
             if not view:return None
             age=max(0,session.worker.engine.clock()-int(view['received_ns']))/1e6
             return dict(view,age_ms=age)
+
+    def _refresh_raw(self,session):
+        if not session.raw_worker:return
+        if session.state['closed'] or session.state['phase']=='error':
+            session.raw_worker.stop();session.raw_view=None
+            return
+        if time.monotonic()>=session.raw_requested_until:return
+        packet=session.worker.engine.source.latest()
+        if packet and (packet['capture_frame_id']>session.raw_sequence or session.raw_quality!=self.preview_quality):
+            session.raw_sequence=packet['capture_frame_id'];session.raw_quality=self.preview_quality
+            session.raw_worker.submit({'frame':packet,'quality':self.preview_quality})
 
     def _refresh(self, session):
         while True:
@@ -494,13 +528,7 @@ class WebWorkspace:
             except queue.Empty:
                 break
         state = session.state
-        if session.raw_worker:
-            packet=session.worker.engine.source.latest()
-            if packet and packet['capture_frame_id']>session.raw_sequence and not state['closed'] and state['phase']!='error':
-                session.raw_sequence=packet['capture_frame_id']
-                session.raw_worker.submit({'frame':packet,'quality':self.preview_quality})
-            if state['closed'] or state['phase']=='error':
-                session.raw_worker.stop();session.raw_view=None
+        self._refresh_raw(session)
         try:
             frame = session.worker.frames.get_nowait()
         except queue.Empty:
@@ -629,17 +657,18 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # No local paths, tokens or video data in access logs.
 
-    def _reply(self, status, value, mime='application/json; charset=utf-8'):
-        body = json.dumps(value, ensure_ascii=False, allow_nan=False).encode() if mime.startswith('application/json') else value
+    def _reply(self, status, value, mime='application/json; charset=utf-8', etag=None):
+        body = json.dumps(value, ensure_ascii=False, allow_nan=False).encode() if mime.startswith('application/json') and not isinstance(value,bytes) else value
         self.send_response(status)
         self.send_header('Content-Type', mime)
-        self.send_header('Content-Length', str(len(body)))
+        if status!=304:self.send_header('Content-Length', str(len(body)))
+        if etag is not None:self.send_header('ETag',etag)
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
         self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
         self.end_headers()
-        self.wfile.write(body)
+        if body:self.wfile.write(body)
 
     def _authorized(self):
         origin = self.headers.get('Origin')
@@ -658,7 +687,14 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
             if not self._authorized():
                 return self._reply(403, {'error': '작업실 실행 주소로 다시 접속하세요.'})
             if path == '/api/state':
-                return self._reply(200, self.server.workspace.snapshot())
+                query=parse_qs(url.query)
+                compact=query.get('compact',['0'])[0]=='1'
+                known=set(query.get('known_profiles',[''])[0].split(','))
+                data=self.server.workspace.snapshot(compact=compact,known_profiles=known)
+                body=json.dumps(data,ensure_ascii=False,allow_nan=False).encode()
+                etag='"'+hashlib.sha256(body).hexdigest()+'"'
+                if self.headers.get('If-None-Match')==etag:return self._reply(304,b'',etag=etag)
+                return self._reply(200,body,etag=etag)
             if path == '/api/records/timeline':
                 query=parse_qs(url.query)
                 result=self.server.workspace.records.timeline(query.get('record_id',[''])[0],
@@ -678,10 +714,10 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
             self._reply(404, {'error': 'Not found'})
         except KeyError:
             self._reply(404, {'error': '입력을 찾을 수 없습니다.'})
-        except (ValueError,TypeError,OSError):
-            self._reply(400, {'error': '기록을 읽을 수 없습니다. 목록 새로고침 후 다시 여세요.'})
         except (BrokenPipeError, ConnectionResetError):
             pass
+        except (ValueError,TypeError,OSError):
+            self._reply(400, {'error': '기록을 읽을 수 없습니다. 목록 새로고침 후 다시 여세요.'})
 
     def do_POST(self):
         self.connection.settimeout(30)

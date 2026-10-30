@@ -41,6 +41,8 @@ def main():
             page.wait_for_function("()=>current()?.region!=null && picture!=null")
             # Visible canvas contains both blue bed geometry and green skeleton pixels.
             page.wait_for_function('''()=>{const c=document.getElementById('canvas'),a=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let blue=0,green=0;for(let i=0;i<a.length;i+=4){if(a[i+2]>150&&a[i+2]>a[i]*1.5&&a[i+2]>a[i+1]*1.2)blue++;if(a[i+1]>150&&a[i+1]>a[i]*1.4&&a[i+2]>80)green++}return blue>10&&green>10}''')
+            calls=page.evaluate('''()=>{draw();const ctx=document.getElementById('canvas').getContext('2d'),original=ctx.drawImage,checked=document.getElementById('overlay').checked;let count=0;ctx.drawImage=function(...args){count++;return original.apply(this,args)};try{draw();draw();const unchanged=count;document.getElementById('overlay').checked=!checked;draw();return [unchanged,count]}finally{ctx.drawImage=original;document.getElementById('overlay').checked=checked;draw()}}''')
+            assert calls==[0,1],calls
             for width in (390,1280,1920):
                 page.set_viewport_size({'width':width,'height':900})
                 assert page.locator('#analysis-mode').is_visible()

@@ -51,3 +51,5 @@ CLIP ViT-B/16 실행 제공자·0.8 최종 조합·[정답 주석 평가 CLI](do
 - 목표 자세·AI 예측·확인된 정답·외부 센서 결과를 분리합니다.
 - 개발 테스트와 기록 무결성 검사는 실제 사람의 자세 정확도 검증을 대신하지 않습니다.
 - 원본 영상·개인정보·모델 파일은 GitHub에 올리지 않습니다.
+
+Windows와 Apple Silicon Mac의 공통 실행 경로(CPU/CUDA/MPS)를 제공합니다. 현재 Mac 패키지 대상과 설치 방법은 [측정 작업실 안내](docs/guides/LIVE_MEASUREMENT.md#macos-설치와-실행)를 확인하세요. Mac 실기기 실행 검증과 Intel Mac 대응은 별도입니다.

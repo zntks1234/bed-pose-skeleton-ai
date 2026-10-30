@@ -28,13 +28,25 @@ class RuntimePerformanceTests(unittest.TestCase):
             self.assertEqual(clip_posture.configure_cpu_threads(torch),1)
 
     def test_auto_device_uses_available_cuda_and_explicit_cpu_is_preserved(self):
-        torch=Mock()
+        torch=Mock();torch.backends.mps.is_available.return_value=False
         with patch.dict('sys.modules',{'torch':torch}):
             for available,expected in ((True,'cuda'),(False,'cpu')):
                 torch.cuda.is_available.return_value=available
                 self.assertEqual(clip_posture.resolve_device('auto'),expected)
                 self.assertEqual(clip_posture.resolve_device('cpu'),'cpu')
         with self.assertRaises(ValueError):clip_posture.resolve_device('invalid')
+
+    def test_auto_mps_and_cpu_fallback_on_non_cuda_hosts(self):
+        torch=Mock();torch.cuda.is_available.return_value=False
+        with patch.dict('sys.modules',{'torch':torch}):
+            torch.backends.mps.is_available.return_value=True
+            self.assertEqual(clip_posture.resolve_device('auto'),'mps')
+            self.assertEqual(clip_posture.resolve_device('cpu'),'cpu')
+            self.assertEqual(clip_posture.resolve_device('mps'),'mps')
+            torch.backends.mps.is_available.return_value=False
+            self.assertEqual(clip_posture.resolve_device('auto'),'cpu')
+            torch.backends=None
+            self.assertEqual(clip_posture.resolve_device('auto'),'cpu')
 
     def test_stage_times_measure_work_without_dropping_frames(self):
         now=[0]

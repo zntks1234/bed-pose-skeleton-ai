@@ -27,7 +27,7 @@ MediaPipe 모델 파일 `checkpoints/pose_landmarker_full.task`가 없으면 입
 <a id="clip"></a>
 ## CLIP 이미지 자세 분석 준비
 
-기존 MediaPipe는 관절·실루엣, CLIP은 사람 RGB의 신체 상태/누운 방향을 예측합니다. 아래 명령 블록은 프로젝트 폴더의 PowerShell에서 실행합니다. GPU는 필수가 아니며 기본은 CPU입니다.
+기존 MediaPipe는 관절·실루엣, CLIP은 사람 RGB의 신체 상태/누운 방향을 예측합니다. 아래 명령 블록은 프로젝트 폴더의 PowerShell에서 실행합니다. GPU는 필수가 아니며 기본은 실행 가능한 장치를 자동 선택합니다.
 
 ```powershell
 & .\.venv\Scripts\python.exe -m pip install -e ".[live,clip]"
@@ -117,7 +117,7 @@ CLIP 입력 부족은 어깨/골반/하체 관측 부족을 표시합니다. 입
 
 ## 처리 속도 확인과 실행 장치
 
-기본 실행은 준비된 CLIP에 대해 설치된 PyTorch가 CUDA를 지원하면 GPU, 그렇지 않으면 CPU를 선택합니다. MediaPipe는 기존 CPU 실행을 유지합니다. NVIDIA GPU가 있어도 CPU 전용 PyTorch 설치에서는 CPU로 동작합니다. GPU 로딩 실패를 성공이나 CPU 전환으로 숨기지 않습니다.
+기본 실행은 준비된 CLIP에 대해 CUDA → MPS → CPU 순서로 사용 가능한 장치를 선택합니다. Windows에서는 CUDA 또는 CPU, 지원되는 Mac에서는 MPS 또는 CPU를 사용합니다. MediaPipe는 기존 CPU 실행을 유지합니다. NVIDIA GPU가 있어도 CPU 전용 PyTorch 설치에서는 CPU로 동작합니다. GPU 로딩 실패를 성공이나 CPU 전환으로 숨기지 않습니다.
 
 CPU CLIP의 PyTorch 연산 스레드는 최초 로딩 때 기본 최대 4개(기존 설정·논리 CPU 수가 더 작으면 그 수)로 제한합니다. 여러 입력·MediaPipe·미리보기와의 CPU 경쟁을 줄이기 위한 초기 설정이며, 모든 PC에서 가장 빠른 값은 아닙니다. 프로세스 공통 설정이므로 변경 후 작업실을 다시 실행합니다.
 
@@ -149,3 +149,24 @@ AI 자세 판정 카드의 `최근 처리`에서 읽기·관절·이미지·전�
 두 입력에서 CLIP을 사용하고 각 입력의 대상을 지정한 다음, 같은 사람 확인과 허용 수신 시각 차이를 입력해 그룹 측정을 시작합니다. 누움 통합에는 침대 영역이 필수가 아니며 걸터앉음은 침대 가장자리 근거가 필요합니다. 개별 카메라 결과 아래의 `두 카메라 통합 자세`에서 결과·기여 시점 수·통합 점수를 확인합니다. 한 시점만 사용하면 그렇게 표시하고, 시간/대상 대응 실패 시 보류합니다. 종료 후 그룹의 posture_predictions.jsonl에 정책과 근거가 남습니다. 같은 대상이라는 운영자 확인은 검증된 동일인 식별과 다릅니다.
 
 통합 로직은 운영체제나 GPU 종류에 종속되지 않습니다. 현재 실행 환경에서 지원되는 카메라/모델 제공자를 사용하며 macOS 실기기 실행은 별도 검증이 필요합니다. 이 기능이 특정 GPU를 필수로 요구하지는 않습니다.
+
+## macOS 설치와 실행
+
+현재 고정된 MediaPipe 0.10.35의 공식 macOS wheel은 arm64용입니다. PyAV 18.1.0 arm64 wheel의 최소 대상은 macOS 14입니다. 따라서 현재의 Mac 우선 대상은 **Apple Silicon(M1 이상), macOS 14 이상, ARM64 Python 3.12**입니다. Intel Mac과 Rosetta/x86 Python 조합은 현재 의존성 그대로 지원된다고 보장하지 않습니다. Windows와 Mac에서 같은 코드를 사용하지만 가상환경은 각 OS에서 새로 만듭니다.
+
+프로젝트 폴더의 Terminal에서 실행합니다. MediaPipe .task 모델은 앞의 공통 안내대로 별도 준비합니다.
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -e ".[live,clip]"
+.venv/bin/python -m bed_pose clip-setup
+.venv/bin/python -m bed_pose live
+```
+
+MPS를 명시하려면 마지막 명령에 `--clip-device mps`, CPU로 확인하려면 `--clip-device cpu`를 사용합니다. 명시한 장치를 쓸 수 없으면 오류를 표시합니다. 카메라 접근 권한은 macOS 개인정보 보호 설정에서 실행 앱에 허용해야 합니다. 동일한 단일/두 카메라 판정 로직을 사용하며 MediaPipe는 CPU 실행입니다.
+
+CLIP은 고정 문장 특징을 만든 뒤 문장 인코더/문장 projection 가중치를 해제합니다. 이미지 인코더와 캐시된 문장 특징·점수 계산은 그대로 유지합니다. 모델 파일의 크기와 로딩 중 최대 메모리를 줄이는 변경은 아니며, 로딩 후 불필요한 가중치의 상주를 줄이는 변경입니다. 실제 프로세스 사용량은 실행 장치의 메모리 할당 방식에 따라 다릅니다.
+
+작은 무작위 CLIP 모델의 CPU 검사에서 해제 전후 이미지 점수가 동일하고 가중치 수가 감소함을 확인합니다. 이 검사는 사전학습 정확도나 Mac MPS 실기기 검증을 대신하지 않습니다. GPU 백엔드 간 수치 차이·실제 카메라 입력·MPS 실행은 Mac에서 확인해야 합니다.
+
+배포 파일 확인: [MediaPipe 0.10.35](https://pypi.org/project/mediapipe/0.10.35/#files), [PyAV 18.1.0](https://pypi.org/project/av/18.1.0/#files). 배포 대상 확인과 실제 장치 검증은 구분합니다.

@@ -63,7 +63,7 @@ class WebWorkspace:
         from .clip_assets import DEFAULT_DIRECTORY,read_assets
         from .clip_posture import policy,resolve_device
         from importlib.metadata import version,PackageNotFoundError
-        if clip_device not in ('auto','cpu','cuda'):raise ValueError('CLIP 실행 장치를 확인하세요.')
+        if clip_device not in ('auto','cpu','cuda','mps'):raise ValueError('CLIP 실행 장치를 확인하세요.')
         policy(clip_state_min,clip_direction_min,'cpu' if clip_device=='auto' else clip_device)
         self.clip_model=Path(clip_model or DEFAULT_DIRECTORY).expanduser().resolve()
         self.clip_options={'clip_model':self.clip_model,'clip_device':clip_device,

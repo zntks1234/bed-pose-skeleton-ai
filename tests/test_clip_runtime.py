@@ -32,6 +32,28 @@ class ClipRuntimeTests(unittest.TestCase):
                 num_attention_heads=2,image_size=224,patch_size=32).to_dict(),projection_dim=8)
             torch.manual_seed(1);CLIPModel(config).save_pretrained(path)
             runtime=ClipRuntime(path,'cpu')
+            self.assertIsNone(runtime.model.text_model)
+            self.assertIsNone(runtime.model.text_projection)
+            reference=CLIPModel.from_pretrained(path,local_files_only=True).float().eval()
+            self.assertLess(sum(p.numel() for p in runtime.model.parameters()),sum(p.numel() for p in reference.parameters()))
+            pixels=runtime.processor.image_processor(images=square_image(np.zeros((96,160,3),np.uint8)),
+                do_resize=False,do_center_crop=False,return_tensors='pt')['pixel_values']
+            with torch.inference_mode():
+                expected=reference.get_image_features(pixel_values=pixels)
+                expected=expected/expected.norm(dim=-1,keepdim=True)
+                expected=(expected@runtime.text_features.T)[0].tolist()
+            actual,_=runtime.similarities(square_image(np.zeros((96,160,3),np.uint8)))
+            self.assertEqual(list(actual.values()),expected)
+            del reference
+            if torch.backends.mps.is_available():
+                apple=ClipRuntime(path,'mps')
+                try:
+                    apple_scores,_=apple.similarities(square_image(np.zeros((96,160,3),np.uint8)))
+                    np.testing.assert_allclose(list(apple_scores.values()),list(actual.values()),rtol=1e-4,atol=1e-4)
+                finally:apple.close()
+            else:
+                with self.assertRaisesRegex(ValueError,'MPS'):ClipRuntime(path,'mps')
+
             with (patch.object(runtime.model,'get_text_features',wraps=runtime.model.get_text_features) as text,
                   patch.object(runtime.model,'get_image_features',wraps=runtime.model.get_image_features) as image):
                 rgb=np.zeros((96,160,3),np.uint8)

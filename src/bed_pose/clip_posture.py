@@ -33,11 +33,13 @@ def configure_cpu_threads(torch):
 
 
 def resolve_device(device):
-    if device not in ("auto", "cpu", "cuda"):
+    if device not in ("auto", "cpu", "cuda", "mps"):
         raise ValueError("CLIP 실행 장치를 확인하세요.")
     if device != "auto":return device
     import torch
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    if torch.cuda.is_available():return "cuda"
+    mps=getattr(getattr(torch,'backends',None),'mps',None)
+    return "mps" if mps is not None and mps.is_available() else "cpu"
 
 import numpy as np
 
@@ -62,7 +64,7 @@ PROMPTS = {
 
 def policy(state_min=.5, direction_min=.5, device='cpu'):
     if (any(type(v) not in (int, float) or not math.isfinite(v) or not 0<=v<=1 for v in (state_min,direction_min))
-            or device not in ('cpu','cuda')):raise ValueError('CLIP 점수 기준 또는 실행 장치를 확인하세요.')
+            or device not in ('cpu','cuda','mps')):raise ValueError('CLIP 점수 기준 또는 실행 장치를 확인하세요.')
     return {'version':PROVIDER, 'state_min':float(state_min), 'direction_min':float(direction_min),
             'crop_quality':deepcopy(CROP_POLICY), 'prompts':deepcopy(PROMPTS), 'score_policy':'group_softmax_uncalibrated_no_runner_up_margin',
             'text_pooling':'mean_normalized_prompt_embeddings_then_normalize', 'device':device,
@@ -139,6 +141,8 @@ class ClipRuntime:
         import torch
         from transformers import CLIPModel, CLIPProcessor
         if device=='cuda' and not torch.cuda.is_available():raise ValueError('CUDA를 사용할 수 없습니다. CPU를 선택하세요.')
+        if device=='mps' and not getattr(getattr(torch,'backends',None),'mps',None):raise ValueError('MPS를 지원하는 PyTorch가 필요합니다.')
+        if device=='mps' and not torch.backends.mps.is_available():raise ValueError('MPS를 사용할 수 없습니다. CPU를 선택하세요.')
         self.torch=torch;self.device=device
         threads=configure_cpu_threads(torch) if device=='cpu' else torch.get_num_threads()
         self.execution_info={'device':device,'torch_intraop_threads':threads}
@@ -155,6 +159,10 @@ class ClipRuntime:
                 groups.append(mean/mean.norm());offset+=length
             self.text_features=torch.stack(groups)
             self.scale=float(self.model.logit_scale.exp().cpu())
+        # Text features and scale are now fixed. Image inference never uses these modules.
+        self.model.text_model=None
+        self.model.text_projection=None
+        self.execution_info['text_encoder_released']=True
 
     def similarities(self,image):
         torch=self.torch

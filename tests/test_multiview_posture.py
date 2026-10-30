@@ -57,6 +57,8 @@ class MultiviewTests(unittest.TestCase):
         v=views();a=evaluate(v)
         v[0]['image_profile']['decision_policy']['device']='cpu';v[1]['image_profile']['decision_policy']['device']='cuda'
         self.assertEqual(a['fusion_evidence'],evaluate(v)['fusion_evidence'])
+        v[1]['image_profile']['decision_policy']['device']='mps'
+        self.assertEqual(a['fusion_evidence'],evaluate(v)['fusion_evidence'])
         v[1]['image_profile']['model_sha256']='1'*64;self.assertIn('fusion_provider_mismatch',evaluate(v)['reasons'])
 
     def test_sitting_requires_edge_context_and_conflicts_hold(self):

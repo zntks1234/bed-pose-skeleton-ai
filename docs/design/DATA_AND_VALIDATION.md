@@ -121,3 +121,9 @@
 ## 단독 동작 진단 필드 · 2026-10-30
 
 새 프레임의 `previous_processing_ns`는 직전 프레임을 수신한 뒤 엔진 반환 직전까지 측정한 처리 시간입니다. 현재 프레임 처리 시간·촬영 간격과 구분하며 첫 프레임은 0입니다. CLIP 0.2 관측의 `input_quality`는 입력 검사 결과, 선택적 `error`는 실행 오류 코드/예외 종류입니다. 원문 예외 메시지는 저장하지 않습니다. 관절 `processing_status`와 CLIP 관측 상태는 독립적이며 이미지 실패가 관절 ok를 failed로 바꾸지는 않습니다. 실루엣 실행 여부는 어댑터 프로필의 segmentation_masks에 남습니다. 과거 기록은 당시 필드/정책으로 읽습니다.
+
+## 재계산 수치와 카메라 수신 번호 · 2026-10-30
+
+파일 SHA-256은 정확히 비교합니다. 자세·CLIP 재계산 결과의 구조·라벨·정수·문자열은 정확히 비교하고 float는 유한한 값에 한해 상대/절대 오차 각 1e-12를 허용합니다. Windows/Linux 수학 라이브러리의 극미세 반올림 차이 대응이며 임계값을 넘어 라벨이 달라지는 경우는 허용하지 않습니다.
+
+source_profile.capture_policy가 latest_camera_frame_v1인 기록은 camera_capture.capture_frame_id와 skipped_before(비음수 정수의 문자열)를 보존합니다. 연속 분석 행 사이의 수신 번호 증가와 건너뜀 수가 일치해야 합니다. stream_frame_id는 분석한 프레임 순서이므로 수신 전체의 완전성을 뜻하지 않습니다.

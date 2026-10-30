@@ -72,6 +72,8 @@ class LiveEngine:
             if self.adapter_profile.get('execution_kind') != self.execution_kind:
                 raise ValueError('Live adapter execution kind mismatch')
             self.reset_profile = self.adapter.reset_for_video()
+            if getattr(self.source,'latest_camera',False):
+                self.source.clock=self.clock;self.source.utc_clock=self.utc_clock
             self.source_profile = self.source.open()
             allowed = ('synthetic',) if self.execution_kind == 'synthetic' else ('camera', 'video_file')
             if self.source_profile['kind'] not in allowed:
@@ -179,6 +181,7 @@ class LiveEngine:
         if self.posture_classifier and self.posture_classifier.profile['version']=='automatic-posture-rules-0.8':
             manifest['body_state_provider_profile']=self.body_state_profile
             manifest['image_runtime']=getattr(getattr(self.body_state_provider,'runtime',None),'execution_info',None)
+        if getattr(self.source,'latest_camera',False):self.source.minimum_time=int(manifest['started_ns'])
         self.recorder = LiveRecorder(self.output_root/measurement_id, manifest, self.clock)
         self.recorder.event('measurement_started', effective_stream_frame_id=self.next_frame_id, request=request)
         return self.recorder.directory
@@ -213,6 +216,10 @@ class LiveEngine:
         except Exception as exc:
             raise LiveFailure('SOURCE_READ_FAILED', str(exc)) from exc
         received, utc = self.clock(), self.utc_clock()
+        capture=getattr(self.source,'analysis_capture',None)
+        if capture is not None:
+            read_started,received=capture['read_started_ns'],capture['received_ns']
+            utc=capture['received_utc_ns']
         if not isinstance(rgb, np.ndarray) or rgb.dtype != np.uint8 or rgb.ndim != 3 or rgb.shape[2] != 3 or min(rgb.shape[:2]) < 1:
             raise LiveFailure('INVALID_CAMERA_FRAME', '카메라가 유효한 RGB 영상을 반환하지 않았습니다.')
         geometry = (rgb.shape[1], rgb.shape[0])
@@ -239,6 +246,8 @@ class LiveEngine:
                'bed_occupancy_status': 'not_implemented',
                'target_resolution': {'status': 'not_configured', 'candidate_id': None}, 'target_posture': None,
                'verified_gt': None, 'sensor_results': None}
+        if capture is not None:
+            row['camera_capture']={k:str(capture[k]) for k in ('capture_frame_id','skipped_before')}
         if media is not None:
             row['source_media'] = dict(media)
         failure = None

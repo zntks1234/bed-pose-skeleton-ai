@@ -1,4 +1,5 @@
 """Live recording contract: received timestamps, explicit unknowns, no video data."""
+from .replay_compare import equivalent
 from collections import Counter
 from fractions import Fraction
 from pathlib import Path
@@ -158,6 +159,7 @@ def _verify(directory, manifest, hashes=True):
     counts = Counter(ok=0, failed=0)
     previous_id, previous_time, previous_model_ms = -1, 0, None
     previous_media_id, media_origin = None, None
+    previous_capture_id=None
     with (directory/'live_frames.jsonl').open(encoding='utf-8') as stream:
         for index, line in enumerate(stream):
             row = strict_loads(line)
@@ -166,6 +168,13 @@ def _verify(directory, manifest, hashes=True):
                     or row['clock_id'] != manifest['clock_id']
                     or row['stream_frame_id'] != manifest['first_stream_frame_id'] + index):
                 raise IntegrityError('Invalid live frame identity/order')
+            if manifest['source_profile'].get('capture_policy')=='latest_camera_frame_v1':
+                capture=row.get('camera_capture',{})
+                capture_id=unsigned_ns(capture.get('capture_frame_id'))
+                skipped=unsigned_ns(capture.get('skipped_before'))
+                if previous_capture_id is not None and (capture_id<=previous_capture_id or skipped!=capture_id-previous_capture_id-1):
+                    raise IntegrityError('Invalid camera capture sequence/skipped count')
+                previous_capture_id=capture_id
             previous_id = row['stream_frame_id']
             expected_revision = manifest['initial_bed_revision']
             for effective_id, change_revision in changes:
@@ -231,7 +240,7 @@ def _verify(directory, manifest, hashes=True):
                 raise IntegrityError('Missing posture assessment')
             if 'posture_assessment' in row:
                 from .posture import assess_frame
-                if row['posture_assessment']!=assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']],reference_model):
+                if not equivalent(row['posture_assessment'],assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']],reference_model)):
                     raise IntegrityError('Posture assessment differs from source frame')
             if 'posture_evidence_profile' in manifest or 'posture_evidence' in row:
                 from .posture_evidence import compare_frame
@@ -240,14 +249,14 @@ def _verify(directory, manifest, hashes=True):
                 if 'posture_assessment' not in row:
                     raise IntegrityError('Missing posture assessment for evidence')
                 expected_evidence=compare_frame(row,manifest['width'],manifest['height'],row['posture_assessment'])
-                if row['posture_evidence']!=expected_evidence:
+                if not equivalent(row['posture_evidence'],expected_evidence):
                     raise IntegrityError('Posture evidence differs from source frame')
             if 'silhouette_profile' in manifest or 'silhouette_assessment' in row or 'silhouette_observation' in row:
                 from .silhouette import assess as assess_silhouette
                 if ('silhouette_profile' not in manifest or 'silhouette_assessment' not in row
                         or 'silhouette_observation' not in row or 'posture_assessment' not in row):
                     raise IntegrityError('Missing silhouette observation, assessment or profile')
-                if row['silhouette_assessment']!=assess_silhouette(row,manifest['width'],manifest['height']):
+                if not equivalent(row['silhouette_assessment'],assess_silhouette(row,manifest['width'],manifest['height'])):
                     raise IntegrityError('Silhouette evidence differs from source samples')
             if 'previous_processing_ns' in row:unsigned_ns(row['previous_processing_ns'])
             observation=row.get('body_state_observation') or {}

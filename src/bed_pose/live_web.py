@@ -37,6 +37,9 @@ class Session:
     preview_generation: int = 0
     displayed_generation: int = -1
     preview_epoch: int = 0
+    raw_worker: object | None = None
+    raw_view: object | None = None
+    raw_sequence: int = -1
     preview_rgb: object | None = None  # One current frame per input, RAM only.
 
 
@@ -145,6 +148,9 @@ class WebWorkspace:
             session=self.sessions[session_id]
             session.preview_worker=PreviewWorker(lambda rgb,quality:encode_preview(rgb,quality),
                 lambda job,result,error:self._preview_ready(session,job,result,error))
+            if getattr(engine.source,"latest_camera",False):
+                session.raw_worker=PreviewWorker(lambda rgb,quality:encode_preview(rgb,quality),
+                    lambda job,result,error:self._raw_ready(session,job,result,error))
             worker.start()
             return {'id': session_id}
 
@@ -323,6 +329,7 @@ class WebWorkspace:
                 else:
                     state['phase'] = 'closing'
                     session.worker.request_close()
+                if session.raw_worker:session.raw_worker.stop()
                 return
             if state['closed'] or state['phase'] == 'closing' or state['pending']:
                 raise ValueError('이전 작업이 끝난 뒤 다시 조작하세요.')
@@ -462,6 +469,24 @@ class WebWorkspace:
                 group.data['errors'].append({'code':'GROUP_WRITE_FAILED'})
                 for member in group.members:member.worker.request_close()
 
+    def _raw_ready(self,session,job,result,error):
+        with self.lock:
+            if (session.id not in self.sessions or session.state['closed'] or session.state['phase']=='error'
+                    or job['quality']!=self.preview_quality):return
+            if error:return
+            packet=job['frame']
+            session.raw_view={'capture_frame_id':packet['capture_frame_id'],'received_ns':str(packet['received_ns']),
+                              'image':result[0],'preview':result[1]}
+
+    def raw_view(self,session_id):
+        with self.lock:
+            session=self.sessions[session_id]
+            if session.state['closed'] or session.state['phase']=='error':return None
+            view=session.raw_view
+            if not view:return None
+            age=max(0,session.worker.engine.clock()-int(view['received_ns']))/1e6
+            return dict(view,age_ms=age)
+
     def _refresh(self, session):
         while True:
             try:
@@ -469,6 +494,13 @@ class WebWorkspace:
             except queue.Empty:
                 break
         state = session.state
+        if session.raw_worker:
+            packet=session.worker.engine.source.latest()
+            if packet and packet['capture_frame_id']>session.raw_sequence and not state['closed'] and state['phase']!='error':
+                session.raw_sequence=packet['capture_frame_id']
+                session.raw_worker.submit({'frame':packet,'quality':self.preview_quality})
+            if state['closed'] or state['phase']=='error':
+                session.raw_worker.stop();session.raw_view=None
         try:
             frame = session.worker.frames.get_nowait()
         except queue.Empty:
@@ -529,6 +561,7 @@ class WebWorkspace:
                     except Exception as exc:
                         self._message(session, 'error', {'message': '화면 전달 오류: '+str(exc)})
                         session.worker.request_close()
+                        if session.raw_worker:session.raw_worker.stop()
                     if session.remove and session.state['closed']:
                         session.preview_worker.stop()
                         self.sessions.pop(session.id, None)
@@ -547,9 +580,16 @@ class WebWorkspace:
                 group.finished=True
                 for member in group.members:member.worker.request_close()
 
-    def view(self, session_id):
+    def view(self, session_id, clip_preview=True):
         with self.lock:
-            return self.sessions[session_id].view
+            session=self.sessions[session_id]
+            provider=session.worker.engine.body_state_provider
+            if provider is not None:provider.input_preview_enabled=clip_preview
+            result=session.view
+            if result is not None and not clip_preview:return dict(result,body_state_input_preview=None)
+            if result is not None and callable(getattr(provider,'input_preview',None)):
+                return dict(result,body_state_input_preview=provider.input_preview(result['frame_id']))
+            return result
 
     def close(self):
         self.stop_requested.set()
@@ -557,6 +597,7 @@ class WebWorkspace:
             sessions = list(self.sessions.values())
             for session in sessions:
                 session.worker.request_close()
+                if session.raw_worker:session.raw_worker.stop()
         # Wait for owners to finalize records. Do not delete assets while they are in use.
         while any(s.worker.is_alive() for s in sessions):
             for session in sessions:
@@ -630,8 +671,10 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 result=(library.catalog(offset,limit) if path=='/api/records' else
                         library.frames(query.get('record_id',[''])[0],offset,limit))
                 return self._reply(200,result)
+            if path.startswith('/api/live-view/'):
+                return self._reply(200,self.server.workspace.raw_view(path.split('/')[-1]))
             if path.startswith('/api/view/'):
-                return self._reply(200, self.server.workspace.view(path.split('/')[-1]))
+                return self._reply(200, self.server.workspace.view(path.split('/')[-1],parse_qs(url.query).get('clip_preview',['1'])[0]=='1'))
             self._reply(404, {'error': 'Not found'})
         except KeyError:
             self._reply(404, {'error': '입력을 찾을 수 없습니다.'})

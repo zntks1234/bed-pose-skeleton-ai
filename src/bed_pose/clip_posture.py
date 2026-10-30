@@ -117,7 +117,8 @@ def validate_recorded_decision(decision, profile):
     if not isinstance(details,dict) or set(details)!={'version','cosine_scores','logit_scale','direction_scores','reasons'}:
         raise ValueError('Missing CLIP source scores')
     expected=decide(details['cosine_scores'],details['logit_scale'],profile['decision_policy'])
-    if decision!=expected:raise ValueError('CLIP decision differs from recorded scores and policy')
+    from .replay_compare import equivalent
+    if not equivalent(decision,expected):raise ValueError('CLIP decision differs from recorded scores and policy')
 
 
 def square_image(rgb):
@@ -181,7 +182,7 @@ class ClipBodyStateProvider:
                       'model_sha256':self.assets['files']['pytorch_model.bin'],
                       'preprocess_id':configuration['preprocess'], 'decision_policy':configuration,
                       'execution_kind':'model_inference'}
-        self.runtime=None;self.last_input_preview=None
+        self.runtime=None;self.last_input_preview=None;self.input_preview_enabled=True;self.preview_image=None
 
     def open(self):
         if self.runtime is not None:raise ValueError('CLIP provider is already open')
@@ -195,11 +196,13 @@ class ClipBodyStateProvider:
         self.last_input_preview=None
         if self.runtime is None:raise ValueError('CLIP provider is not open')
         image=square_image(observation.rgb)
+        self.preview_image=(observation.stream_frame_id,observation.candidate_id,image)
         cosines,scale=self.runtime.similarities(image)
         result=decide(cosines,scale,self.profile['decision_policy'])
+        if not self.input_preview_enabled:return result
         try:
             with BytesIO() as buffer:
-                image.save(buffer,format='PNG')
+                image.save(buffer,format='PNG',compress_level=1)
                 self.last_input_preview={'stream_frame_id':observation.stream_frame_id,'candidate_id':observation.candidate_id,
                                          'image':'data:image/png;base64,'+base64.b64encode(buffer.getvalue()).decode('ascii')}
         except Exception:
@@ -207,6 +210,15 @@ class ClipBodyStateProvider:
             self.last_input_preview=None
         return result
 
+    def input_preview(self,frame_id):
+        packet=self.preview_image
+        if packet is None or packet[0]!=frame_id:return None
+        if self.last_input_preview and self.last_input_preview['stream_frame_id']==frame_id:return self.last_input_preview
+        with BytesIO() as buffer:
+            packet[2].save(buffer,format='PNG',compress_level=1)
+            return {'stream_frame_id':packet[0],'candidate_id':packet[1],
+                    'image':'data:image/png;base64,'+base64.b64encode(buffer.getvalue()).decode('ascii')}
+
     def close(self):
         if self.runtime is not None:self.runtime.close()
-        self.runtime=None;self.last_input_preview=None
+        self.runtime=None;self.last_input_preview=None;self.input_preview_enabled=True;self.preview_image=None

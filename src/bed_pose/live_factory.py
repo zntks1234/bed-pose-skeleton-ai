@@ -11,6 +11,10 @@ def make_engine(source, model, output_root, options_root, *, demo=False, clip_mo
         from .pose.fake import FakeAdapter
         return LiveEngine(source, FakeAdapter(), {'execution_mode': 'ordered_sequence'},
                           output_root, execution_kind='synthetic')
+    from .live_sources import CameraSource
+    if isinstance(source,CameraSource):
+        from .latest_camera import LatestCameraSource
+        source=LatestCameraSource(source)
     from .pose.mediapipe import MediaPipeAdapter, DEFAULT_OPTIONS, mapping_profile
     model = Path(model).expanduser().resolve()
     if not model.is_file():

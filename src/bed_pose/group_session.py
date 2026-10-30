@@ -36,6 +36,10 @@ class MeasurementGroup:
                      'target_pair_status':'operator_initialized_not_verified' if targets else 'not_configured',
                      'same_person_assertion':'operator_report_not_verified' if targets else None,
                      'posture_prediction':{'status':'not_implemented','label':None}}
+        from .multiview_posture import POLICY,supported
+        profiles=[getattr(s.worker.engine,'body_state_profile',None) for s in members]
+        if supported(profiles) and all(s.worker.engine.posture_classifier and s.worker.engine.posture_classifier.profile['version']=='automatic-posture-rules-0.8' for s in members):
+            self.data['posture_fusion_policy']=copy.deepcopy(POLICY)
         self.finished, self.failed = False, False
         self._finalize_job=None
         self.save()
@@ -48,7 +52,7 @@ class MeasurementGroup:
 
     def _begin(self):
         if self.finished or self.data['phase'] not in ('preparing','starting'):return
-        if any(s.state['closed'] or s.worker.stop_requested.is_set() or s.state['recording'] or s.state['pending'] or not s.state['region'] for s in self.members):
+        if any(s.state['closed'] or s.worker.stop_requested.is_set() or s.state['recording'] or s.state['pending'] or (not s.state['region'] and not self.data.get('posture_fusion_policy')) for s in self.members):
             self.fail('PLAN_START_INPUT_UNAVAILABLE')
             return
         self.data['phase']='starting'
@@ -244,10 +248,11 @@ class MeasurementGroup:
             a=s.state.get('posture_assessment')
             tracking=s.state.get('target_tracking') or {}
             views.append({'input_id':s.id,'title':s.title,'closed':s.state['closed'],'assessment':a,
+                'image_profile':getattr(s.worker.engine,'body_state_profile',None),
                 'reference_profile':s.state.get('automatic_posture_profile') or s.state.get('posture_reference_profile'),
                 'tracking_provisional':tracking.get('status')=='tracking_provisional',
                 'time_ns':str(s.worker.engine.origin+int(a['received_ns'])) if a else '0',
                 'max_age_ns':int(tracking.get('config',{}).get('max_gap_ms',500)*1e6)})
         posture=combine_views(views,int(self.data['alignment_max_skew_ns']) if self.data['alignment_max_skew_ns'] is not None else None,
-            confirmations(self.data),self.data['phase']=='recording' and all(s.kind!='video_file' for s in self.members),time.perf_counter_ns())
+            confirmations(self.data),self.data['phase']=='recording' and all(s.kind!='video_file' for s in self.members),time.perf_counter_ns(),fusion_policy=self.data.get('posture_fusion_policy'))
         return dict(self.data,directory=str(self.directory),target_observations=observations,plan_progress=progress,posture_assessment=posture)

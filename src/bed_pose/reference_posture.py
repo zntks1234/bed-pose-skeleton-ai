@@ -59,10 +59,10 @@ class ReferenceClassifier:
     def predict(self,observation):return self.evaluate(observation)[0]
 
 
-def combine_views(views,max_skew_ns,confirmations,active,now_ns):
+def combine_views(views,max_skew_ns,confirmations,active,now_ns,fusion_policy=None):
     """Equal mean of per-view normalized distances, receive-time gated; no 3D fusion."""
-    result={'status':'held','label':None,'reasons':[],'views':views,'experimental':True,
-            'identity_verified':False,'exposure_synchronized':False,'method':'mean_reference_distance_v1'}
+    result={'status':'held','label':None,'reasons':[],'views':[{k:value for k,value in v.items() if k!='image_profile'} for v in views],'experimental':True,
+            'identity_verified':False,'exposure_synchronized':False,'method':fusion_policy['version'] if fusion_policy is not None else 'mean_reference_distance_v1'}
     reasons=result['reasons']
     if not active:reasons.append('group_not_recording')
     if len(views)!=2 or any(v['closed'] or not v.get('assessment') for v in views):reasons.append('view_unavailable')
@@ -76,6 +76,13 @@ def combine_views(views,max_skew_ns,confirmations,active,now_ns):
     for v in views:
         a=v['assessment']
         if not a.get('track_id') or a.get('track_id')!=confirmed.get(v['input_id']):reasons.append('operator_pair_confirmation_missing');break
+    if fusion_policy is not None:
+        if any(not v.get('tracking_provisional') for v in views):reasons.append('view_features_unavailable')
+        if reasons:return result
+        from .multiview_posture import fuse
+        fused=fuse(views,fusion_policy)
+        fused['delta_ns']=result['delta_ns']
+        return fused
     auto=[v.get('reference_profile',{}).get('version','').startswith('automatic-posture') if v.get('reference_profile') else False for v in views]
     if any(auto):
         result['method']='automatic_two_view_agreement_v1'

@@ -1,0 +1,30 @@
+"""Two prescribed CLIP camera streams, no physical camera/accuracy claims."""
+import os
+import shutil
+from playwright.sync_api import sync_playwright
+from test_multiview_posture import MultiviewWebTests
+
+
+def main():
+    case=MultiviewWebTests();case.setUp()
+    try:
+        gid=case.start_pair()
+        with sync_playwright() as p:
+            browser=p.chromium.launch(executable_path=os.environ.get('BEDPOSE_CHROMIUM') or shutil.which('chromium'),
+                                      headless=True,args=['--no-sandbox'])
+            page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+            page.goto(case.server.url)
+            page.locator('#fused-posture').wait_for(state='visible')
+            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='바로 누움'")
+            assert '두 시점 영상 점수 통합' in page.locator('#fused-detail').inner_text()
+            assert '통합 점수' in page.locator('#fused-detail').inner_text()
+            page.evaluate('setGridMode(true)')
+            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='바로 누움'")
+            assert not errors,errors
+            browser.close()
+        case.request('/api/group',{'action':'stop','group_id':gid})
+        case.wait(lambda x:x['groups'][0]['phase']=='completed')
+        print('PASS: live fused result, contribution count, scores, single/grid and recording completion')
+    finally:case.doCleanups()
+
+if __name__=='__main__':main()

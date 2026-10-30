@@ -264,9 +264,11 @@ class WebWorkspace:
                 members=[self.sessions[sid] for sid in ids]
                 if len({s.kind for s in members})!=1:
                     raise ValueError('카메라끼리 또는 영상 파일끼리 묶으세요.')
+                from .multiview_posture import supported
+                image_fusion=supported([s.worker.engine.body_state_profile for s in members]) and all((s.state.get('automatic_posture_profile') or {}).get('version')=='automatic-posture-rules-0.8' for s in members)
                 for session in members:
                     if (session.state['closed'] or session.worker.stop_requested.is_set() or session.state['phase']=='closing' or session.state['pending']
-                            or session.state['recording'] or session.state['frame_id'] is None or not session.state['region']
+                            or session.state['recording'] or session.state['frame_id'] is None or (not session.state['region'] and not image_fusion)
                             or self.active_group(session.id)):
                         raise ValueError('두 입력의 연결과 침대 영역을 준비하고 개별 측정을 종료하세요.')
                 tolerance=values.get('max_skew_ms')

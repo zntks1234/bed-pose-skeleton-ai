@@ -9,6 +9,7 @@ __pycache__/
 .ipynb_checkpoints/
 .DS_Store
 Thumbs.db
+node_modules/
 
 # Experiment data, recordings and model artifacts
 data/

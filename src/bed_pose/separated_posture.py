@@ -75,6 +75,8 @@ def bed_relation(points,region,cfg,width,height):
     result={'version':VERSION,'status':'unknown','relation':None,'reasons':[],
             'semantics':'image_region_membership_not_physical_occupancy',
             'physical_occupancy':'unknown','hip_edge_fraction':None}
+    if cfg.get('version') in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
+        result['torso_available']=(len(points)==17 and all(points[i] is not None for i in (5,6,11,12)))
     if region is None:result['reasons']=['bed_region_required'];return result
     if len(points)!=17 or any(points[i] is None for i in (11,12)):
         result['reasons']=['bed_relation_hips_missing'];return result
@@ -90,6 +92,49 @@ def bed_relation(points,region,cfg,width,height):
         if uv is None:result['reasons']=['bed_coordinate_unavailable'];return result
         edge=max(0.,min(*uv,1-uv[0],1-uv[1]))
         result.update(status='observed',relation='edge' if edge<=cfg['edge_fraction'] else 'inside',hip_edge_fraction=edge)
+        if cfg.get('version') in ('automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
+            # Camera projection, not a physical bed-contact measurement. Both knees
+            # must cross the same nearest edge while both hips remain inside.
+            side=min(range(4),key=lambda i:(uv[0],1-uv[0],uv[1],1-uv[1])[i])
+            knees=[relative_xy(region,points[i]) if points[i] is not None else None for i in (13,14)]
+            valid=all(k is not None and all(math.isfinite(x) for x in k) for k in knees)
+            crossing=valid and all(((k[0]<0 and 0<=k[1]<=1),
+                                    (k[0]>1 and 0<=k[1]<=1),
+                                    (k[1]<0 and 0<=k[0]<=1),
+                                    (k[1]>1 and 0<=k[0]<=1))[side] for k in knees)
+            supported=bool(crossing and edge<=cfg['knee_edge_hip_limit'])
+            result['knee_edge_evidence']={'nearest_edge':side,'knees_cross_same_edge':bool(crossing),
+                                          'hip_limit':cfg['knee_edge_hip_limit'],'supported':supported}
+            if supported:result['relation']='edge'
+            if cfg['version'] in ('automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
+                ankles=[relative_xy(region,points[i]) if points[i] is not None else None for i in (15,16)]
+                ankles_valid=all(a is not None and all(math.isfinite(x) for x in a) for a in ankles)
+                def outside_same_side(p):
+                    return ((p[0]<0 and 0<=p[1]<=1), (p[0]>1 and 0<=p[1]<=1),
+                            (p[1]<0 and 0<=p[0]<=1), (p[1]>1 and 0<=p[0]<=1))[side]
+                def near_same_side(p):
+                    distance=(p[0],1-p[0],p[1],1-p[1])[side]
+                    orthogonal=p[1] if side<2 else p[0]
+                    return distance<=cfg['foot_edge_knee_limit'] and 0<=orthogonal<=1
+                foot_crossing=bool(ankles_valid and all(outside_same_side(a) for a in ankles))
+                knee_near=bool(valid and all(near_same_side(k) for k in knees))
+                foot_supported=bool(foot_crossing and knee_near and edge<=cfg['knee_edge_hip_limit'])
+                result['foot_edge_evidence']={'nearest_edge':side,'ankles_cross_same_edge':foot_crossing,
+                    'knees_near_same_edge':knee_near,'knee_limit':cfg['foot_edge_knee_limit'],
+                    'supported':foot_supported,'semantics':'ankle_projection_not_physical_contact'}
+                if foot_supported:result['relation']='edge'
+                if cfg['version'] in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
+                    # Hip proximity alone is not enough. Knees must be near or
+                    # beyond the same edge, and both ankles beyond that edge.
+                    result['edge_posture_evidence']={
+                        'supported':bool(foot_crossing and (knee_near or crossing)
+                                         and edge<=cfg['knee_edge_hip_limit']),
+                        'knees_available':bool(valid),'ankles_available':bool(ankles_valid),
+                        'semantics':'2d_projection_not_physical_support'}
+                    result['sitting_inside_evidence']={
+                        'supported':bool(valid and ankles_valid and edge>cfg['edge_fraction']
+                                         and all(contains(region,points[i]) for i in (13,14,15,16))),
+                        'semantics':'2d_projection_not_physical_support'}
     except (TypeError,ValueError,KeyError,ZeroDivisionError,OverflowError):
         result['reasons']=['bed_coordinate_unavailable']
     return result
@@ -119,7 +164,13 @@ def evaluate_with_body_state(obs,cfg):
     _,_,e=evaluate(obs,cfg)
     state=obs.body_state or {'status':'unavailable','state':'unknown','lying_direction':'unknown',
                              'reasons':['body_state_provider_not_configured']}
-    label,reason=compose(state,e['bed_relation'])
+    if cfg['version']=='automatic-posture-rules-0.12':
+        from .posture_decision import finalize_forced
+        label,reason,e['forced_decision']=finalize_forced(state,e['bed_relation'])
+    elif cfg['version']=='automatic-posture-rules-0.11':
+        from .posture_decision import finalize_evidence
+        label,reason=finalize_evidence(state,e['bed_relation'],obs.points)
+    else:label,reason=compose(state,e['bed_relation'])
     e['body_state']=state
     e['context_assessment'].update(status='predicted' if label else 'held',label=label,candidate_label=label,
                                     reasons=[reason] if reason else [],

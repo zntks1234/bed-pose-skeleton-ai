@@ -60,8 +60,8 @@ class LiveEngine:
         if body_state_provider is not None:
             from .body_state import validate_profile
             self.body_state_profile=validate_profile(body_state_provider.profile,execution_kind)
-        from .automatic_posture import AutomaticClassifier,SEPARATED_DEFAULTS,BODY_STATE_DEFAULTS
-        self.posture_classifier=(AutomaticClassifier(BODY_STATE_DEFAULTS,body_state_profile=self.body_state_profile)
+        from .automatic_posture import AutomaticClassifier,SEPARATED_DEFAULTS,FORCED_DEFAULTS
+        self.posture_classifier=(AutomaticClassifier(FORCED_DEFAULTS,body_state_profile=self.body_state_profile)
                                  if body_state_provider is not None else AutomaticClassifier(SEPARATED_DEFAULTS)
                                  if execution_kind=='model_inference' else None)
 
@@ -148,8 +148,8 @@ class LiveEngine:
             self.posture_classifier=ReferenceClassifier(profile)
 
     def start_measurement(self, request=None):
-        from .automatic_posture import SEPARATED_METHOD,BODY_STATE_METHOD
-        independent=self.posture_classifier and self.posture_classifier.profile['version'] in (SEPARATED_METHOD,BODY_STATE_METHOD)
+        from .automatic_posture import SEPARATED_METHOD,BODY_STATE_METHODS
+        independent=self.posture_classifier and self.posture_classifier.profile['version'] in (SEPARATED_METHOD,*BODY_STATE_METHODS)
         if not self.opened or self.geometry is None or (self.region is None and not independent):
             raise ValueError('영상이 표시된 뒤 침대 영역을 먼저 지정하세요.')
         if self.recorder:
@@ -191,7 +191,7 @@ class LiveEngine:
                     'reference_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version']=='reference-posture-0.1' else None,
                     'automatic_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version'].startswith('automatic-posture') else None,
                     'target_policy': 'none', 'posture_classifier': self.posture_classifier.model_id if self.posture_classifier else 'not_implemented', 'event_analyzer': 'not_implemented'}
-        if self.posture_classifier and self.posture_classifier.profile['version']=='automatic-posture-rules-0.8':
+        if self.posture_classifier and self.posture_classifier.profile['version'] in ('automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
             manifest['body_state_provider_profile']=self.body_state_profile
             manifest['image_runtime']=getattr(getattr(self.body_state_provider,'runtime',None),'execution_info',None)
         if self.person_detector is not None:
@@ -299,14 +299,15 @@ class LiveEngine:
         row['previous_processing_ns']=str(self.previous_processing_ns)
         row['target_tracking']=self.target_tracker.observe(row,*geometry)
         from .posture import assess_frame
-        if self.posture_classifier and self.posture_classifier.profile['version']=='automatic-posture-rules-0.8':
+        if self.posture_classifier and self.posture_classifier.profile['version'] in ('automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
             from .body_state import observe
             selection=assess_frame(row,*geometry,None)
             row['body_state_started_ns']=str(self.clock())
             if self.person_detector is not None:
                 from .person_crop import observe as observe_crop
                 row['person_crop_observation']=observe_crop(row,rgb,selection,self.person_detector)
-            row['body_state_observation']=observe(row,rgb,selection,self.body_state_provider,self.body_state_profile)
+            row['body_state_observation']=observe(row,rgb,selection,self.body_state_provider,self.body_state_profile,
+                allow_missing_presence=self.posture_classifier.profile['version'] in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12'))
             row['body_state_finished_ns']=str(self.clock())
         from copy import deepcopy
         row['image_runtime_metrics']=deepcopy(getattr(getattr(self.body_state_provider,'runtime',None),'last_metrics',None)) if (row.get('body_state_observation') or {}).get('decision') is not None else None
@@ -412,11 +413,11 @@ class LiveWorker(threading.Thread):
                             self.messages.put(('target_selected',{'tracking':tracking,'selection_id':values.get('selection_id')}))
                         elif action == 'posture_mode':
                             if self.engine.recorder:raise ValueError('측정을 종료한 뒤 설정을 바꾸세요.')
-                            from .automatic_posture import AutomaticClassifier,DEFAULTS,AUTO_DEFAULTS,SEPARATED_DEFAULTS,BODY_STATE_DEFAULTS
+                            from .automatic_posture import AutomaticClassifier,DEFAULTS,AUTO_DEFAULTS,SEPARATED_DEFAULTS,FORCED_DEFAULTS
                             mode=values.get('mode')
                             if mode not in ('automatic','off') or values.get('view') not in ('auto','body_state','bed_auto','oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
                             use_state=values['view']=='body_state' or (values['view']=='auto' and self.engine.body_state_provider is not None)
-                            profile=BODY_STATE_DEFAULTS if use_state else SEPARATED_DEFAULTS if values['view']=='auto' else AUTO_DEFAULTS if values['view']=='bed_auto' else dict(DEFAULTS,view=values['view'])
+                            profile=FORCED_DEFAULTS if use_state else SEPARATED_DEFAULTS if values['view']=='auto' else AUTO_DEFAULTS if values['view']=='bed_auto' else dict(DEFAULTS,view=values['view'])
                             self.engine.posture_classifier=AutomaticClassifier(profile,body_state_profile=self.engine.body_state_profile if use_state else None) if mode=='automatic' else None
                             model=self.engine.posture_classifier
                             self.messages.put(('posture_mode',{'profile':model.profile if model else None,'model_id':model.model_id if model else None}))

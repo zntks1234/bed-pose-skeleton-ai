@@ -4,6 +4,7 @@ import math
 from typing import Protocol
 
 LABELS=('supine','side','edge_sitting')
+PREDICTION_LABELS=LABELS+('sitting','prone','lying','standing','other')
 PROFILE={'version':'posture-interface-0.1','classifier':'not_configured',
          'quality_policy':'finite_in_image_coordinates_only_not_accuracy',
          'temporal_policy':'current_frame_only_no_smoothing'}
@@ -45,6 +46,19 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
         valid=(joint.get('availability')=='predicted' and type(x) in (float,int) and type(y) in (float,int)
                and math.isfinite(x) and math.isfinite(y) and 0<=x<width and 0<=y<height)
         points.append((x,y) if valid else None)
+    # Version 0.11 uses the source model's visibility rather than treating
+    # every finite coordinate as an observed joint. Presence is optional for
+    # browser GPU output; missing visibility cannot establish joint quality.
+    if (candidate and getattr(classifier,'profile',{}).get('version') in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12')):
+        raw=[p for p in row.get('raw_candidates',[]) if p.get('candidate_id')==candidate['candidate_id']]
+        scores=raw[0].get('sdk_landmarks',{}).get('image',[]) if len(raw)==1 else []
+        for i,joint in enumerate(candidate['joints']):
+            source=joint.get('source_index')
+            score=scores[source] if type(source) is int and 0<=source<len(scores) else {}
+            visibility=score.get('visibility') if isinstance(score,dict) else None
+            presence=score.get('presence') if isinstance(score,dict) else None
+            def good(v):return type(v) in (int,float) and math.isfinite(v) and .5<=v<=1
+            if not good(visibility) or (presence is not None and not good(presence)):points[i]=None
     if candidate and not any(p is not None for p in points):reasons.append('no_usable_coordinates')
     if classifier is None:reasons.append('classifier_not_configured')
     result={'version':PROFILE['version'],'stream_frame_id':row['stream_frame_id'],
@@ -58,18 +72,18 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
     try:
         from .bed_geometry import observation_region
         from .reference_posture import ReferenceClassifier
-        from .automatic_posture import AutomaticClassifier,METHOD,WORLD_METHOD,AUTO_METHOD,SEPARATED_METHOD,BODY_STATE_METHOD
+        from .automatic_posture import AutomaticClassifier,METHOD,WORLD_METHOD,AUTO_METHOD,SEPARATED_METHOD,BODY_STATE_METHODS
         world=None
-        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (WORLD_METHOD,METHOD,AUTO_METHOD,SEPARATED_METHOD,BODY_STATE_METHOD):
+        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (WORLD_METHOD,METHOD,AUTO_METHOD,SEPARATED_METHOD,*BODY_STATE_METHODS):
             from .posture_evidence import world_body_evidence
             world=world_body_evidence(row,candidate)
         pose=None
-        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (AUTO_METHOD,SEPARATED_METHOD,BODY_STATE_METHOD):
+        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (AUTO_METHOD,SEPARATED_METHOD,*BODY_STATE_METHODS):
             from .viewpoint_posture import world_points
             pose=world_points(row,candidate)
-        separated=isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (SEPARATED_METHOD,BODY_STATE_METHOD)
+        separated=isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (SEPARATED_METHOD,*BODY_STATE_METHODS)
         state=None
-        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version']==BODY_STATE_METHOD:
+        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in BODY_STATE_METHODS:
             from .body_state import read_observation
             state=read_observation(row.get('body_state_observation'),row,candidate['candidate_id'],classifier.body_state_profile)
         observation=PostureInput(tuple(points),width,height,region if separated else observation_region(region),world,pose,state)
@@ -87,7 +101,7 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
                 return result
         else:label=classifier.predict(observation)
         if label is None:result.update(status='held',reasons=['insufficient_or_out_of_scope'])
-        elif type(label) is not str or label not in LABELS:result.update(status='held',reasons=['invalid_classifier_output'])
+        elif type(label) is not str or label not in PREDICTION_LABELS:result.update(status='held',reasons=['invalid_classifier_output'])
         else:result.update(status='predicted',label=label)
     except Exception:
         result.update(status='held',reasons=['classifier_failed'])

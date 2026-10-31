@@ -22,8 +22,8 @@ def predictions(group,directory):
     configs=profiles(group);timeline=confirmations(group)
     policy=group.get('posture_fusion_policy')
     if policy is not None:
-        from .multiview_posture import POLICY
-        if policy!=POLICY:raise IntegrityError('Unsupported group fusion policy')
+        from .multiview_posture import POLICY,EVIDENCE_POLICY,FORCED_POLICY
+        if policy not in (POLICY,EVIDENCE_POLICY,FORCED_POLICY):raise IntegrityError('Unsupported group fusion policy')
     image_profiles=[load_json(Path(m['run_directory'])/'manifest.json').get('body_state_provider_profile') for m in group['members']]
     automatic=any(c and c.get('version','').startswith('automatic-posture') for c in configs)
     for row in iter_inputs(group,directory):

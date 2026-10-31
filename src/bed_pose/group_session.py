@@ -36,10 +36,12 @@ class MeasurementGroup:
                      'target_pair_status':'operator_initialized_not_verified' if targets else 'not_configured',
                      'same_person_assertion':'operator_report_not_verified' if targets else None,
                      'posture_prediction':{'status':'not_implemented','label':None}}
-        from .multiview_posture import POLICY,supported
+        from .multiview_posture import POLICY,EVIDENCE_POLICY,FORCED_POLICY,supported
         profiles=[getattr(s.worker.engine,'body_state_profile',None) for s in members]
-        if supported(profiles) and all(s.worker.engine.posture_classifier and s.worker.engine.posture_classifier.profile['version']=='automatic-posture-rules-0.8' for s in members):
-            self.data['posture_fusion_policy']=copy.deepcopy(POLICY)
+        if supported(profiles) and all(s.worker.engine.posture_classifier and s.worker.engine.posture_classifier.profile['version'] in ('automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12') for s in members):
+            strict=any(s.worker.engine.posture_classifier.profile['version']=='automatic-posture-rules-0.11' for s in members)
+            forced=any(s.worker.engine.posture_classifier.profile['version']=='automatic-posture-rules-0.12' for s in members)
+            self.data['posture_fusion_policy']=copy.deepcopy(FORCED_POLICY if forced else EVIDENCE_POLICY if strict else POLICY)
         from .decision_evidence import PROFILE as DECISION_PROFILE
         self.data['decision_evidence_profile']=copy.deepcopy(DECISION_PROFILE)
         from .posture_stability import Stabilizer,merged

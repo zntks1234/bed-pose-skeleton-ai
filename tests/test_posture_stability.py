@@ -39,7 +39,7 @@ class StabilityTests(unittest.TestCase):
         self.assertEqual(v['label'],'side')
 
     def test_held_missing_or_out_of_scope_clears_current_and_requires_reconfirmation(self):
-        for a in (raw(None,'held'),raw(None,'unavailable'),raw('prone')):
+        for a in (raw(None,'held'),raw(None,'unavailable'),raw('unsupported')):
             m=self.stable();v=m.observe(a,600_000_000,3,{})
             self.assertEqual(v['status'],'held');self.assertIsNone(v['last_confirmed_label'])
             self.assertEqual(m.observe(raw(),700_000_000,4,{})['status'],'confirming')
@@ -109,7 +109,7 @@ class StabilityRecordTests(unittest.TestCase):
         from bed_pose.fusion_inputs import inspect_group
         from bed_pose.live_recording import verify_live
         from bed_pose.contracts import IntegrityError
-        gid=self.start_pair()
+        gid=self.start_pair(with_regions=True)
         self.wait(lambda x:all(s.get('stable_posture',{}).get('status')=='stable' for s in x['sessions']) and x['groups'][0]['posture_assessment'].get('stable_posture',{}).get('status')=='stable')
         self.request('/api/group',{'action':'stop','group_id':gid})
         g=self.wait(lambda x:x['groups'][0]['phase']=='completed')['groups'][0];root=Path(g['directory'])

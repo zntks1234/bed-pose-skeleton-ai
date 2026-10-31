@@ -32,7 +32,7 @@
 
 관절 추정 실증 → 독립 자세·이벤트 측정기 → ToF/mmWave 비교 → 운영 기능 완성 순서입니다. 현재는 실제 침대 영상으로 세 자세 기준선을 평가할 준비 단계이며, 자동 침대 인식·선택적 녹화·단일/순차 계획 등 남은 목표도 유지합니다. [전체 로드맵과 단계별 체크리스트](ROADMAP.md)에서 현재 위치·다음 작업·완료 조건을 확인하세요.
 
-CLIP ViT-B/16 실행 제공자·0.8 최종 조합·[정답 주석 평가 CLI](docs/guides/RECORD_REVIEW.md#posture-accuracy)를 구현했습니다. **CLIP 가중치는 별도 준비**하며 미사용 시 기존 0.7입니다. 개발 환경의 가중치 다운로드는 네트워크 제한으로 실패했고 사전학습 인식 성능은 미검증입니다. [CLIP 설치·선택](docs/guides/LIVE_MEASUREMENT.md#clip) · [상세 계약](docs/design/AUTOMATIC_POSTURE.md).
+CLIP ViT-B/16 실행 제공자·0.10 최종 조합·[정답 주석 평가 CLI](docs/guides/RECORD_REVIEW.md#posture-accuracy)를 구현했습니다. **CLIP 가중치는 별도 준비**하며 미사용 시 기존 0.7입니다. 관절·자세의 정답 기반 정확도는 미검증입니다. [CLIP 설치·선택](docs/guides/LIVE_MEASUREMENT.md#clip) · [상세 계약](docs/design/AUTOMATIC_POSTURE.md).
 
 ## 지금 읽을 문서
 

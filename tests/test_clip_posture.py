@@ -65,6 +65,45 @@ class PoseAdapterDouble(FileTestAdapter):
 
 
 class ClipTests(unittest.TestCase):
+    def test_low_confidence_score_is_selected_and_record_replays(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);setup_assets(root/'model',source=source_assets(root/'src'));make_video(root/'input.mkv')
+            with patch('bed_pose.clip_posture.version',return_value='test-double'),patch('bed_pose.clip_posture.ClipRuntime',RuntimeDouble):
+                provider=ClipBodyStateProvider(root/'model')
+                engine=LiveEngine(VideoFileSource(root/'input.mkv'),PoseAdapterDouble(),{'execution_mode':'ordered_sequence'},
+                                  root/'records',profile=mapping_profile(),body_state_provider=provider)
+                try:
+                    engine.open()
+                    provider.runtime.similarities=lambda image:({name:(.02 if name=='sitting' else 0.) for name in STATE_NAMES+DIRECTION_NAMES},10.)
+                    engine.step();directory=engine.start_measurement();frame=engine.step()
+                    self.assertEqual(frame['row']['body_state_observation']['status'],'held')
+                    assessment=frame['row']['posture_assessment']
+                    self.assertEqual(assessment['label'],'sitting')
+                    self.assertIn('below_state_threshold_or_tied',assessment['rule_features']['forced_decision']['warnings'])
+                finally:engine.close()
+            self.assertEqual(verify_live(directory)['integrity'],'verified')
+
+    def test_missing_presence_gpu_style_crop_record_replay(self):
+        class MissingPresence(PoseAdapterDouble):
+            def estimate(self,m):
+                result=super().estimate(m)
+                for person in result.candidates:
+                    for point in person['sdk_landmarks']['image']:point['presence']=None
+                return result
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);setup_assets(root/'model',source=source_assets(root/'src'));make_video(root/'input.mkv')
+            with patch('bed_pose.clip_posture.version',return_value='test-double'),patch('bed_pose.clip_posture.ClipRuntime',RuntimeDouble):
+                provider=ClipBodyStateProvider(root/'model')
+                engine=LiveEngine(VideoFileSource(root/'input.mkv'),MissingPresence(),{'execution_mode':'ordered_sequence'},
+                                  root/'records',profile=mapping_profile(),body_state_provider=provider)
+                try:
+                    engine.open();engine.step();directory=engine.start_measurement();frame=engine.step()
+                    state=frame['row']['body_state_observation']
+                    self.assertEqual(state['status'],'predicted')
+                    self.assertEqual(state['input_quality']['version'],'joint-crop-quality-0.2')
+                finally:engine.close()
+            self.assertEqual(verify_live(directory)['integrity'],'verified')
+
     def test_asset_import_hashes_and_existing_output_preservation(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);source=source_assets(root/'source');out=root/'prepared'
@@ -163,7 +202,7 @@ class ClipTests(unittest.TestCase):
                     frame=engine.step();self.assertEqual(frame['row']['posture_assessment']['label'],'supine')
                     self.assertIsNotNone(frame['body_state_input_preview'])
                     provider.runtime.state='standing';frame=engine.step()
-                    self.assertIsNone(frame['row']['posture_assessment']['label'])
+                    self.assertEqual(frame['row']['posture_assessment']['label'],'standing')
                     provider.runtime.similarities=lambda image:(_ for _ in ()).throw(RuntimeError('test failure'))
                     frame=engine.step();self.assertIsNone(frame['body_state_input_preview'])
                 finally:engine.close()

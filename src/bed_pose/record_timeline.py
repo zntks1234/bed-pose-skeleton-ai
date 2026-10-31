@@ -3,7 +3,8 @@ import math
 
 VERSION = 'record-timeline-0.1'
 LABELS = ('supine', 'side', 'edge_sitting')
-STATES = LABELS + ('held', 'inactive', 'unrecorded', 'failed')
+PREDICTION_LABELS = LABELS + ('sitting', 'prone', 'lying', 'standing', 'other')
+STATES = PREDICTION_LABELS + ('held', 'inactive', 'unrecorded', 'failed')
 
 
 def time_value(row, manifest, basis):
@@ -20,7 +21,7 @@ def posture_state(row):
     assessment = row.get('posture_assessment')
     if assessment is None:
         return 'unrecorded'
-    if assessment.get('label') in LABELS:
+    if assessment.get('label') in PREDICTION_LABELS:
         return assessment['label']
     return 'held' if assessment.get('status') == 'held' else 'inactive'
 

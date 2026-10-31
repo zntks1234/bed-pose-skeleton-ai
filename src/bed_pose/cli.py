@@ -67,6 +67,7 @@ def main(argv=None):
     live = commands.add_parser('live', help='Browser workspace for cameras, videos and measurements')
     live_source = live.add_mutually_exclusive_group()
     live.add_argument('--model', type=Path)
+    live.add_argument('--pose-device', choices=('cpu','browser_gpu'), default='cpu', help='Experimental Windows browser GPU MediaPipe backend')
     live_source.add_argument('--demo', action='store_true', help='Explicit synthetic input; no camera or real inference')
     live_source.add_argument('--camera', type=int)
     live_source.add_argument('--video', type=Path)
@@ -149,7 +150,8 @@ def main(argv=None):
                                clip_model=args.clip_model,clip_device=args.clip_device,
                                clip_state_min=args.clip_state_min,clip_direction_min=args.clip_direction_min,
                                clip_precision=args.clip_precision,clip_shared=not args.no_clip_share,
-                               clip_batch_size=args.clip_batch_size,clip_batch_wait_ms=args.clip_batch_wait_ms)
+                               clip_batch_size=args.clip_batch_size,clip_batch_wait_ms=args.clip_batch_wait_ms,
+                               pose_device=args.pose_device)
         if args.command == 'live-inspect':
             from .live_recording import verify_live
             print(json.dumps(verify_live(args.run), ensure_ascii=False))

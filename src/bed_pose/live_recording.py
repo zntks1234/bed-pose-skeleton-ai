@@ -83,7 +83,7 @@ def _verify(directory, manifest, hashes=True):
     region = manifest['initial_bed_region']
     if region is not None:validate_region(region, manifest['width'], manifest['height'])
     elif (manifest['schema_version']!=LIVE_SCHEMA
-          or (manifest.get('automatic_posture_profile') or {}).get('version') not in ('automatic-posture-rules-0.7','automatic-posture-rules-0.8')):
+          or (manifest.get('automatic_posture_profile') or {}).get('version') not in ('automatic-posture-rules-0.7','automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12')):
         raise IntegrityError('Initial bed region is required by the recorded mode')
     selection = manifest['initial_bed_selection']
     if selection is None:
@@ -108,7 +108,7 @@ def _verify(directory, manifest, hashes=True):
         if manifest['silhouette_profile']!=SILHOUETTE_PROFILE:raise IntegrityError('Unsupported silhouette profile')
     from .posture import load_classifier
     reference_model=load_classifier(manifest)
-    state_mode=(manifest.get('automatic_posture_profile') or {}).get('version')=='automatic-posture-rules-0.8'
+    state_mode=(manifest.get('automatic_posture_profile') or {}).get('version') in ('automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12')
     if state_mode and 'body_state_provider_profile' not in manifest:
         raise IntegrityError('Missing body-state provider profile')
     if 'person_crop_profile' in manifest:
@@ -317,7 +317,8 @@ def _verify(directory, manifest, hashes=True):
             observation=row.get('body_state_observation') or {}
             if 'input_quality' in observation:
                 from .image_quality import inspect_crop
-                _,quality=inspect_crop(row,observation['candidate_id'],manifest['width'],manifest['height'])
+                _,quality=inspect_crop(row,observation['candidate_id'],manifest['width'],manifest['height'],
+                    allow_missing_presence=(manifest.get('automatic_posture_profile') or {}).get('version') in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12'))
                 if quality['status']!='usable' and row.get('person_crop_observation',{}).get('quality') is not None:
                     quality=row['person_crop_observation']['quality']
                 if quality!=observation['input_quality']:raise IntegrityError('Crop quality differs from source joints')

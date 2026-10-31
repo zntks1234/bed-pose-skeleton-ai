@@ -85,7 +85,7 @@ class MultiviewWebTests(unittest.TestCase):
     setUp=ClipWebTests.setUp
     cleanup=ClipWebTests.cleanup
 
-    def start_pair(self):
+    def start_pair(self,with_regions=False):
         from bed_pose.live_sources import SyntheticSource
         original=self.workspace.factory
         class Camera(SyntheticSource):
@@ -98,6 +98,10 @@ class MultiviewWebTests(unittest.TestCase):
             status,result=self.request('/api/inputs',{'kind':'camera','camera':index,'use_clip':True})
             self.assertEqual(status,200,result);sid=result['id'];ids.append(sid)
             self.wait(lambda x:any(s['id']==sid and s['frame_id'] is not None for s in x['sessions']))
+            if with_regions:
+                _,view=self.request('/api/view/'+sid)
+                self.assertEqual(self.control(sid,'region',box=[1,1,639,359],selected_frame_id=view['frame_id'])[0],200)
+                self.wait(lambda x:any(s['id']==sid and s['region'] is not None for s in x['sessions']))
             capture=self.workspace.capture_target(sid);candidate=capture['people'][0]['candidate_id']
             selected=self.workspace.select_target({'ticket':capture['ticket'],'candidate_id':candidate,
                 'tracking_config':{'max_gap_ms':10000,'max_speed_diagonals_per_second':100}})
@@ -115,14 +119,15 @@ class MultiviewWebTests(unittest.TestCase):
         from bed_pose.io_utils import load_json,atomic_json,file_hash
         from bed_pose.contracts import IntegrityError
         gid=self.start_pair()
-        result=self.wait(lambda x:x['groups'][0]['posture_assessment']['label']=='supine' and all(s['recorded_frames']>=4 for s in x['sessions']))
+        result=self.wait(lambda x:x['groups'][0]['posture_assessment'].get('fusion_evidence',{}).get('mode')=='two_view_fusion' and all(s['recorded_frames']>=4 for s in x['sessions']))
+        self.assertEqual(result['groups'][0]['posture_assessment']['label'],'supine')
         self.assertEqual(result['groups'][0]['posture_assessment']['fusion_evidence']['mode'],'two_view_fusion')
         self.request('/api/group',{'action':'stop','group_id':gid})
         group=self.wait(lambda x:x['groups'][0]['phase']=='completed')['groups'][0];root=Path(group['directory'])
         self.assertEqual(inspect_group(root)['integrity'],'verified')
         manifest=load_json(root/'manifest.json');self.assertEqual(manifest['posture_predictions']['method'],'gated_image_score_fusion_v1')
         path=root/'posture_predictions.jsonl';rows=[json.loads(l) for l in path.read_text(encoding='utf-8').splitlines()]
-        row=next(r for r in rows if r['label']=='supine');self.assertEqual(row['version'],'group-posture-0.3')
+        row=next(r for r in rows if r.get('fusion_evidence',{}).get('state_scores'));self.assertEqual(row['version'],'group-posture-0.3')
         row['fusion_evidence']['state_scores']['lying']=0.
         path.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
         manifest['posture_predictions']['sha256']=file_hash(path);atomic_json(root/'manifest.json',manifest)

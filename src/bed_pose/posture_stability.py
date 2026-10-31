@@ -5,7 +5,7 @@ from .io_utils import object_hash
 DEFAULT = {'version':'posture-stability-0.1', 'confirm_ms':500, 'min_samples':3,
            'max_gap_ms':1000, 'expire_ms':1500, 'validation':'unvalidated_initial_values',
            'hold_policy':'clear_current_and_pending', 'future_frames':False}
-LABELS=('supine','side','edge_sitting')
+LABELS=('supine','side','edge_sitting','sitting','prone','lying','standing','other')
 
 
 def profile(options=None):

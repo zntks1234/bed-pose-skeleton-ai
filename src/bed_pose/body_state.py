@@ -69,7 +69,7 @@ def validate_decision(value):
     return deepcopy(value)
 
 
-def observe(row,rgb,assessment,provider,profile):
+def observe(row,rgb,assessment,provider,profile,*,allow_missing_presence=False):
     """Only the current image and selected visual target go to the provider."""
     result={'version':VERSION,'stream_frame_id':row['stream_frame_id'],'clock_id':row['clock_id'],
             'received_ns':row['received_ns'],'candidate_id':assessment['candidate_id'],
@@ -94,7 +94,7 @@ def observe(row,rgb,assessment,provider,profile):
             result.update(status='held',reasons=['body_state_target_unavailable']);return result
     if profile.get('decision_policy',{}).get('crop_quality'):
         from .image_quality import inspect_crop
-        points,quality=inspect_crop(row,assessment['candidate_id'],w,h)
+        points,quality=inspect_crop(row,assessment['candidate_id'],w,h,allow_missing_presence=allow_missing_presence)
         fallback=row.get('person_crop_observation')
         if quality['status']!='usable' and fallback is not None:
             if (fallback.get('stream_frame_id')==row['stream_frame_id'] and fallback.get('clock_id')==row['clock_id']
@@ -146,7 +146,7 @@ def validate_observation(value,row,candidate,profile):
     elif 'input_quality' in value:
         q=value['input_quality']
         if (not isinstance(q,dict) or set(q)!={'version','status','reasons','bounds','usable_joints','full_body_verified'}
-                or q['version']!='joint-crop-quality-0.1' or q['status'] not in ('usable','held')
+                or q['version'] not in ('joint-crop-quality-0.1','joint-crop-quality-0.2') or q['status'] not in ('usable','held')
                 or q['full_body_verified'] is not False or type(q['usable_joints']) is not int
                 or not 0<=q['usable_joints']<=17 or not isinstance(q['reasons'],list)
                 or q['status']=='held' and (value['decision'] is not None or value['reasons']!=['body_state_crop_quality_insufficient'])

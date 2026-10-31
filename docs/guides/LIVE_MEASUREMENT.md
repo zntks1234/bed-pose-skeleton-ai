@@ -22,7 +22,24 @@ py -3.12 -m venv .venv
 
 MediaPipe 모델 파일 `checkpoints/pose_landmarker_full.task`가 없으면 입력 추가 창에서 `.task` 파일을 선택합니다. SDK와 모델 자산은 별개입니다. [어댑터·모델 안내](../development/MEDIAPIPE_ADAPTER.md)를 확인하세요.
 
+**모델 변경**으로 선택한 관절 추정 모델은 사용자 설정 폴더에 복사되어 다음 작업실 실행에도 유지됩니다. 이후 입력부터 선택된 모델을 사용하며 이미 연결된 입력은 기존 모델을 유지합니다. 저장된 모델을 찾을 수 없거나 내용이 바뀌면 다시 선택해야 합니다. 저장된 선택이 있으면 실행 명령의 `--model`보다 우선하며, `--model`은 저장된 선택이 없을 때 초기 모델을 지정합니다. 모델 파일은 사용자 홈의 `.config/bed-pose/pose-model/`에 보관됩니다.
+
 실행 후 열린 브라우저와 Python 터미널을 유지합니다. 업데이트할 때는 작업실 종료 → GitHub Desktop Pull → 재실행 순서입니다.
+
+작업실 오른쪽의 **추론 실행 장치**에서 선택한 입력의 MediaPipe와 CLIP 실행 장치를 각각 확인할 수 있습니다. CLIP의 **대기**는 모델은 준비됐지만 해당 프레임에서 추론하지 않은 상태입니다. 입력이 중단되면 장치 대신 중단 상태를 표시합니다.
+
+### Windows MediaPipe GPU 실험 모드
+
+Windows의 공식 MediaPipe Python GPU delegate는 지원되지 않아, 선택적으로 로컬 Chrome/Edge와 WebGL GPU 추론 프로세스를 사용합니다. Node.js 18 이상과 Chrome 또는 Edge, 위 Python 작업실 환경 및 로컬 모델이 필요합니다. 저장소 폴더에서 실행합니다.
+
+```powershell
+npm.cmd ci --prefix tools/gpu-preview
+& .\.venv\Scripts\python.exe -m bed_pose live --pose-device browser_gpu --model .\pose_landmarker_full.task
+```
+
+모델 경로는 실제 보유한 파일에 맞게 바꿉니다. 기존과 같이 작업실 화면에서 카메라를 추가합니다. 이 옵션은 명시적 GPU 요청이며 GPU 렌더러를 확인하지 못하면 오류로 종료하고 CPU로 자동 전환하지 않습니다. 고성능 GPU 선택은 요청하지만 실제 선택된 장치는 작업실의 처리 정보 또는 측정 기록의 `adapter_profile.gpu_renderer`에서 확인합니다. 기본 옵션 `cpu`는 기존 동작입니다. 브라우저 추론 프로세스와 프레임 전달은 이 컴퓨터 내부에서만 실행됩니다.
+
+GPU 실험 모드에서는 실루엣 마스크 옵션을 지원하지 않으며 함께 선택하면 오류로 거부합니다. Web SDK는 이 경로에서 landmark `presence` 값을 제공하지 않아 기록에는 `null`로 남습니다. FPS·정확도·다중 카메라 성능과 CPU 결과의 차이는 아직 실험이 필요합니다. 소스 저장소의 `tools/gpu-preview` 폴더가 필요하며 독립 wheel만으로는 실행할 수 없습니다. 별도 [GPU 검증 화면](../../tools/gpu-preview/README.md)도 사용할 수 있습니다.
 
 ## 화면에서 다중 카메라 사용 · 2026-10-31
 
@@ -66,7 +83,17 @@ MediaPipe 모델 파일 `checkpoints/pose_landmarker_full.task`가 없으면 입
 3. 침대 관계도 확인하려면 **침대 영역 지정**을 누르고 침대 모서리 네 곳을 둘레 순서대로 클릭합니다. 점 위치 수정·영역 지우기·Esc 취소를 지원합니다. [영역 계약](BED_REGION.md).
 4. 기본 분리 모드에서는 영역 없이도 **측정 시작 → 측정 종료**로 신체 형태를 기록할 수 있습니다. 종료 전에 기록 완료 상태를 확인합니다.
 
+CLIP 이미지 자세 분석을 사용하는 새 입력은 걸터앉음 판정에 골반·양쪽 무릎과 발목의 침대 경계 관계를 함께 사용합니다. 침대의 실제 모서리를 지정하고 골반·양쪽 무릎과 발목이 화면 안에 보이게 하세요. 발목 근거를 사용하면 **침대 관계**에 `골반·무릎·발목 근거`가 표시됩니다. 발목이 가려져도 기존 무릎 근거는 사용할 수 있습니다. 영상상 겹침을 이용하는 미검증 실험 규칙이므로 실제 자세를 확인하고, 가림이나 다른 촬영 각도에서의 오류를 따로 검증해야 합니다.
+
 연결 중 해상도 변경은 지원하지 않습니다. 입력을 제거한 뒤 재연결하고 영역/대상을 다시 지정하세요. 같은 크기로 카메라가 움직인 경우 자동으로 감지하지 못하므로 세션 중 고정합니다.
+
+### 라즈베리파이 USB 카메라
+
+이 PC와 Pi가 같은 네트워크에 있고 Pi 카메라 서비스가 실행 중이면, 카메라 목록에서 **라즈베리파이 · 삼성 USB 카메라**를 선택합니다. Pi에서 640×480, 15 FPS로 전송하며 Windows의 일반 웹캠 목록에 별도로 등록되는 방식은 아닙니다. 작업실의 기존 MediaPipe·CLIP 설정과 기록을 사용할 수 있습니다. 노트북에 도착한 시각을 사용하므로 실제 카메라 노출 시각이나 네트워크 지연은 확인할 수 없습니다.
+
+Pi에서는 사용자 서비스 `bed-pose-camera.service`가 `tools/pi_camera_stream.py`를 실행합니다. 설치된 파일은 `~/.local/share/bed-pose-camera/stream.py`, 비밀 토큰은 같은 폴더의 `token`입니다. PC의 연결 설정은 사용자 홈의 `.config/bed-pose/pi-camera-url.txt`에 있으며 토큰을 포함하므로 공유하거나 기록에 넣지 않습니다. 영상은 토큰으로 접근을 제한하지만 HTTP 전송 자체는 암호화되지 않으므로 신뢰할 수 있는 네트워크에서만 사용합니다.
+
+Pi에서 상태를 확인하거나 다시 시작할 때는 `systemctl --user status bed-pose-camera.service` 또는 `systemctl --user restart bed-pose-camera.service`를 사용합니다. 현재 Pi 사용자의 linger와 서비스 자동 시작을 켰으나 실제 재부팅 후 자동 시작은 아직 확인하지 않았습니다. Pi 주소가 바뀌면 PC의 연결 설정 주소도 바꿔야 합니다.
 
 ## 촬영해 둔 영상 분석
 
@@ -92,6 +119,8 @@ MediaPipe 모델 파일 `checkpoints/pose_landmarker_full.task`가 없으면 입
 입력마다 소스·SDK·영역·시계·기록이 분리되며 선택하지 않은 입력도 계속 처리합니다. 여러 화면 보기에서 격자로 확인하고 입력별 제거 버튼으로 정리합니다.
 
 두 입력 그룹은 대상 지정·운영자 동일인 확인·수신 시각 허용 차이 설정을 사용합니다. 현재 자동 결합은 양쪽 판정 일치 방식이며, 관절 상호 보완이나 촬영 노출 동기화가 아닙니다. [그룹 설계](../design/MULTI_CAMERA_DESIGN.md) · [단일 목표 계획 측정](SINGLE_POSTURE_PLAN.md).
+
+**그룹 측정 시작**이 비활성화되어 있으면 버튼 아래의 목록에서 빠진 조건을 확인합니다. 예를 들어 양쪽의 대상 지정과 잠정 추적, 동일인 확인, 허용 수신 시각 차이 입력이 필요합니다. 두 입력 모두 CLIP 통합 모드가 아니면 각 침대 영역도 지정해야 합니다.
 
 ## 기록 확인
 
@@ -130,7 +159,7 @@ CLIP 입력 부족은 어깨/골반/하체 관측 부족을 표시합니다. 입
 
 ## 처리 속도 확인과 실행 장치
 
-기본 실행은 준비된 CLIP에 대해 CUDA → MPS → CPU 순서로 사용 가능한 장치를 선택합니다. Windows에서는 CUDA 또는 CPU, 지원되는 Mac에서는 MPS 또는 CPU를 사용합니다. MediaPipe는 기존 CPU 실행을 유지합니다. NVIDIA GPU가 있어도 CPU 전용 PyTorch 설치에서는 CPU로 동작합니다. GPU 로딩 실패를 성공이나 CPU 전환으로 숨기지 않습니다.
+기본 실행은 준비된 CLIP에 대해 CUDA → MPS → CPU 순서로 사용 가능한 장치를 선택합니다. Windows에서는 CUDA 또는 CPU, 지원되는 Mac에서는 MPS 또는 CPU를 사용합니다. MediaPipe는 기본 CPU이며 Windows에서 위 GPU 실험 모드를 별도로 선택할 수 있습니다. NVIDIA GPU가 있어도 CPU 전용 PyTorch 설치에서는 CLIP이 CPU로 동작합니다. GPU 로딩 실패를 성공이나 CPU 전환으로 숨기지 않습니다.
 
 CPU CLIP의 PyTorch 연산 스레드는 최초 로딩 때 기본 최대 4개(기존 설정·논리 CPU 수가 더 작으면 그 수)로 제한합니다. 여러 입력·MediaPipe·미리보기와의 CPU 경쟁을 줄이기 위한 초기 설정이며, 모든 PC에서 가장 빠른 값은 아닙니다. 프로세스 공통 설정이므로 변경 후 작업실을 다시 실행합니다.
 

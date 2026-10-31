@@ -7,9 +7,11 @@ import json
 import hashlib
 from copy import deepcopy
 import math
+import os
 from pathlib import Path
 import queue
 import secrets
+import shutil
 import tempfile
 import threading
 import time
@@ -20,7 +22,7 @@ from .preview_worker import PreviewWorker
 from .live_engine import LiveWorker
 from .group_session import MeasurementGroup
 from .live_factory import make_engine
-from .live_sources import CameraSource, SyntheticSource, VideoFileSource, probe_cameras, named_cameras
+from .live_sources import CameraSource, PiCameraSource, SyntheticSource, VideoFileSource, probe_cameras, named_cameras
 from .io_utils import strict_loads
 from .preview_quality import encode_preview, PROFILES as PREVIEW_PROFILES, DEFAULT as PREVIEW_DEFAULT
 
@@ -54,14 +56,20 @@ class Session:
 class WebWorkspace:
     def __init__(self, model=None, output_root=Path('recordings/live'), *, engine_factory=make_engine,
                  clip_model=None, clip_device='auto', clip_state_min=.5, clip_direction_min=.5,
-                 clip_precision='fp32',clip_shared=True,clip_batch_size=1,clip_batch_wait_ms=2.):
+                 clip_precision='fp32',clip_shared=True,clip_batch_size=1,clip_batch_wait_ms=2.,pose_device='cpu',model_store=None):
         self.model = Path(model or 'checkpoints/pose_landmarker_full.task').resolve()
+        self.model_name = self.model.name
+        self.model_store = Path(model_store) if model_store is not None else Path.home()/'.config'/'bed-pose'/'pose-model'
+        self.model_error = None
+        self._load_saved_model()
         self.output_root = Path(output_root).resolve()
         from .record_library import RecordLibrary
         self.records=RecordLibrary(self.output_root)
         self.temp = tempfile.TemporaryDirectory(prefix='bed-pose-browser-')
         self.temp_root = Path(self.temp.name)
         self.factory = engine_factory
+        if pose_device not in ('cpu', 'browser_gpu'): raise ValueError('지원하지 않는 MediaPipe 실행 장치입니다.')
+        self.pose_device = pose_device
         from .clip_assets import DEFAULT_DIRECTORY,read_assets
         from .clip_posture import policy,resolve_device
         from importlib.metadata import version,PackageNotFoundError
@@ -107,13 +115,59 @@ class WebWorkspace:
     def register_asset(self, path, kind, name):
         asset_id = uuid.uuid4().hex
         with self.lock:
+            if kind == 'model':
+                path = self._save_model(Path(path), name[:200])
             self.assets[asset_id] = {'path': Path(path), 'kind': kind, 'name': name[:200]}
         return {'asset_id': asset_id, 'name': name[:200], 'kind': kind}
+
+    def _load_saved_model(self):
+        from .io_utils import file_hash, load_json
+        settings = self.model_store/'selected.json'
+        if not settings.exists(): return
+        try:
+            saved = load_json(settings)
+            digest, name = saved['sha256'], saved['name']
+            if (not isinstance(digest, str) or len(digest) != 64 or
+                    any(c not in '0123456789abcdef' for c in digest) or
+                    not isinstance(name, str) or not name or len(name) > 200):
+                raise ValueError('invalid saved selection')
+            path = self.model_store/(digest+'.task')
+            self.model, self.model_name = path, name
+            if not path.is_file() or file_hash(path) != digest:
+                raise ValueError('missing or changed model')
+        except (OSError, ValueError, KeyError, TypeError):
+            self.model = self.model_store/'unavailable.task'
+            self.model_name = '저장된 모델'
+            self.model_error = '저장된 모델을 찾거나 확인할 수 없습니다. 모델을 다시 선택하세요.'
+
+    def _save_model(self, source, name):
+        from .io_utils import atomic_json, file_hash
+        if not name or not source.is_file() or source.stat().st_size == 0:
+            raise ValueError('모델 파일을 확인하세요.')
+        self.model_store.mkdir(parents=True, exist_ok=True)
+        digest = file_hash(source)
+        destination = self.model_store/(digest+'.task')
+        temporary = self.model_store/(uuid.uuid4().hex+'.tmp')
+        try:
+            if not destination.is_file() or file_hash(destination) != digest:
+                with source.open('rb') as src, temporary.open('xb') as dst:
+                    shutil.copyfileobj(src, dst, length=1024*1024)
+                    dst.flush()
+                    os.fsync(dst.fileno())
+                if file_hash(temporary) != digest: raise ValueError('모델 복사 중 오류가 발생했습니다.')
+                os.replace(temporary, destination)
+            atomic_json(self.model_store/'selected.json', {'name':name, 'sha256':digest})
+        finally:
+            temporary.unlink(missing_ok=True)
+        self.model, self.model_name, self.model_error = destination, name, None
+        return destination
 
     def add(self, values):
         with self.lock:
             if self.stop_requested.is_set():
                 raise ValueError('작업실을 종료하고 있습니다.')
+            from .posture_stability import profile as stability_profile
+            temporal_configuration=stability_profile(values.get('stability'))
             kind = values.get('kind')
             model = self.model
             if values.get('model_asset'):
@@ -123,7 +177,12 @@ class WebWorkspace:
                 if asset['kind'] != 'model':
                     raise ValueError('모델 파일을 다시 선택하세요.')
                 model = asset['path']
-            if kind == 'camera':
+            if kind == 'pi_camera':
+                if any(s.kind == 'camera' and not s.state['closed'] and s.worker.engine.source.index == 'raspberry_pi'
+                       for s in self.sessions.values()):
+                    raise ValueError('라즈베리파이 카메라가 이미 연결되어 있습니다.')
+                source, title, kind = PiCameraSource(), '라즈베리파이 · 삼성 USB 카메라', 'camera'
+            elif kind == 'camera':
                 index = values.get('camera')
                 if type(index) is not int or index < 0:
                     raise ValueError('카메라 번호는 0 이상의 정수여야 합니다.')
@@ -158,7 +217,10 @@ class WebWorkspace:
             if type(person_fallback) is not bool or person_fallback and not use_clip:raise ValueError('사람 영역 보완에는 CLIP을 선택하세요.')
             if person_fallback and not self.person_crop_status['available']:raise ValueError('person-setup 실행 후 작업실을 다시 시작하세요.')
             engine = self.factory(source, model, self.output_root, self.temp_root, demo=kind == 'demo',
-                                  **(self.clip_options if use_clip else {}), **({'silhouette':True} if silhouette else {}), **({'person_fallback':True} if person_fallback else {}))
+                                  **(self.clip_options if use_clip else {}), **({'silhouette':True} if silhouette else {}), **({'person_fallback':True} if person_fallback else {}),
+                                  **({'pose_device':self.pose_device} if self.pose_device != 'cpu' else {}))
+            from .posture_stability import Stabilizer
+            if values.get('stability') is not None:engine.stability=Stabilizer(temporal_configuration)
             worker = LiveWorker(engine)
             session_id = uuid.uuid4().hex
             state = {'id': session_id, 'title': title, 'kind': kind, 'phase': 'opening',
@@ -170,7 +232,7 @@ class WebWorkspace:
                      'width': None, 'height': None, 'posture': 'not_implemented', 'posture_assessment': None,
                      'posture_model_id':engine.posture_classifier.model_id if engine.posture_classifier else None,
                      'automatic_posture_profile':engine.posture_classifier.profile if engine.posture_classifier else None,
-                     'body_state_provider_profile':engine.body_state_profile, 'silhouette_enabled':silhouette,'person_fallback_enabled':person_fallback}
+                     'body_state_provider_profile':engine.body_state_profile, 'silhouette_enabled':silhouette,'person_fallback_enabled':person_fallback,'stability_profile':dict(engine.stability.profile)}
             self.sessions[session_id] = Session(session_id, title, kind, worker, state)
             session=self.sessions[session_id]
             session.preview_worker=PreviewWorker(lambda rgb,quality:encode_preview(rgb,quality),
@@ -184,10 +246,13 @@ class WebWorkspace:
     def snapshot(self, compact=False, known_profiles=()):
         with self.lock:
             sessions=[];profiles={}
-            fixed=('automatic_posture_profile','body_state_provider_profile','posture_reference_profile')
+            fixed=('automatic_posture_profile','body_state_provider_profile','posture_reference_profile','stability_profile')
             for session in self.sessions.values():
                 if not compact:
-                    sessions.append(session.state)
+                    from .posture_stability import project
+                    current=dict(session.state)
+                    if session.worker is not None:current['stable_posture']=project(current.get('stable_posture'),session.worker.engine.clock() if session.kind=='camera' else None,closed=current.get('closed',False) or current.get('phase') in ('error','closing'))
+                    sessions.append(current)
                     continue
                 sources=tuple((k in session.state,session.state.get(k)) for k in fixed)
                 if session.settings_sources is None or any(a[0]!=b[0] or a[1] is not b[1] for a,b in zip(sources,session.settings_sources)):
@@ -195,12 +260,16 @@ class WebWorkspace:
                     session.settings_sources=sources
                     session.settings_bundle=deepcopy({k:session.state[k] for k in fixed if k in session.state})
                     session.settings_key=object_hash(session.settings_bundle)
-                sessions.append(dict({k:v for k,v in session.state.items() if k not in fixed},settings_key=session.settings_key))
+                from .posture_stability import project
+                current=dict({k:v for k,v in session.state.items() if k not in fixed},settings_key=session.settings_key)
+                if session.worker is not None:current['stable_posture']=project(current.get('stable_posture'),session.worker.engine.clock() if session.kind=='camera' else None,closed=current.get('closed',False) or current.get('phase') in ('error','closing'))
+                sessions.append(current)
                 if session.settings_key not in known_profiles:profiles[session.settings_key]=session.settings_bundle
             result={'sessions':sessions,'groups':[g.public() for g in self.groups.values()],
                     'scan':self.scan_state,'closing':self.stop_requested.is_set(),
-                    'preview_quality':self.preview_quality,'model':self.model.name,
-                    'model_available':self.model.is_file(),'clip':self.clip_status,'person_crop':self.person_crop_status}
+                    'preview_quality':self.preview_quality,'model':self.model_name,
+                    'model_available':self.model.is_file() and self.model_error is None,'model_error':self.model_error,'clip':self.clip_status,'person_crop':self.person_crop_status,
+                    'pi_camera_configured':(Path.home()/'.config'/'bed-pose'/'pi-camera-url.txt').is_file()}
             if compact:result['profiles']=profiles
             # Detach mutable values once; HTTP performs the single JSON serialization.
             return deepcopy(result)
@@ -290,7 +359,7 @@ class WebWorkspace:
                 if association==BED_POLICY and values.get('bed_regions_confirmed') is not True:
                     raise ValueError('두 입력의 침대 영역을 확인하세요.')
                 from .multiview_posture import supported
-                image_fusion=supported([s.worker.engine.body_state_profile for s in members]) and all((s.state.get('automatic_posture_profile') or {}).get('version')=='automatic-posture-rules-0.8' for s in members)
+                image_fusion=supported([s.worker.engine.body_state_profile for s in members]) and all((s.state.get('automatic_posture_profile') or {}).get('version') in ('automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12') for s in members)
                 for session in members:
                     if (session.state['closed'] or session.worker.stop_requested.is_set() or session.state['phase']=='closing' or session.state['pending']
                             or session.state['recording'] or session.state['frame_id'] is None or (not session.state['region'] and (association==BED_POLICY or not image_fusion))
@@ -408,8 +477,8 @@ class WebWorkspace:
                 session.worker.submit('posture_reference',label=values.get('label'),selected_frame_id=values.get('selected_frame_id'),
                     max_distance=values.get('max_distance',.35),min_margin=values.get('min_margin',.10),clear=values.get('clear') is True)
             elif action == 'start':
-                from .automatic_posture import SEPARATED_METHOD,BODY_STATE_METHOD
-                independent=(state.get('automatic_posture_profile') or {}).get('version') in (SEPARATED_METHOD,BODY_STATE_METHOD)
+                from .automatic_posture import SEPARATED_METHOD,BODY_STATE_METHODS
+                independent=(state.get('automatic_posture_profile') or {}).get('version') in (SEPARATED_METHOD,*BODY_STATE_METHODS)
                 if state['frame_id'] is None or (not state['region'] and not independent) or state['recording']:
                     raise ValueError('영상에서 침대 영역을 먼저 지정하세요.')
                 record_video=values.get('record_video',False)
@@ -475,14 +544,18 @@ class WebWorkspace:
             if manifest['run_status'] == 'failed' and not state['error']:
                 state['error'] = '오류로 측정을 종료했습니다. 기록을 확인하세요.'
         elif kind == 'posture_mode':
+            state['stable_posture']=None
             state.update(automatic_posture_profile=value['profile'],posture_reference_profile=None,posture_model_id=value['model_id'],pending=None)
         elif kind == 'posture_reference':
+            state['stable_posture']=None
             state['automatic_posture_profile']=None
             state['posture_model_id']=value['model_id']
             state['posture_reference_profile']=value['profile']
             state['posture_reference_model_id']=value['model_id']
             state['pending']=None
         elif kind == 'target_selected':
+            state['stable_posture']=None
+            session.stability_target_track=value['tracking'].get('track_id')
             state['target_tracking']=value['tracking']
             state['target_selection_applied']=value.get('selection_id')
             state['target_selection_pending']=None
@@ -558,6 +631,9 @@ class WebWorkspace:
             except queue.Empty:
                 break
         state = session.state
+        profile = session.worker.engine.adapter_profile
+        state['pose_device'] = profile.get('actual_device')
+        state['pose_gpu_renderer'] = profile.get('gpu_renderer')
         self._refresh_raw(session)
         try:
             frame = session.worker.frames.get_nowait()
@@ -591,6 +667,8 @@ class WebWorkspace:
                      media_seconds=int(media['relative_time_ns'])/1e9 if media else None)
         state['target_tracking']=row['target_tracking']
         state['posture_assessment']=row['posture_assessment']
+        state['stable_posture']=row.get('stable_posture') if getattr(session,'stability_target_track',row['posture_assessment'].get('track_id'))==row['posture_assessment'].get('track_id') and state.get('posture_model_id')==row['posture_assessment'].get('classifier_id') else None
+        state['bed_region_revision']=row['bed_region_revision']
         state['person_crop_observation']=row.get('person_crop_observation')
         state['decision_evidence']=row.get('decision_evidence')
         state['posture_evidence']=row.get('posture_evidence')
@@ -603,6 +681,7 @@ class WebWorkspace:
                         'clock_id':row['clock_id'],'received_ns':row['received_ns'],
                         'target_tracking':row['target_tracking'],
                         'posture_assessment':row['posture_assessment'],
+                        'stable_posture':row.get('stable_posture'),
                         'person_crop_observation':row.get('person_crop_observation'),
                         'decision_evidence':row.get('decision_evidence'),
                         'posture_evidence':row.get('posture_evidence'),
@@ -653,7 +732,9 @@ class WebWorkspace:
             if provider is not None:provider.input_preview_enabled=clip_preview
             result=session.view
             if result is not None:
-                result=dict(result,age_ms=max(0,session.worker.engine.clock()-int(result['received_ns']))/1e6)
+                from .posture_stability import project
+                result=dict(result,age_ms=max(0,session.worker.engine.clock()-int(result['received_ns']))/1e6,
+                            stable_posture=project(result.get('stable_posture'),session.worker.engine.clock() if session.kind=='camera' else None,closed=session.state.get('closed',False) or session.state.get('phase') in ('error','closing')))
             if result is not None and not clip_preview:return dict(result,body_state_input_preview=None)
             if result is not None and callable(getattr(provider,'input_preview',None)):
                 return dict(result,body_state_input_preview=provider.input_preview(result['frame_id']))
@@ -850,11 +931,11 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
 def launch_browser(model=None, camera=None, output_root=Path('recordings/live'), demo=False,
                    video=None, *, port=0, open_browser=True,clip_model=None,clip_device='auto',
                    clip_state_min=.5,clip_direction_min=.5,clip_precision='fp32',clip_shared=True,
-                   clip_batch_size=1,clip_batch_wait_ms=2.):
+                   clip_batch_size=1,clip_batch_wait_ms=2.,pose_device='cpu'):
     workspace = WebWorkspace(model, output_root,clip_model=clip_model,clip_device=clip_device,
                              clip_state_min=clip_state_min,clip_direction_min=clip_direction_min,
                              clip_precision=clip_precision,clip_shared=clip_shared,
-                             clip_batch_size=clip_batch_size,clip_batch_wait_ms=clip_batch_wait_ms)
+                             clip_batch_size=clip_batch_size,clip_batch_wait_ms=clip_batch_wait_ms,pose_device=pose_device)
     server = None
     try:
         server = WorkspaceHTTPServer(workspace, port)

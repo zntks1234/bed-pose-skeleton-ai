@@ -31,9 +31,9 @@ def main():
                     return {'lying':.6,'sitting':0.,'standing':0.,'other':0.,
                             'supine':.05,'side':0.,'prone':0.},10.
                 runtime.similarities=weak_direction
-            page.wait_for_function("()=>document.getElementById('fused-detail').textContent.includes('기준 미달 · 결과 불확실')")
+            page.wait_for_function("()=>snapshot.groups[0].posture_assessment?.fusion_evidence?.direction_scores?.supine < .5")
             assert page.locator('#fused-label').inner_text()=='바로 누움'
-            assert '기준 미달 · 결과 불확실' in page.locator('#fused-detail').inner_text()
+            assert '최고 점수 선택' in page.locator('#fused-detail').inner_text()
             for member in members:
                 del member.worker.engine.body_state_provider.runtime.similarities
             page.wait_for_function("()=>document.getElementById('fused-label').textContent==='바로 누움'")

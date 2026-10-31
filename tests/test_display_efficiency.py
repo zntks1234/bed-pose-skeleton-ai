@@ -41,7 +41,7 @@ class DemandTests(unittest.TestCase):
 
     def test_compact_snapshot_restores_identical_settings_and_tracks_new_settings(self):
         w=WebWorkspace.__new__(WebWorkspace);w.lock=threading.RLock();w.groups={};w.scan_state={};w.stop_requested=threading.Event()
-        w.preview_quality='high';w.model=Path('/nonexistent/test-model');w.clip_status={};w.person_crop_status={}
+        w.preview_quality='high';w.model=Path('/nonexistent/test-model');w.model_name=w.model.name;w.model_error=None;w.clip_status={};w.person_crop_status={}
         profile={'version':'example','decision_policy':{'values':[1,2]}}
         state={'id':'a','posture':'side','body_state_provider_profile':profile,'automatic_posture_profile':None}
         session=Session('a','a','camera',None,state);w.sessions={'a':session}

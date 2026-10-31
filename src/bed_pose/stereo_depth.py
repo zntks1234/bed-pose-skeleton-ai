@@ -146,8 +146,8 @@ def decision_config(group):
     from .automatic_posture import AUTO_DEFAULTS, AutomaticClassifier
     from .group_posture import profiles
     configs = profiles(group)
-    if any(not isinstance(p, dict) or p.get('version') != 'automatic-posture-rules-0.8' for p in configs):
-        raise ValueError('Depth checking requires automatic posture 0.8 on both views')
+    if any(not isinstance(p, dict) or p.get('version') not in ('automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12') for p in configs):
+        raise ValueError('Depth checking requires compatible automatic body-state profiles on both views')
     geometry_keys = set(AUTO_DEFAULTS) - {'version', 'view', 'auto_focal_prior',
         'auto_plane_orthogonal_max', 'auto_plane_visible_min', 'auto_reprojection_max'}
     if any(configs[0].get(k) != configs[1].get(k) for k in geometry_keys):

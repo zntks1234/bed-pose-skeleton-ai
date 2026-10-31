@@ -24,7 +24,7 @@ def main():
             page.wait_for_function("()=>document.getElementById('clip-input-image').naturalWidth===224")
             assert float(page.locator('#clip-lying').inner_text())>.9
             assert '정답 확률이 아닙니다' in page.locator('#clip-note').inner_text()
-            assert '미검증 초기값' in page.locator('#clip-policy').inner_text()
+            assert '가장 높은 항목' in page.locator('#clip-policy').inner_text()
             page.locator('#add-source').click();assert page.locator('#use-clip').is_checked()
             assert not page.locator('#use-silhouette').is_checked()
             assert not page.locator('#use-clip').is_disabled();page.locator('#dialog-close').click()

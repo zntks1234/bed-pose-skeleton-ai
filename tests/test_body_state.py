@@ -112,8 +112,11 @@ class BodyStateWebTests(unittest.TestCase):
         class Adapter(FakeAdapter):
             def estimate(self,m):return PoseOutput(copy.deepcopy(sample()['raw_candidates']),m.model_timestamp_ms,True)
         def factory(source,model,output_root,options_root,**kwargs):
-            return LiveEngine(source,Adapter(),{'execution_mode':'ordered_sequence'},output_root,
+            engine=LiveEngine(source,Adapter(),{'execution_mode':'ordered_sequence'},output_root,
                               profile=mapping_profile(),execution_kind='synthetic',body_state_provider=self.provider)
+            # This fixture exercises the legacy 0.8 provider contract, not the CLIP-specific 0.12 scores.
+            engine.posture_classifier=AutomaticClassifier(BODY_STATE_DEFAULTS,body_state_profile=PROFILE)
+            return engine
         self.workspace.factory=factory
         sid=self.demo();self.wait(lambda s:s['sessions'][0]['posture_assessment']['label']=='supine')
         return sid

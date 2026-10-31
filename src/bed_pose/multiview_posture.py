@@ -9,6 +9,11 @@ POLICY={'version':'two-view-image-scores-0.1','pooling':'equal_mean_of_usable_vi
         'thresholds':'maximum_of_member_thresholds','single_view_fallback':True,
         'bed_policy':'edge_observed_without_outside_or_boundary_conflict',
         'validation':'experimental_not_accuracy_validated'}
+EVIDENCE_POLICY=dict(POLICY,version='two-view-image-scores-0.2',
+                     bed_policy='0.11_joint_and_edge_evidence_without_outside_conflict')
+FORCED_POLICY=dict(POLICY,version='two-view-image-scores-0.3',
+                   thresholds='best_available_score_no_abstention',
+                   bed_policy='edge_if_supported_otherwise_generic_sitting')
 STATES=('lying','sitting','standing','other')
 DIRECTIONS=('supine','side','prone')
 
@@ -27,8 +32,8 @@ def compatible(profiles):
 
 
 def fuse(views,policy):
-    if policy!=POLICY:raise ValueError('Unsupported two-view posture policy')
-    result={'status':'held','label':None,'reasons':[],'method':POLICY['version'],
+    if policy not in (POLICY,EVIDENCE_POLICY,FORCED_POLICY):raise ValueError('Unsupported two-view posture policy')
+    result={'status':'held','label':None,'reasons':[],'method':policy['version'],
             'views':[{k:value for k,value in v.items() if k!='image_profile'} for v in views],'experimental':True,'identity_verified':False,'exposure_synchronized':False}
     profiles=[v.get('image_profile') for v in views]
     if not compatible(profiles):result['reasons']=['fusion_provider_mismatch'];return result
@@ -50,6 +55,7 @@ def fuse(views,policy):
     evidence.update(state_min=state_min,direction_min=direction_min)
     state=choose(evidence['state_scores'],state_min)
     direction_views=[b for _,b in usable if max(b['state_scores'],key=b['state_scores'].get)=='lying']
+    if policy==FORCED_POLICY and not direction_views:direction_views=[b for _,b in usable]
     if direction_views:
         evidence['direction_scores']={k:math.fsum(b['direction_scores'][k] for b in direction_views)/len(direction_views) for k in DIRECTIONS}
     direction=choose(evidence['direction_scores'],direction_min) if state=='lying' else None
@@ -58,8 +64,31 @@ def fuse(views,policy):
     observed=[x.get('relation') for x in relations if x.get('status')=='observed']
     relation={'status':'unknown','relation':None}
     if 'edge' in observed and not any(x in ('outside','boundary') for x in observed):relation={'status':'observed','relation':'edge'}
-    label,reason=compose({'status':'predicted' if state else 'held','state':state or 'unknown',
-                         'lying_direction':direction or 'unknown','reasons':[] if state else ['fusion_state_score_insufficient']},relation)
+    fused_state={'status':'predicted' if state else 'held','state':state or 'unknown',
+                 'lying_direction':direction or 'unknown','reasons':[] if state else ['fusion_state_score_insufficient']}
+    if policy==FORCED_POLICY:
+        from .posture_decision import finalize_forced
+        valid=[r for r in relations if r.get('status')=='observed' and r.get('relation') in ('inside','edge')]
+        if any(x in ('outside','boundary') for x in observed):valid=[]
+        edge=[r for r in valid if r.get('edge_posture_evidence',{}).get('supported')]
+        inside=[r for r in valid if r.get('sitting_inside_evidence',{}).get('supported')]
+        if edge and inside:valid=[]
+        elif edge:valid=edge
+        elif inside:valid=inside
+        relation=valid[0] if valid else {'status':'unknown','relation':None}
+        fused_state.update(scores=evidence['state_scores'],details={'direction_scores':evidence['direction_scores']})
+        label,reason,evidence['forced_decision']=finalize_forced(fused_state,relation)
+    elif policy==EVIDENCE_POLICY:
+        from .posture_decision import finalize_evidence
+        valid=[r for r in relations if r.get('status')=='observed' and r.get('relation') in ('inside','edge') and r.get('torso_available')]
+        if any(x in ('outside','boundary') for x in observed):valid=[]
+        if state=='sitting':
+            edge=[r for r in valid if r.get('edge_posture_evidence',{}).get('supported')]
+            inside=[r for r in valid if r.get('sitting_inside_evidence',{}).get('supported')]
+            valid=[] if edge and inside else edge or inside
+        relation=valid[0] if valid else {'status':'unknown','relation':None}
+        label,reason=finalize_evidence(fused_state,relation)
+    else:label,reason=compose(fused_state,relation)
     evidence['bed_relations']=observed
     if reason:result['reasons']=[reason]
     else:result.update(status='predicted',label=label)

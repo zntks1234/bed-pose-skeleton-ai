@@ -24,7 +24,7 @@ class WebTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name)
-        self.workspace=WebWorkspace(output_root=self.root/'records',engine_factory=factory)
+        self.workspace=WebWorkspace(output_root=self.root/'records',engine_factory=factory,model_store=self.root/'model-store')
         self.server=WorkspaceHTTPServer(self.workspace)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start()
         self.addCleanup(self.cleanup)
@@ -131,7 +131,28 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request('/api/inputs',{'kind':'video_file','video_asset':'../../etc/passwd'})[0],400)
         status,asset=self.request('/api/upload?kind=model&name=x.task',raw=b'model bytes')
         self.assertEqual(status,200)
-        self.assertEqual(self.workspace.assets[asset['asset_id']]['path'].parent, self.workspace.temp_root)
+        self.assertEqual(self.workspace.assets[asset['asset_id']]['path'].parent, self.root/'model-store')
+
+    def test_selected_model_survives_restart_and_failed_upload(self):
+        store=self.root/'model-store'
+        status,asset=self.request('/api/upload?kind=model&name=first.task',raw=b'first model')
+        self.assertEqual(status,200)
+        chosen=self.workspace.assets[asset['asset_id']]['path']
+        self.assertEqual(self.workspace.snapshot()['model'],'first.task')
+        self.workspace.close()
+        restored=WebWorkspace(model=self.root/'explicit.task',output_root=self.root/'records2',engine_factory=factory,model_store=store)
+        self.addCleanup(restored.close)
+        self.assertEqual(restored.model,chosen)
+        self.assertEqual(restored.snapshot()['model'],'first.task')
+        self.assertTrue(restored.snapshot()['model_available'])
+        self.assertEqual(restored.model.read_bytes(),b'first model')
+        with self.assertRaises(ValueError):restored.register_asset(self.root/'missing.task','model','missing.task')
+        self.assertEqual(restored.model,chosen)
+        chosen.write_bytes(b'changed')
+        again=WebWorkspace(output_root=self.root/'records3',engine_factory=factory,model_store=store)
+        self.addCleanup(again.close)
+        self.assertFalse(again.snapshot()['model_available'])
+        self.assertIsNotNone(again.snapshot()['model_error'])
 
     def test_shutdown_rejects_new_inputs_and_cleans_temporary_assets(self):
         sid=self.demo();root=self.workspace.temp_root
@@ -164,12 +185,14 @@ class WebTests(unittest.TestCase):
         manifest.pop('silhouette_profile')
         manifest.pop('native_pose_cues_profile')
         manifest.pop('decision_evidence_profile')
+        manifest.pop('stability_profile')
         for row in rows:
             row.pop('posture_assessment')
             row.pop('posture_evidence')
             row.pop('silhouette_observation');row.pop('silhouette_assessment')
             row.pop('native_pose_cues')
             row.pop('decision_evidence')
+            row.pop('stable_posture')
         path.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
         manifest['artifact_sha256']['live_frames.jsonl']=file_hash(path)
         atomic_json(root/'manifest.json',manifest)

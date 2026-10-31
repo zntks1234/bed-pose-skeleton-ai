@@ -65,6 +65,36 @@ class CameraSource:
             capture.release()
 
 
+class PiCameraSource(CameraSource):
+    """Local configuration supplies a private MJPEG URL; never include it in records."""
+    def __init__(self):
+        from pathlib import Path
+        self.index = 'raspberry_pi'
+        self.config = Path.home() / '.config' / 'bed-pose' / 'pi-camera-url.txt'
+        self.capture = None
+
+    def open(self):
+        import cv2
+        from urllib.parse import urlsplit
+        self.cv2 = cv2
+        try:
+            url = self.config.read_text(encoding='ascii').strip()
+            parsed = urlsplit(url)
+            if parsed.scheme != 'http' or not parsed.hostname or not parsed.path or parsed.query or parsed.username:
+                raise ValueError('invalid configuration')
+            self.capture = cv2.VideoCapture(url, cv2.CAP_FFMPEG,
+                [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1500])
+        except (OSError, ValueError, cv2.error) as exc:
+            raise SourceError('라즈베리파이 카메라 설정 또는 연결을 확인하세요.') from exc
+        if not self.capture.isOpened():
+            self.close()
+            raise SourceError('라즈베리파이 카메라에 연결할 수 없습니다.')
+        return {'kind':'camera', 'camera_index':self.index, 'backend':'FFmpeg MJPEG',
+                'opencv_version':cv2.__version__, 'timestamp_source':'received_after_read',
+                'exposure_timestamp_available':False, 'hardware_dropped_frames':None,
+                'pixel_format':'rgb24', 'mirror':False}
+
+
 class SyntheticSource:
     def __init__(self, interval=0.1):
         self.interval, self.index = interval, 0

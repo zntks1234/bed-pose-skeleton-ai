@@ -42,7 +42,7 @@ class PostureTests(unittest.TestCase):
         self.assertEqual(model.seen.points,((0,5),));self.assertFalse(a['identity_verified'])
 
     def test_abstention_invalid_output_failure_and_processing_gate(self):
-        for label,reason in ((None,'insufficient_or_out_of_scope'),('prone','invalid_classifier_output'),([], 'invalid_classifier_output')):
+        for label,reason in ((None,'insufficient_or_out_of_scope'),('unrecognized_posture','invalid_classifier_output'),([], 'invalid_classifier_output')):
             a=assess_frame(frame(),100,100,None,Classifier(label))
             self.assertEqual(a['status'],'held');self.assertIsNone(a['label']);self.assertIn(reason,a['reasons'])
         class Broken(Classifier):

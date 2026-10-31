@@ -10,6 +10,8 @@ from .live_recording import verify_live
 
 LABELS=('supine','side','edge_sitting')
 OUTSIDE=('sitting','standing','other')
+EVIDENCE_LABELS=LABELS+('sitting','prone')
+FORCED_LABELS=EVIDENCE_LABELS+('lying','standing','other')
 STATES=('lying','sitting','standing','other')
 
 
@@ -25,7 +27,7 @@ def load_annotations(path,measurement_id):
     for row in value['frames']:
         if (not isinstance(row,dict) or set(row)!={'stream_frame_id','label','annotation_id','uncertainty_reason'}
                 or type(row['stream_frame_id']) is not int or row['stream_frame_id']<0
-                or row['stream_frame_id'] in frames or row['label'] not in LABELS+OUTSIDE+('uncertain',)
+                or row['stream_frame_id'] in frames or row['label'] not in FORCED_LABELS+OUTSIDE+('uncertain',)
                 or not isinstance(row['annotation_id'],str) or not row['annotation_id'].strip()
                 or (row['label']=='uncertain' and (not isinstance(row['uncertainty_reason'],str) or not row['uncertainty_reason'].strip()))
                 or (row['label']!='uncertain' and row['uncertainty_reason'] is not None)):
@@ -37,8 +39,8 @@ def load_annotations(path,measurement_id):
 def _rate(n,d):return n/d if d else None
 
 
-def summarize(rows,annotations):
-    confusion={gt:dict.fromkeys(LABELS+('held',),0) for gt in LABELS+('out_of_scope',)}
+def summarize(rows,annotations,labels=LABELS):
+    confusion={gt:dict.fromkeys(labels+('held',),0) for gt in labels+('out_of_scope',)}
     coarse={gt:dict.fromkeys(STATES+('held',),0) for gt in STATES}
     seen=set();total=unannotated=uncertain=0
     for row in rows:
@@ -48,24 +50,24 @@ def summarize(rows,annotations):
         if gt=='uncertain':uncertain+=1;continue
         a=row.get('posture_assessment') or {}
         label=a.get('label') if row['processing_status']=='ok' and a.get('status')=='predicted' else None
-        if label not in LABELS:label='held'
-        confusion[gt if gt in LABELS else 'out_of_scope'][label]+=1
+        if label not in labels:label='held'
+        confusion[gt if gt in labels else 'out_of_scope'][label]+=1
         state=a.get('rule_features',{}).get('body_state') or {}
         predicted=state.get('state') if row['processing_status']=='ok' and state.get('status')=='predicted' else 'held'
         if predicted not in STATES:predicted='held'
-        coarse_gt='lying' if gt in ('supine','side') else 'sitting' if gt in ('sitting','edge_sitting') else gt
+        coarse_gt='lying' if gt in ('supine','side','prone') else 'sitting' if gt in ('sitting','edge_sitting') else gt
         coarse[coarse_gt][predicted]+=1
     if set(annotations)-seen:raise ValueError('Annotations reference frames missing from this measurement')
     metrics={}
-    for label in LABELS:
+    for label in labels:
         tp=confusion[label][label];support=sum(confusion[label].values());fn=support-tp
         fp=sum(counts[label] for gt,counts in confusion.items() if gt!=label)
         metrics[label]={'support':support,'tp':tp,'fp':fp,'fn_including_held':fn,
                         'precision':_rate(tp,tp+fp),'recall':_rate(tp,support),
                         'f1':_rate(2*tp,2*tp+fp+fn) if support else None}
-    target_count=sum(sum(confusion[k].values()) for k in LABELS)
-    correct=sum(confusion[k][k] for k in LABELS)
-    accepted=sum(sum(confusion[k][p] for p in LABELS) for k in LABELS)
+    target_count=sum(sum(confusion[k].values()) for k in labels)
+    correct=sum(confusion[k][k] for k in labels)
+    accepted=sum(sum(confusion[k][p] for p in labels) for k in labels)
     values=[m['f1'] for m in metrics.values() if m['support']]
     outside=sum(confusion['out_of_scope'].values())
     coarse_total=sum(sum(c.values()) for c in coarse.values())
@@ -74,9 +76,9 @@ def summarize(rows,annotations):
     return {'frame_count':total,'unannotated_frames':unannotated,'uncertain_excluded_frames':uncertain,
             'evaluated_target_frames':target_count,'out_of_scope_frames':outside,
             'confusion':confusion,'per_class':metrics,
-            'full_three_class_macro_f1':sum(values)/3 if len(values)==3 else None,
+            'full_three_class_macro_f1':sum(values)/3 if labels==LABELS and len(values)==3 else None,
             'observed_class_macro_f1':sum(values)/len(values) if values else None,
-            'macro_labels':[k for k in LABELS if metrics[k]['support']],
+            'macro_labels':[k for k in labels if metrics[k]['support']],
             'coverage':_rate(accepted,target_count),'held_rate':_rate(target_count-accepted,target_count),
             'accuracy_on_accepted':_rate(correct,accepted),'correct_fraction_including_held':_rate(correct,target_count),
             'out_of_scope_false_acceptance_rate':_rate(outside-confusion['out_of_scope']['held'],outside),
@@ -93,7 +95,9 @@ def evaluate(directory,output,annotations=None):
     manifest_hash=file_hash(manifest_path);frames_hash=file_hash(frames_path);manifest=load_json(manifest_path)
     annotation_hash=file_hash(annotations) if annotations is not None else None
     provenance,labels=load_annotations(annotations,manifest['measurement_id']) if annotations is not None else (None,{})
-    with frames_path.open(encoding='utf-8') as stream:metrics=summarize((strict_loads(line) for line in stream),labels)
+    version=(manifest.get('automatic_posture_profile') or {}).get('version')
+    classes=FORCED_LABELS if version=='automatic-posture-rules-0.12' else EVIDENCE_LABELS if version=='automatic-posture-rules-0.11' else LABELS
+    with frames_path.open(encoding='utf-8') as stream:metrics=summarize((strict_loads(line) for line in stream),labels,classes)
     if (file_hash(manifest_path)!=manifest_hash or file_hash(frames_path)!=frames_hash
             or annotations is not None and file_hash(annotations)!=annotation_hash):
         raise ValueError('Measurement or annotations changed during evaluation')

@@ -57,3 +57,4 @@ jobs:
           python tests/browser_multiview_posture.py
           python tests/browser_multicamera_setup.py
           python tests/browser_person_crop.py
+          python tests/browser_posture_stability.py

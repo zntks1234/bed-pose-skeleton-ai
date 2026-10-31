@@ -7,7 +7,12 @@ from .live_engine import LiveEngine
 
 def make_engine(source, model, output_root, options_root, *, demo=False, clip_model=None,
                 clip_device='cpu', clip_state_min=.5, clip_direction_min=.5, silhouette=False,
-                clip_precision='fp32',clip_shared=True,clip_batch_size=1,clip_batch_wait_ms=2.,person_fallback=False):
+                clip_precision='fp32',clip_shared=True,clip_batch_size=1,clip_batch_wait_ms=2.,person_fallback=False,
+                pose_device='cpu'):
+    if pose_device not in ('cpu', 'browser_gpu'):
+        raise ValueError('지원하지 않는 MediaPipe 실행 장치입니다.')
+    if pose_device == 'browser_gpu' and silhouette:
+        raise ValueError('GPU 실험 모드에서는 실루엣 마스크를 아직 지원하지 않습니다.')
     if demo:
         from .pose.fake import FakeAdapter
         return LiveEngine(source, FakeAdapter(), {'execution_mode': 'ordered_sequence'},
@@ -22,7 +27,7 @@ def make_engine(source, model, output_root, options_root, *, demo=False, clip_mo
         raise ValueError('추론 모델(.task)을 먼저 선택하세요.')
     options = Path(options_root)/(uuid.uuid4().hex+'.json')
     atomic_json(options, DEFAULT_OPTIONS)
-    settings = {'execution_mode': 'ordered_sequence', 'requested_device': 'cpu',
+    settings = {'execution_mode': 'ordered_sequence', 'requested_device': pose_device,
                 'assets': [{'role': 'pose_landmarker_task', 'path': str(model), 'sha256': file_hash(model)}],
                 'adapter_options_path': str(options), 'adapter_options_sha256': file_hash(options)}
     provider=None
@@ -35,5 +40,10 @@ def make_engine(source, model, output_root, options_root, *, demo=False, clip_mo
         if provider is None:raise ValueError('사람 영역 보완에는 CLIP이 필요합니다.')
         from .person_detector import PersonDetector
         detector=PersonDetector(device=clip_device)
-    return LiveEngine(source, MediaPipeAdapter(silhouette=silhouette), settings, output_root,
+    if pose_device == 'browser_gpu':
+        from .pose.browser_gpu import BrowserGPUAdapter
+        adapter = BrowserGPUAdapter()
+    else:
+        adapter = MediaPipeAdapter(silhouette=silhouette)
+    return LiveEngine(source, adapter, settings, output_root,
                       profile=mapping_profile(),body_state_provider=provider,person_detector=detector)

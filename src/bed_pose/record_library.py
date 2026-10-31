@@ -94,6 +94,7 @@ class OpenRecord:
                     'score_decision':(a or {}).get('rule_features',{}).get('score_decision'),
                     'body_assessment':(a or {}).get('rule_features',{}).get('body_assessment'),
                     'body_state':(a or {}).get('rule_features',{}).get('body_state'),
+                    'stable_posture':row.get('stable_posture'),
                     'decision_evidence':row.get('decision_evidence'),
                     'bed_relation':(a or {}).get('rule_features',{}).get('bed_relation'),
                     'context_assessment':(a or {}).get('rule_features',{}).get('context_assessment'),
@@ -165,6 +166,7 @@ class OpenRecord:
                 'stream_frame_id':row['stream_frame_id'],'source_media':media,
                 'width':self.manifest['width'],'height':self.manifest['height'],
                 'image':image,'preview':preview,'people':display_people(row,self.manifest['width'],self.manifest['height']),
+                'stable_posture':row.get('stable_posture'),
                 'decision_evidence':row.get('decision_evidence'),
                 'native_pose_cues':row.get('native_pose_cues'),
                 'bed_region':region,'posture_assessment':row.get('posture_assessment'),
@@ -232,6 +234,7 @@ class RecordLibrary:
         # Return original settings for inspection, never for live reconfiguration.
         return dict(record.meta,integrity='verified',counts=record.manifest['counts'],
                     automatic_profile=record.manifest.get('automatic_posture_profile'),
+                    stability_profile=record.manifest.get('stability_profile'),
                     score_semantics='independent_rule_fit_not_probability',
                     content='stored_frame_results_no_video_replay')
 

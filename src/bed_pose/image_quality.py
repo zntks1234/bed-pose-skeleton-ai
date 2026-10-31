@@ -6,7 +6,7 @@ POLICY = {'version':'joint-crop-quality-0.1', 'min_visibility':0.5,
           'validation':'experimental_initial_policy_not_accuracy'}
 
 
-def inspect_crop(row, candidate_id, width, height):
+def joint_points(row, candidate_id, width, height):
     from .pose.mediapipe import COCO_INDICES
     people=[p for p in row.get('mapped_people') or [] if p['candidate_id']==candidate_id]
     raw=[p for p in row.get('raw_candidates') or [] if p['candidate_id']==candidate_id]
@@ -23,6 +23,13 @@ def inspect_crop(row, candidate_id, width, height):
             if (confidence and j.get('availability')=='predicted' and type(x) in (int,float)
                     and type(y) in (int,float) and math.isfinite(x) and math.isfinite(y)
                     and 0<=x<width and 0<=y<height):points[i]=(x,y)
+    return tuple(points), reasons
+
+
+def inspect_crop(row, candidate_id, width, height):
+    """Legacy region policy, independent of alternate person-region providers."""
+    points,reasons=joint_points(row,candidate_id,width,height)
+    if not reasons:
         for name,indices in zip(('shoulder','hip','lower_body'),POLICY['required_groups']):
             if not any(points[i] is not None for i in indices):reasons.append('crop_'+name+'_missing')
     valid=[p for p in points if p is not None]

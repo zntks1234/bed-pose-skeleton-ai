@@ -24,7 +24,7 @@ class LiveFailure(RuntimeError):
 class LiveEngine:
     def __init__(self, source, adapter, settings, output_root, *, profile=None,
                  execution_kind='model_inference', clock=time.perf_counter_ns, utc_clock=time.time_ns,
-                 body_state_provider=None):
+                 body_state_provider=None,person_detector=None):
         self.source, self.adapter, self.settings = source, adapter, settings
         self.output_root = Path(output_root)
         self.profile = profile or MappingProfile()
@@ -48,6 +48,11 @@ class LiveEngine:
         self.target_tracker=TargetTracker()
         from .posture_diagnostics import PostureDiagnostics
         self.posture_diagnostics=PostureDiagnostics()
+        self.person_detector=person_detector
+        if person_detector is not None:
+            from .person_detector import validate_profile
+            validate_profile(person_detector.profile)
+            if body_state_provider is None:raise ValueError("Person crop fallback requires CLIP")
         self.body_state_provider=body_state_provider
         self.body_state_profile=None
         if body_state_provider is not None:
@@ -185,6 +190,9 @@ class LiveEngine:
         if self.posture_classifier and self.posture_classifier.profile['version']=='automatic-posture-rules-0.8':
             manifest['body_state_provider_profile']=self.body_state_profile
             manifest['image_runtime']=getattr(getattr(self.body_state_provider,'runtime',None),'execution_info',None)
+        if self.person_detector is not None:
+            from copy import deepcopy
+            manifest['person_crop_profile']=deepcopy(self.person_detector.profile)
         if getattr(self.source,'latest_camera',False):self.source.minimum_time=int(manifest['started_ns'])
         self.recorder = LiveRecorder(self.output_root/measurement_id, manifest, self.clock)
         self.recorder.event('measurement_started', effective_stream_frame_id=self.next_frame_id, request=request)
@@ -291,6 +299,9 @@ class LiveEngine:
             from .body_state import observe
             selection=assess_frame(row,*geometry,None)
             row['body_state_started_ns']=str(self.clock())
+            if self.person_detector is not None:
+                from .person_crop import observe as observe_crop
+                row['person_crop_observation']=observe_crop(row,rgb,selection,self.person_detector)
             row['body_state_observation']=observe(row,rgb,selection,self.body_state_provider,self.body_state_profile)
             row['body_state_finished_ns']=str(self.clock())
         from copy import deepcopy
@@ -337,7 +348,7 @@ class LiveEngine:
     def close(self, outcome='succeeded', error=None, request=None, reason='stream_closed'):
         self.target_tracker.hold('input_closed')
         errors = [error] if error else []
-        resources=(self.source,self.adapter)+( (self.body_state_provider,) if self.body_state_provider is not None else () )
+        resources=(self.source,self.adapter)+((self.person_detector,) if self.person_detector is not None else ())+ ( (self.body_state_provider,) if self.body_state_provider is not None else () )
         for resource in resources:
             try:
                 resource.close()

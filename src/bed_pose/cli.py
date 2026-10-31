@@ -87,6 +87,9 @@ def main(argv=None):
     clip_bench.add_argument('--batch-size',type=int,choices=range(1,5),default=1)
     clip_bench.add_argument('--iterations',type=int,default=20)
     clip_bench.add_argument('--output',type=Path,required=True)
+    person_setup=commands.add_parser('person-setup',help='Prepare optional YOLOS-tiny person crop detector')
+    person_setup.add_argument('--output',type=Path,default=Path('checkpoints/person-yolos-tiny'))
+    person_setup.add_argument('--source',type=Path,help='Offline YOLOS-tiny folder instead of download')
     clip_setup=commands.add_parser('clip-setup',help='Explicitly download or import CLIP ViT-B/16 and record asset hashes')
     clip_setup.add_argument('--output',type=Path,default=Path('checkpoints/clip-vit-base-patch16'))
     clip_setup.add_argument('--source',type=Path,help='Offline Hugging Face-format folder instead of downloading')
@@ -104,6 +107,10 @@ def main(argv=None):
     group_inspect.add_argument('--run',type=Path,required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command=='person-setup':
+            from .person_detector import setup
+            print(json.dumps(setup(args.output,args.source),ensure_ascii=False))
+            return 0
         if args.command=='clip-setup':
             from .clip_assets import setup_assets
             path,assets=setup_assets(args.output,source=args.source,revision=args.revision)

@@ -88,23 +88,31 @@ def observe(row,rgb,assessment,provider,profile):
         return (x,y) if (j.get('availability')=='predicted' and type(x) in (int,float) and type(y) in (int,float)
                          and math.isfinite(x) and math.isfinite(y) and 0<=x<w and 0<=y<h) else None
     points=tuple(point(j) for j in people[0]['joints'])
-    valid=[p for p in points if p is not None]
-    if len(valid)<2:
-        result.update(status='held',reasons=['body_state_target_unavailable']);return result
-    xs,ys=zip(*valid);dx=max(xs)-min(xs);dy=max(ys)-min(ys)
-    if dx<=0 or dy<=0:
-        result.update(status='held',reasons=['body_state_target_unavailable']);return result
-    # Fixed, versioned preprocessing, not a posture threshold: crop the selected
-    # person's observed joints with 10% padding; do not send a whole room.
-    x1=max(0,math.floor(min(xs)-.1*dx));x2=min(w,math.ceil(max(xs)+.1*dx)+1)
-    y1=max(0,math.floor(min(ys)-.1*dy));y2=min(h,math.ceil(max(ys)+.1*dy)+1)
+    if 'person_crop_observation' not in row:
+        valid=[p for p in points if p is not None]
+        if len(valid)<2 or max(p[0] for p in valid)==min(p[0] for p in valid) or max(p[1] for p in valid)==min(p[1] for p in valid):
+            result.update(status='held',reasons=['body_state_target_unavailable']);return result
     if profile.get('decision_policy',{}).get('crop_quality'):
         from .image_quality import inspect_crop
         points,quality=inspect_crop(row,assessment['candidate_id'],w,h)
+        fallback=row.get('person_crop_observation')
+        if quality['status']!='usable' and fallback is not None:
+            if (fallback.get('stream_frame_id')==row['stream_frame_id'] and fallback.get('clock_id')==row['clock_id']
+                    and fallback.get('received_ns')==row['received_ns'] and fallback.get('candidate_id')==assessment['candidate_id']
+                    and fallback.get('quality') is not None):quality=deepcopy(fallback['quality'])
         result['input_quality']=quality
         if quality['status']!='usable':
             result.update(status='held',reasons=['body_state_crop_quality_insufficient']);return result
         x1,y1,x2,y2=quality['bounds']
+    else:
+        valid=[p for p in points if p is not None]
+        if len(valid)<2:
+            result.update(status='held',reasons=['body_state_target_unavailable']);return result
+        xs,ys=zip(*valid);dx=max(xs)-min(xs);dy=max(ys)-min(ys)
+        if dx<=0 or dy<=0:
+            result.update(status='held',reasons=['body_state_target_unavailable']);return result
+        x1=max(0,math.floor(min(xs)-.1*dx));x2=min(w,math.ceil(max(xs)+.1*dx)+1)
+        y1=max(0,math.floor(min(ys)-.1*dy));y2=min(h,math.ceil(max(ys)+.1*dy)+1)
     local=tuple((p[0]-x1,p[1]-y1) if p is not None else None for p in points)
     try:
         decision=validate_decision(provider.estimate(ImageBodyInput(rgb[y1:y2,x1:x2],row['stream_frame_id'],row['clock_id'],
@@ -130,7 +138,12 @@ def validate_observation(value,row,candidate,profile):
     if (profile and profile.get('decision_policy',{}).get('crop_quality') and value['decision'] is not None
             and (not isinstance(value.get('input_quality'),dict) or value['input_quality'].get('status')!='usable')):
         raise ValueError('Missing CLIP input quality')
-    if 'input_quality' in value:
+    if 'input_quality' in value and isinstance(value['input_quality'],dict) and value['input_quality'].get('version')=='person-crop-quality-0.1':
+        q=value['input_quality']
+        fallback=row.get('person_crop_observation') or {}
+        if q!=fallback.get('quality') or fallback.get('candidate_id')!=candidate or (q['status']=='held' and value['decision'] is not None):
+            raise ValueError('Invalid detector fallback quality')
+    elif 'input_quality' in value:
         q=value['input_quality']
         if (not isinstance(q,dict) or set(q)!={'version','status','reasons','bounds','usable_joints','full_body_verified'}
                 or q['version']!='joint-crop-quality-0.1' or q['status'] not in ('usable','held')

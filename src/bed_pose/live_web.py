@@ -85,6 +85,12 @@ class WebWorkspace:
             self.clip_status={'available':False,'reason':'CLIP 준비 필요: python -m pip install -e ".[clip]" 후 python -m bed_pose clip-setup 실행'}
         if self.clip_status['available']:
             policy(clip_state_min,clip_direction_min,self.clip_options['clip_device'],precision=clip_precision)
+        self.person_crop_status={'available':False,'reason':'person-setup 실행 후 작업실을 다시 시작하세요.'}
+        try:
+            from .person_detector import read_assets, DIRECTORY
+            read_assets(DIRECTORY)
+            self.person_crop_status={'available':True,'reason':None}
+        except (OSError,ValueError,KeyError):pass
         self.sessions, self.assets = {}, {}
         self.groups = {}
         self.target_tickets = {}
@@ -148,8 +154,11 @@ class WebWorkspace:
             if type(use_clip) is not bool:raise ValueError('CLIP 사용 여부를 확인하세요.')
             if use_clip and (kind=='demo' or not self.clip_status['available']):
                 raise ValueError(self.clip_status['reason'] or '합성 입력에는 실제 CLIP을 적용하지 않습니다.')
+            person_fallback=values.get('person_fallback',False)
+            if type(person_fallback) is not bool or person_fallback and not use_clip:raise ValueError('사람 영역 보완에는 CLIP을 선택하세요.')
+            if person_fallback and not self.person_crop_status['available']:raise ValueError('person-setup 실행 후 작업실을 다시 시작하세요.')
             engine = self.factory(source, model, self.output_root, self.temp_root, demo=kind == 'demo',
-                                  **(self.clip_options if use_clip else {}), **({'silhouette':True} if silhouette else {}))
+                                  **(self.clip_options if use_clip else {}), **({'silhouette':True} if silhouette else {}), **({'person_fallback':True} if person_fallback else {}))
             worker = LiveWorker(engine)
             session_id = uuid.uuid4().hex
             state = {'id': session_id, 'title': title, 'kind': kind, 'phase': 'opening',
@@ -161,7 +170,7 @@ class WebWorkspace:
                      'width': None, 'height': None, 'posture': 'not_implemented', 'posture_assessment': None,
                      'posture_model_id':engine.posture_classifier.model_id if engine.posture_classifier else None,
                      'automatic_posture_profile':engine.posture_classifier.profile if engine.posture_classifier else None,
-                     'body_state_provider_profile':engine.body_state_profile, 'silhouette_enabled':silhouette}
+                     'body_state_provider_profile':engine.body_state_profile, 'silhouette_enabled':silhouette,'person_fallback_enabled':person_fallback}
             self.sessions[session_id] = Session(session_id, title, kind, worker, state)
             session=self.sessions[session_id]
             session.preview_worker=PreviewWorker(lambda rgb,quality:encode_preview(rgb,quality),
@@ -191,7 +200,7 @@ class WebWorkspace:
             result={'sessions':sessions,'groups':[g.public() for g in self.groups.values()],
                     'scan':self.scan_state,'closing':self.stop_requested.is_set(),
                     'preview_quality':self.preview_quality,'model':self.model.name,
-                    'model_available':self.model.is_file(),'clip':self.clip_status}
+                    'model_available':self.model.is_file(),'clip':self.clip_status,'person_crop':self.person_crop_status}
             if compact:result['profiles']=profiles
             # Detach mutable values once; HTTP performs the single JSON serialization.
             return deepcopy(result)
@@ -574,6 +583,7 @@ class WebWorkspace:
                      media_seconds=int(media['relative_time_ns'])/1e9 if media else None)
         state['target_tracking']=row['target_tracking']
         state['posture_assessment']=row['posture_assessment']
+        state['person_crop_observation']=row.get('person_crop_observation')
         state['decision_evidence']=row.get('decision_evidence')
         state['posture_evidence']=row.get('posture_evidence')
         state['native_pose_cues']=row.get('native_pose_cues')
@@ -585,6 +595,7 @@ class WebWorkspace:
                         'clock_id':row['clock_id'],'received_ns':row['received_ns'],
                         'target_tracking':row['target_tracking'],
                         'posture_assessment':row['posture_assessment'],
+                        'person_crop_observation':row.get('person_crop_observation'),
                         'decision_evidence':row.get('decision_evidence'),
                         'posture_evidence':row.get('posture_evidence'),
                         'native_pose_cues':row.get('native_pose_cues'),

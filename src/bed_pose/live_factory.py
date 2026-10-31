@@ -7,7 +7,7 @@ from .live_engine import LiveEngine
 
 def make_engine(source, model, output_root, options_root, *, demo=False, clip_model=None,
                 clip_device='cpu', clip_state_min=.5, clip_direction_min=.5, silhouette=False,
-                clip_precision='fp32',clip_shared=True,clip_batch_size=1,clip_batch_wait_ms=2.):
+                clip_precision='fp32',clip_shared=True,clip_batch_size=1,clip_batch_wait_ms=2.,person_fallback=False):
     if demo:
         from .pose.fake import FakeAdapter
         return LiveEngine(source, FakeAdapter(), {'execution_mode': 'ordered_sequence'},
@@ -30,5 +30,10 @@ def make_engine(source, model, output_root, options_root, *, demo=False, clip_mo
         from .clip_posture import ClipBodyStateProvider
         provider=ClipBodyStateProvider(clip_model,device=clip_device,state_min=clip_state_min,direction_min=clip_direction_min,
             precision=clip_precision,shared=clip_shared,batch_size=clip_batch_size,batch_wait_ms=clip_batch_wait_ms)
+    detector=None
+    if person_fallback:
+        if provider is None:raise ValueError('사람 영역 보완에는 CLIP이 필요합니다.')
+        from .person_detector import PersonDetector
+        detector=PersonDetector(device=clip_device)
     return LiveEngine(source, MediaPipeAdapter(silhouette=silhouette), settings, output_root,
-                      profile=mapping_profile(),body_state_provider=provider)
+                      profile=mapping_profile(),body_state_provider=provider,person_detector=detector)

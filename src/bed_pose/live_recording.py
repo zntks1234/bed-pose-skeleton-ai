@@ -111,6 +111,11 @@ def _verify(directory, manifest, hashes=True):
     state_mode=(manifest.get('automatic_posture_profile') or {}).get('version')=='automatic-posture-rules-0.8'
     if state_mode and 'body_state_provider_profile' not in manifest:
         raise IntegrityError('Missing body-state provider profile')
+    if 'person_crop_profile' in manifest:
+        from .person_detector import validate_profile as validate_detector
+        try:validate_detector(manifest['person_crop_profile'])
+        except (ValueError,TypeError,KeyError) as exc:raise IntegrityError('Invalid person crop profile') from exc
+        if not state_mode:raise IntegrityError('Person crop requires image provider')
     provider_profile=manifest.get('body_state_provider_profile')
     if provider_profile is not None:
         from .body_state import validate_profile
@@ -239,6 +244,11 @@ def _verify(directory, manifest, hashes=True):
             from .posture import assess_frame
             if state_mode != ('body_state_observation' in row):
                 raise IntegrityError('Missing or unexpected independent body-state observation')
+            if 'person_crop_profile' in manifest or 'person_crop_observation' in row:
+                from .person_crop import validate as validate_crop
+                if 'person_crop_profile' not in manifest or 'person_crop_observation' not in row:raise IntegrityError('Missing person crop extension')
+                try:validate_crop(row['person_crop_observation'],row,manifest['width'],manifest['height'],manifest['person_crop_profile'])
+                except (ValueError,TypeError,KeyError) as exc:raise IntegrityError('Invalid person crop evidence') from exc
             if state_mode:
                 from .body_state import validate_observation
                 selection=assess_frame(row,manifest['width'],manifest['height'],None)
@@ -296,6 +306,8 @@ def _verify(directory, manifest, hashes=True):
             if 'input_quality' in observation:
                 from .image_quality import inspect_crop
                 _,quality=inspect_crop(row,observation['candidate_id'],manifest['width'],manifest['height'])
+                if quality['status']!='usable' and row.get('person_crop_observation',{}).get('quality') is not None:
+                    quality=row['person_crop_observation']['quality']
                 if quality!=observation['input_quality']:raise IntegrityError('Crop quality differs from source joints')
             tracking=row.get('target_tracking')
             if tracking is not None and tracking != {'status':'not_configured','candidate_id':None}:

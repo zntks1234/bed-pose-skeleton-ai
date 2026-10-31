@@ -20,7 +20,7 @@ def main():
             browser=p.chromium.launch(executable_path=os.environ.get('BEDPOSE_CHROMIUM') or shutil.which('chromium'),headless=True,args=['--no-sandbox'])
             page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(case.server.url)
-            page.wait_for_function("()=>document.getElementById('stable-label').textContent==='바로 누움'")
+            page.wait_for_function("()=>document.getElementById('stable-label').textContent==='누움'")
             for s in case.workspace.sessions.values():s.worker.engine.body_state_provider.runtime.direction='side'
             page.wait_for_function("()=>document.getElementById('posture-value').textContent==='옆으로 누움'")
             page.wait_for_function("()=>['전환 확인 중','자세 확인 중','새 통합 관측 대기'].includes(document.getElementById('stable-label').textContent)")

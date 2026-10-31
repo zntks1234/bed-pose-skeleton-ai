@@ -14,7 +14,7 @@ def main():
             browser=p.chromium.launch(executable_path=os.environ.get('BEDPOSE_CHROMIUM') or shutil.which('chromium'),headless=True,args=['--no-sandbox'])
             page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(case.server.url)
-            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='바로 누움'")
+            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='누움'")
             page.locator('#posture-details > summary').click()
             page.locator('#decision-evidence summary').click()
             page.wait_for_function("()=>document.getElementById('decision-evidence-views').textContent.includes('사람 검출로 보완')")

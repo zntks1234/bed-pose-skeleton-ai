@@ -14,10 +14,11 @@ def main():
                                       headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
             page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(case.server.url)
-            page.wait_for_function("()=>document.getElementById('posture-value').textContent==='바로 누움'")
+            page.wait_for_function("()=>document.getElementById('posture-value').textContent==='누움'")
+            page.locator('#posture-details > summary').click()
             assert page.locator('#body-state-value').inner_text()=='누움'
             assert '영역 미지정' in page.locator('#bed-relation-value').inner_text()
-            assert page.locator('#context-candidate-value').inner_text()=='바로 누움'
+            assert page.locator('#context-candidate-value').inner_text()=='누움'
             page.locator('#start').click();case.wait(lambda s:s['sessions'][0]['recorded_frames']>=2)
             case.provider.decision.update(state='standing',lying_direction='unknown')
             page.wait_for_function("()=>document.getElementById('posture-value').textContent==='서 있음'")

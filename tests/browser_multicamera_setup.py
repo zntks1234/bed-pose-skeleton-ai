@@ -52,7 +52,7 @@ def main():
             page.locator('#beds-confirmed').check();page.locator('#group-skew').fill('1000')
             page.locator('#group-record-video').check()
             page.locator('#group-start').click()
-            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='바로 누움'")
+            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='누움'")
             page.locator('#group-stop').click()
             page.wait_for_function("()=>snapshot.groups[0].phase==='completed'")
             from bed_pose.io_utils import load_json

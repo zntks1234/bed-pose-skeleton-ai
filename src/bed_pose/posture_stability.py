@@ -2,18 +2,23 @@
 from copy import deepcopy
 from .io_utils import object_hash
 
-DEFAULT = {'version':'posture-stability-0.1', 'confirm_ms':500, 'min_samples':3,
+LEGACY = {'version':'posture-stability-0.1', 'confirm_ms':500, 'min_samples':3,
            'max_gap_ms':1000, 'expire_ms':1500, 'validation':'unvalidated_initial_values',
            'hold_policy':'clear_current_and_pending', 'future_frames':False}
+DEFAULT = dict(LEGACY,version='posture-stability-0.2')
 LABELS=('supine','side','edge_sitting','sitting','prone','lying','standing','other')
 
 
+def presentation_label(label, version):
+    return 'lying' if version==DEFAULT['version'] and label=='supine' else label
+
+
 def profile(options=None):
-    p=dict(DEFAULT)
-    if options is not None:
-        if not isinstance(options,dict) or set(options)-set(DEFAULT):raise ValueError('Invalid stability settings')
-        p.update(options)
-    if (any(p[k]!=DEFAULT[k] for k in ('version','validation','hold_policy','future_frames'))
+    if options is not None and (not isinstance(options,dict) or set(options)-set(DEFAULT)):raise ValueError('Invalid stability settings')
+    baseline=LEGACY if options and options.get('version')==LEGACY['version'] else DEFAULT
+    p=dict(baseline)
+    if options is not None:p.update(options)
+    if (any(p[k]!=baseline[k] for k in ('version','validation','hold_policy','future_frames'))
             or p['future_frames'] is not False
             or any(type(p[k]) is not int for k in ('confirm_ms','min_samples','max_gap_ms','expire_ms'))
             or not 0<=p['confirm_ms']<=10000 or not 2<=p['min_samples']<=100
@@ -24,7 +29,8 @@ def profile(options=None):
 
 def merged(profiles):
     configs=[profile(p) for p in profiles]
-    return profile({'confirm_ms':max(p['confirm_ms'] for p in configs),
+    version=DEFAULT['version'] if all(p['version']==DEFAULT['version'] for p in configs) else LEGACY['version']
+    return profile({'version':version, 'confirm_ms':max(p['confirm_ms'] for p in configs),
                     'min_samples':max(p['min_samples'] for p in configs),
                     'max_gap_ms':min(p['max_gap_ms'] for p in configs),
                     'expire_ms':min(p['expire_ms'] for p in configs)})
@@ -55,6 +61,7 @@ class Stabilizer:
             self.current=self.pending=self.since=self.confirmed_ns=None;self.count=0
         self.context=context;self.time=timestamp_ns;self.sequence=sequence
         raw=assessment.get('label') if assessment.get('status')=='predicted' else None
+        raw=presentation_label(raw,self.profile['version'])
         if raw not in LABELS or reset_reason=='observation_not_increasing':
             self.current=self.pending=self.since=self.confirmed_ns=None;self.count=0
             status='held';label=None;reason=reset_reason or 'instantaneous_unavailable'

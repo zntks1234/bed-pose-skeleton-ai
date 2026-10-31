@@ -292,9 +292,10 @@ class MeasurementGroup:
 
     def stable_public(self, views, posture):
         """Live latest-pair preview, not the saved FIFO alignment sequence."""
-        from .posture_stability import project,group_context
+        from .posture_stability import project,group_context,presentation_label
+        label=lambda value:presentation_label(value,self.stability.profile['version'])
         ids=tuple((v.get('assessment') or {}).get('stream_frame_id',-1) for v in views)
-        gate=(posture['status'],posture.get('label'),tuple(posture.get('reasons') or []))
+        gate=(posture['status'],label(posture.get('label')),tuple(posture.get('reasons') or []))
         now=time.perf_counter_ns()
         context=group_context(views,posture,[s.state.get('bed_region_revision') for s in self.members])
         from .io_utils import object_hash
@@ -311,6 +312,6 @@ class MeasurementGroup:
         if result is not None:
             result['time_basis']='receive_time_approximation'
             result['sampling']='live_distinct_latest_pairs'
-            if not fresh and not same and posture['status']=='predicted' and posture.get('label')!=self.stability.result.get('instantaneous_label'):
+            if not fresh and not same and posture['status']=='predicted' and label(posture.get('label'))!=label(self.stability.result.get('instantaneous_label')):
                 result.update(status='waiting_for_pair',label=None,reasons=['fresh_pair_required'])
         return result

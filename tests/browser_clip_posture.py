@@ -14,7 +14,7 @@ def main():
                                       headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
             page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(case.server.url)
-            page.wait_for_function("()=>document.getElementById('posture-value').textContent==='바로 누움'")
+            page.wait_for_function("()=>document.getElementById('posture-value').textContent==='누움'")
             page.locator('#posture-details > summary').click()
             page.locator('#decision-evidence summary').click()
             assert page.locator('#decision-evidence-views p').count()==1
@@ -32,7 +32,7 @@ def main():
             page.wait_for_function("()=>document.getElementById('clip-evidence').hidden")
             assert page.locator('#clip-input-image').get_attribute('src') is None
             page.locator('#open-records').click();page.locator('.records-item').first.click()
-            page.wait_for_function("()=>document.querySelector('#records-frames tr')?.textContent.includes('바로 누움')")
+            page.wait_for_function("()=>document.querySelector('#records-frames tr')?.textContent.includes('누움')")
             assert not errors,errors
             browser.close()
         print('PASS: CLIP toggle, actual input preview, uncalibrated scores, EOF cleanup and record display; prescribed test similarities')

@@ -17,8 +17,19 @@ class StabilityTests(unittest.TestCase):
         self.assertEqual(m.observe(raw(),0,0,{} )['status'],'confirming')
         self.assertEqual(m.observe(raw(),250_000_000,1,{})['status'],'confirming')
         stable=m.observe(raw(),500_000_000,2,{})
-        self.assertEqual(stable['label'],'supine');self.assertEqual(stable['confirmation_delay_ms'],500.)
+        self.assertEqual(stable['label'],'lying');self.assertEqual(stable['confirmation_delay_ms'],500.)
         self.assertIsNone(m.observe(raw(),600_000_000,3,{})['confirmation_delay_ms'])
+
+    def test_unified_lying_stays_stable_and_legacy_profile_remains_distinct(self):
+        m=Stabilizer()
+        for i,label in enumerate(('supine','lying','supine')):
+            result=m.observe(raw(label),i*250_000_000,i,{})
+        self.assertEqual((result['status'],result['label']),('stable','lying'))
+        self.assertEqual(result['instantaneous_label'],'supine')
+        legacy=Stabilizer({'version':'posture-stability-0.1'})
+        for i in range(3):result=legacy.observe(raw('supine'),i*250_000_000,i,{})
+        self.assertEqual(result['label'],'supine')
+        self.assertEqual(legacy.observe(raw('lying'),750_000_000,3,{})['status'],'changing')
 
     def test_duplicate_polling_cannot_confirm_and_returns_detached_copy(self):
         m=Stabilizer();first=m.observe(raw(),0,0,{})
@@ -33,8 +44,8 @@ class StabilityTests(unittest.TestCase):
 
     def test_changed_candidate_never_emits_previous_label_as_current(self):
         m=self.stable();v=m.observe(raw('side'),600_000_000,3,{})
-        self.assertEqual(v['status'],'changing');self.assertIsNone(v['label']);self.assertEqual(v['last_confirmed_label'],'supine')
-        self.assertEqual(m.observe(raw(),700_000_000,4,{})['label'],'supine')
+        self.assertEqual(v['status'],'changing');self.assertIsNone(v['label']);self.assertEqual(v['last_confirmed_label'],'lying')
+        self.assertEqual(m.observe(raw(),700_000_000,4,{})['label'],'lying')
         for i,t in enumerate((800,1050,1300),5):v=m.observe(raw('side'),t*1_000_000,i,{})
         self.assertEqual(v['label'],'side')
 
@@ -55,7 +66,7 @@ class StabilityTests(unittest.TestCase):
         self.assertEqual(project(original,2_000_000_001)['status'],'expired')
         self.assertIsNone(project(original,2_000_000_001)['label'])
         self.assertEqual(m.result,original)
-        self.assertEqual(project(original,None)['label'],'supine') # paused stored video
+        self.assertEqual(project(original,None)['label'],'lying') # paused stored video
         self.assertEqual(project(original,None,closed=True)['status'],'expired')
 
     def test_source_video_pts_and_label_independence(self):
@@ -69,8 +80,15 @@ class StabilityTests(unittest.TestCase):
                 result.append(frame(m,r))
             return result
         self.assertEqual(sequence('supine'),sequence('side'))
-        self.assertEqual(sequence('side')[-1]['label'],'supine')
+        self.assertEqual(sequence('side')[-1]['label'],'lying')
         self.assertEqual(sequence('side')[-1]['time_basis'],'media_relative')
+
+    def test_unified_result_preserves_legacy_profile_validation(self):
+        from bed_pose.posture_stability import LEGACY,merged
+        self.assertEqual(profile(dict(LEGACY)),LEGACY)
+        self.assertEqual(merged([dict(LEGACY),dict(LEGACY)])['version'],'posture-stability-0.1')
+        self.assertEqual(merged([profile(),profile()])['version'],'posture-stability-0.2')
+        self.assertEqual(merged([dict(LEGACY),profile()])['version'],'posture-stability-0.1')
 
     def test_settings_reject_hidden_threshold_changes_and_invalid_ranges(self):
         for value in ({'min_samples':True},{'min_samples':1},{'confirm_ms':.5},{'max_gap_ms':2000,'expire_ms':1000},{'future_frames':True}):
@@ -93,7 +111,7 @@ class StabilityTests(unittest.TestCase):
         for i in (1,2):
             for x in v:x['assessment']['stream_frame_id']=i;x['time_ns']=str(i*250_000_000)
             with patch('bed_pose.group_session.time.perf_counter_ns',return_value=i*250_000_000):a=g.stable_public(v,raw())
-        self.assertEqual(a['label'],'supine')
+        self.assertEqual(a['label'],'lying')
         with patch('bed_pose.group_session.time.perf_counter_ns',return_value=2_000_000_001):self.assertEqual(g.stable_public(v,raw())['status'],'expired')
 
 

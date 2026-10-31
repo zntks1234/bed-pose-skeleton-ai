@@ -15,7 +15,7 @@ def main():
             page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(case.server.url)
             page.locator('#fused-posture').wait_for(state='visible')
-            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='바로 누움'")
+            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='누움'")
             page.locator('#posture-details > summary').click()
             assert '두 시점 영상 점수 통합' in page.locator('#fused-detail').inner_text()
             assert '통합 점수' in page.locator('#fused-detail').inner_text()
@@ -32,11 +32,11 @@ def main():
                             'supine':.05,'side':0.,'prone':0.},10.
                 runtime.similarities=weak_direction
             page.wait_for_function("()=>snapshot.groups[0].posture_assessment?.fusion_evidence?.direction_scores?.supine < .5")
-            assert page.locator('#fused-label').inner_text()=='바로 누움'
+            assert page.locator('#fused-label').inner_text()=='누움'
             assert '최고 점수 선택' in page.locator('#fused-detail').inner_text()
             for member in members:
                 del member.worker.engine.body_state_provider.runtime.similarities
-            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='바로 누움'")
+            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='누움'")
             # Change only prescribed model output in one stream, not image accuracy.
             member=case.workspace.groups[gid].members[1]
             member.worker.engine.body_state_provider.runtime.direction='side'

@@ -92,12 +92,14 @@ class RecordWebTests(unittest.TestCase):
         manifest.pop('silhouette_profile')
         manifest.pop('native_pose_cues_profile')
         manifest.pop('decision_evidence_profile')
+        manifest.pop('stability_profile')
         path=root/'live_frames.jsonl';rows=[json.loads(l) for l in path.read_text(encoding='utf-8').splitlines()]
         for row in rows:
             row.pop('posture_assessment');row.pop('posture_evidence')
             row.pop('silhouette_observation');row.pop('silhouette_assessment')
             row.pop('native_pose_cues')
             row.pop('decision_evidence')
+            row.pop('stable_posture')
         path.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
         manifest['artifact_sha256'][path.name]=file_hash(path);atomic_json(root/'manifest.json',manifest)
         self.assertEqual(self.request('/api/records/open',{'record_id':root.name})[0],200)

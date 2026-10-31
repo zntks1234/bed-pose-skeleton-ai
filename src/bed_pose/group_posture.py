@@ -16,6 +16,9 @@ def predictions(group,directory):
     from .decision_evidence import PROFILE as DECISION_PROFILE, group as group_evidence
     if 'decision_evidence_profile' in group and group['decision_evidence_profile']!=DECISION_PROFILE:
         raise IntegrityError('Unsupported group decision evidence profile')
+    from .posture_stability import Stabilizer,group_context,profile as stability_profile
+    if 'stability_profile' in group and group['stability_profile']!=stability_profile(group['stability_profile']):raise IntegrityError('Invalid group stability profile')
+    stability=Stabilizer(group['stability_profile']) if 'stability_profile' in group else None
     configs=profiles(group);timeline=confirmations(group)
     policy=group.get('posture_fusion_policy')
     if policy is not None:
@@ -41,6 +44,10 @@ def predictions(group,directory):
             result['method']=a['method'];result['fusion_evidence']=a.get('fusion_evidence')
         if 'decision_evidence_profile' in group:
             result['decision_evidence']=group_evidence(views,a)
+        if stability is not None:
+            result['stable_posture']=stability.observe(a,max(times,default=0),row['alignment_id'],
+                group_context(views,a,[v.get('bed_region_revision') if v else None for v in row['views']]))
+            result['stable_posture'].update(time_basis='receive_time_approximation',sampling='saved_fifo_pairs')
         yield result
 
 

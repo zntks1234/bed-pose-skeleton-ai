@@ -42,6 +42,10 @@ class MeasurementGroup:
             self.data['posture_fusion_policy']=copy.deepcopy(POLICY)
         from .decision_evidence import PROFILE as DECISION_PROFILE
         self.data['decision_evidence_profile']=copy.deepcopy(DECISION_PROFILE)
+        from .posture_stability import Stabilizer,merged
+        self.stability=Stabilizer(merged([s.worker.engine.stability.profile for s in members]))
+        self.data['stability_profile']=dict(self.stability.profile)
+        self._stable_ids=None;self._stable_gate=None;self._stable_sequence=0;self._stable_latest=None
         self.finished, self.failed = False, False
         self._finalize_job=None
         self.save()
@@ -157,6 +161,8 @@ class MeasurementGroup:
                 plan['stop_trigger']='duration_elapsed'
                 self.stop()
 
+        if self.data['phase']=='recording':self.public(update_stability=True)
+
         if self._finalize_job is not None:
             try:self.data=self._finalize_job.get_nowait()
             except queue.Empty:return
@@ -224,7 +230,7 @@ class MeasurementGroup:
         self.save()
         self.finished=True
 
-    def public(self):
+    def public(self, update_stability=False):
         observations=[]
         if self.data['target_selections']:
             for member in self.members:
@@ -259,4 +265,34 @@ class MeasurementGroup:
             confirmations(self.data),self.data['phase']=='recording' and all(s.kind!='video_file' for s in self.members),time.perf_counter_ns(),fusion_policy=self.data.get('posture_fusion_policy'))
         from .decision_evidence import group as group_evidence
         posture['decision_evidence']=group_evidence(views,posture)
+        from .posture_stability import project
+        if update_stability:self._stable_latest=self.stable_public(views,posture)
+        posture['stable_posture']=project(self._stable_latest,time.perf_counter_ns(),closed=self.data['phase']!='recording')
+        if posture['stable_posture'] is not None and posture['status']!='predicted' and self.data['phase']=='recording':
+            posture['stable_posture'].update(status='held',label=None,reasons=['instantaneous_unavailable'])
         return dict(self.data,directory=str(self.directory),target_observations=observations,plan_progress=progress,posture_assessment=posture)
+
+    def stable_public(self, views, posture):
+        """Live latest-pair preview, not the saved FIFO alignment sequence."""
+        from .posture_stability import project,group_context
+        ids=tuple((v.get('assessment') or {}).get('stream_frame_id',-1) for v in views)
+        gate=(posture['status'],posture.get('label'),tuple(posture.get('reasons') or []))
+        now=time.perf_counter_ns()
+        context=group_context(views,posture,[s.state.get('bed_region_revision') for s in self.members])
+        from .io_utils import object_hash
+        context_changed=self.stability.context is not None and self.stability.context!=object_hash(context)
+        same=ids==self._stable_ids and gate==self._stable_gate and not context_changed
+        fresh=self._stable_ids is None or all(a>b for a,b in zip(ids,self._stable_ids))
+        if not same and (context_changed or posture['status']!='predicted' or fresh or self._stable_gate is None or self._stable_gate[0]!='predicted'):
+            if posture['status']!='predicted':self.stability.reset()
+            self._stable_sequence+=1
+            timestamp=max((int(v.get('time_ns','0')) for v in views),default=0)
+            self.stability.observe(posture,timestamp,self._stable_sequence,context)
+            self._stable_ids=ids;self._stable_gate=gate
+        result=project(self.stability.result,now,closed=self.data['phase']!='recording')
+        if result is not None:
+            result['time_basis']='receive_time_approximation'
+            result['sampling']='live_distinct_latest_pairs'
+            if not fresh and not same and posture['status']=='predicted' and posture.get('label')!=self.stability.result.get('instantaneous_label'):
+                result.update(status='waiting_for_pair',label=None,reasons=['fresh_pair_required'])
+        return result

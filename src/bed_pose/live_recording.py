@@ -122,6 +122,13 @@ def _verify(directory, manifest, hashes=True):
         if not state_mode:raise IntegrityError('Unexpected body-state provider profile')
         try:validate_profile(provider_profile,manifest['execution_kind'])
         except ValueError as exc:raise IntegrityError('Invalid body-state provider profile') from exc
+    stabilizer=None
+    if 'stability_profile' in manifest:
+        from .posture_stability import Stabilizer,profile as stability_profile
+        try:
+            if manifest['stability_profile']!=stability_profile(manifest['stability_profile']):raise ValueError('Invalid stability profile')
+            stabilizer=Stabilizer(manifest['stability_profile'])
+        except (ValueError,TypeError) as exc:raise IntegrityError('Invalid stability profile') from exc
     revision = manifest['initial_bed_revision']
     regions={manifest['initial_bed_revision']:manifest['initial_bed_region']}
     changes = []
@@ -272,6 +279,11 @@ def _verify(directory, manifest, hashes=True):
                 from .posture import assess_frame
                 if not equivalent(row['posture_assessment'],assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']],reference_model)):
                     raise IntegrityError('Posture assessment differs from source frame')
+            if stabilizer is not None or 'stable_posture' in row:
+                from .posture_stability import frame as stabilize
+                if 'posture_assessment' not in row:raise IntegrityError('Missing posture assessment for stability')
+                if stabilizer is None or 'stable_posture' not in row or not equivalent(row['stable_posture'],stabilize(stabilizer,row)):
+                    raise IntegrityError('Stable posture differs from original observation sequence')
             if 'decision_evidence_profile' in manifest or 'decision_evidence' in row:
                 if 'posture_assessment' not in row:raise IntegrityError('Missing posture assessment for decision evidence')
                 from .decision_evidence import PROFILE as DECISION_PROFILE, single

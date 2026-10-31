@@ -114,6 +114,8 @@ class WebWorkspace:
         with self.lock:
             if self.stop_requested.is_set():
                 raise ValueError('작업실을 종료하고 있습니다.')
+            from .posture_stability import profile as stability_profile
+            temporal_configuration=stability_profile(values.get('stability'))
             kind = values.get('kind')
             model = self.model
             if values.get('model_asset'):
@@ -159,6 +161,8 @@ class WebWorkspace:
             if person_fallback and not self.person_crop_status['available']:raise ValueError('person-setup 실행 후 작업실을 다시 시작하세요.')
             engine = self.factory(source, model, self.output_root, self.temp_root, demo=kind == 'demo',
                                   **(self.clip_options if use_clip else {}), **({'silhouette':True} if silhouette else {}), **({'person_fallback':True} if person_fallback else {}))
+            from .posture_stability import Stabilizer
+            if values.get('stability') is not None:engine.stability=Stabilizer(temporal_configuration)
             worker = LiveWorker(engine)
             session_id = uuid.uuid4().hex
             state = {'id': session_id, 'title': title, 'kind': kind, 'phase': 'opening',
@@ -170,7 +174,7 @@ class WebWorkspace:
                      'width': None, 'height': None, 'posture': 'not_implemented', 'posture_assessment': None,
                      'posture_model_id':engine.posture_classifier.model_id if engine.posture_classifier else None,
                      'automatic_posture_profile':engine.posture_classifier.profile if engine.posture_classifier else None,
-                     'body_state_provider_profile':engine.body_state_profile, 'silhouette_enabled':silhouette,'person_fallback_enabled':person_fallback}
+                     'body_state_provider_profile':engine.body_state_profile, 'silhouette_enabled':silhouette,'person_fallback_enabled':person_fallback,'stability_profile':dict(engine.stability.profile)}
             self.sessions[session_id] = Session(session_id, title, kind, worker, state)
             session=self.sessions[session_id]
             session.preview_worker=PreviewWorker(lambda rgb,quality:encode_preview(rgb,quality),
@@ -184,10 +188,13 @@ class WebWorkspace:
     def snapshot(self, compact=False, known_profiles=()):
         with self.lock:
             sessions=[];profiles={}
-            fixed=('automatic_posture_profile','body_state_provider_profile','posture_reference_profile')
+            fixed=('automatic_posture_profile','body_state_provider_profile','posture_reference_profile','stability_profile')
             for session in self.sessions.values():
                 if not compact:
-                    sessions.append(session.state)
+                    from .posture_stability import project
+                    current=dict(session.state)
+                    if session.worker is not None:current['stable_posture']=project(current.get('stable_posture'),session.worker.engine.clock() if session.kind=='camera' else None,closed=current.get('closed',False) or current.get('phase') in ('error','closing'))
+                    sessions.append(current)
                     continue
                 sources=tuple((k in session.state,session.state.get(k)) for k in fixed)
                 if session.settings_sources is None or any(a[0]!=b[0] or a[1] is not b[1] for a,b in zip(sources,session.settings_sources)):
@@ -195,7 +202,10 @@ class WebWorkspace:
                     session.settings_sources=sources
                     session.settings_bundle=deepcopy({k:session.state[k] for k in fixed if k in session.state})
                     session.settings_key=object_hash(session.settings_bundle)
-                sessions.append(dict({k:v for k,v in session.state.items() if k not in fixed},settings_key=session.settings_key))
+                from .posture_stability import project
+                current=dict({k:v for k,v in session.state.items() if k not in fixed},settings_key=session.settings_key)
+                if session.worker is not None:current['stable_posture']=project(current.get('stable_posture'),session.worker.engine.clock() if session.kind=='camera' else None,closed=current.get('closed',False) or current.get('phase') in ('error','closing'))
+                sessions.append(current)
                 if session.settings_key not in known_profiles:profiles[session.settings_key]=session.settings_bundle
             result={'sessions':sessions,'groups':[g.public() for g in self.groups.values()],
                     'scan':self.scan_state,'closing':self.stop_requested.is_set(),
@@ -467,14 +477,18 @@ class WebWorkspace:
             if manifest['run_status'] == 'failed' and not state['error']:
                 state['error'] = '오류로 측정을 종료했습니다. 기록을 확인하세요.'
         elif kind == 'posture_mode':
+            state['stable_posture']=None
             state.update(automatic_posture_profile=value['profile'],posture_reference_profile=None,posture_model_id=value['model_id'],pending=None)
         elif kind == 'posture_reference':
+            state['stable_posture']=None
             state['automatic_posture_profile']=None
             state['posture_model_id']=value['model_id']
             state['posture_reference_profile']=value['profile']
             state['posture_reference_model_id']=value['model_id']
             state['pending']=None
         elif kind == 'target_selected':
+            state['stable_posture']=None
+            session.stability_target_track=value['tracking'].get('track_id')
             state['target_tracking']=value['tracking']
             state['target_selection_applied']=value.get('selection_id')
             state['target_selection_pending']=None
@@ -583,6 +597,8 @@ class WebWorkspace:
                      media_seconds=int(media['relative_time_ns'])/1e9 if media else None)
         state['target_tracking']=row['target_tracking']
         state['posture_assessment']=row['posture_assessment']
+        state['stable_posture']=row.get('stable_posture') if getattr(session,'stability_target_track',row['posture_assessment'].get('track_id'))==row['posture_assessment'].get('track_id') and state.get('posture_model_id')==row['posture_assessment'].get('classifier_id') else None
+        state['bed_region_revision']=row['bed_region_revision']
         state['person_crop_observation']=row.get('person_crop_observation')
         state['decision_evidence']=row.get('decision_evidence')
         state['posture_evidence']=row.get('posture_evidence')
@@ -595,6 +611,7 @@ class WebWorkspace:
                         'clock_id':row['clock_id'],'received_ns':row['received_ns'],
                         'target_tracking':row['target_tracking'],
                         'posture_assessment':row['posture_assessment'],
+                        'stable_posture':row.get('stable_posture'),
                         'person_crop_observation':row.get('person_crop_observation'),
                         'decision_evidence':row.get('decision_evidence'),
                         'posture_evidence':row.get('posture_evidence'),
@@ -645,7 +662,9 @@ class WebWorkspace:
             if provider is not None:provider.input_preview_enabled=clip_preview
             result=session.view
             if result is not None:
-                result=dict(result,age_ms=max(0,session.worker.engine.clock()-int(result['received_ns']))/1e6)
+                from .posture_stability import project
+                result=dict(result,age_ms=max(0,session.worker.engine.clock()-int(result['received_ns']))/1e6,
+                            stable_posture=project(result.get('stable_posture'),session.worker.engine.clock() if session.kind=='camera' else None,closed=session.state.get('closed',False) or session.state.get('phase') in ('error','closing')))
             if result is not None and not clip_preview:return dict(result,body_state_input_preview=None)
             if result is not None and callable(getattr(provider,'input_preview',None)):
                 return dict(result,body_state_input_preview=provider.input_preview(result['frame_id']))

@@ -18,8 +18,16 @@ def main():
             page.wait_for_function("()=>document.getElementById('fused-label').textContent==='바로 누움'")
             assert '두 시점 영상 점수 통합' in page.locator('#fused-detail').inner_text()
             assert '통합 점수' in page.locator('#fused-detail').inner_text()
+            page.locator('#decision-evidence summary').click()
+            assert page.locator('#decision-evidence-views p').count()==2
+            assert '상태 기여 50%' in page.locator('#decision-evidence-views').inner_text()
+            assert '불일치 없음' in page.locator('#decision-evidence-note').inner_text()
+            # Change only prescribed model output in one stream, not image accuracy.
+            member=case.workspace.groups[gid].members[1]
+            member.worker.engine.body_state_provider.runtime.direction='side'
+            page.wait_for_function("()=>document.getElementById('decision-evidence-note').textContent.includes('시점 간 불일치: 누운 방향')")
             page.evaluate('setGridMode(true)')
-            page.wait_for_function("()=>document.getElementById('fused-label').textContent==='바로 누움'")
+            page.wait_for_function("()=>document.getElementById('decision-evidence-note').textContent.includes('시점 간 불일치')")
             assert not errors,errors
             browser.close()
         case.request('/api/group',{'action':'stop','group_id':gid})

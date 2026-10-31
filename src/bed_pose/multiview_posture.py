@@ -1,7 +1,8 @@
 """Experimental image-score fusion, independent of OS, inference backend and bed geometry."""
 from copy import deepcopy
 import math
-from .body_state import compose
+from .posture_decision import finalize as compose, choose, scores_valid
+from .decision_evidence import camera
 
 POLICY={'version':'two-view-image-scores-0.1','pooling':'equal_mean_of_usable_views',
         'direction_pooling':'views_whose_top_state_is_lying',
@@ -25,18 +26,6 @@ def compatible(profiles):
         a['decision_policy'].get(k)==b['decision_policy'].get(k) for k in ('prompts','score_policy','text_pooling','dtype'))
 
 
-def scores_valid(scores,names):
-    return (isinstance(scores,dict) and set(scores)==set(names)
-            and all(type(v) in (int,float) and math.isfinite(v) and 0<=v<=1 for v in scores.values())
-            and abs(math.fsum(scores.values())-1)<1e-6)
-
-
-def choose(scores,threshold):
-    if not scores:return None
-    best=max(scores,key=scores.get)
-    return best if scores[best]>=threshold and sum(abs(v-scores[best])<=1e-8 for v in scores.values())==1 else None
-
-
 def fuse(views,policy):
     if policy!=POLICY:raise ValueError('Unsupported two-view posture policy')
     result={'status':'held','label':None,'reasons':[],'method':POLICY['version'],
@@ -48,23 +37,21 @@ def fuse(views,policy):
     usable=[]
     for v in views:
         body=v['assessment'].get('rule_features',{}).get('body_state',{})
-        ok=(body.get('input_quality',{}).get('status')=='usable' and not body.get('error')
-            and body.get('score_semantics')=='uncalibrated_probability'
-            and scores_valid(body.get('scores'),STATES)
-            and scores_valid(body.get('details',{}).get('direction_scores'),DIRECTIONS))
+        common=camera(v['assessment'],input_id=v['input_id'],time_ns=v.get('time_ns'),profile=v.get('image_profile'))
+        ok=common['fusion_usable']
         evidence['contributors'].append({'input_id':v['input_id'],'used':ok,
              'reasons':[] if ok else body.get('reasons') or ['fusion_view_evidence_unavailable']})
-        if ok:usable.append((v,body))
+        if ok:usable.append((v,common))
     if not usable:result['reasons']=['fusion_no_usable_view'];return result
     evidence['mode']='two_view_fusion' if len(usable)==2 else 'single_view_fallback'
-    evidence['state_scores']={k:math.fsum(b['scores'][k] for _,b in usable)/len(usable) for k in STATES}
+    evidence['state_scores']={k:math.fsum(b['state_scores'][k] for _,b in usable)/len(usable) for k in STATES}
     cfgs=[p['decision_policy'] for p in profiles]
     state_min=max(c['state_min'] for c in cfgs);direction_min=max(c['direction_min'] for c in cfgs)
     evidence.update(state_min=state_min,direction_min=direction_min)
     state=choose(evidence['state_scores'],state_min)
-    direction_views=[b for _,b in usable if max(b['scores'],key=b['scores'].get)=='lying']
+    direction_views=[b for _,b in usable if max(b['state_scores'],key=b['state_scores'].get)=='lying']
     if direction_views:
-        evidence['direction_scores']={k:math.fsum(b['details']['direction_scores'][k] for b in direction_views)/len(direction_views) for k in DIRECTIONS}
+        evidence['direction_scores']={k:math.fsum(b['direction_scores'][k] for b in direction_views)/len(direction_views) for k in DIRECTIONS}
     direction=choose(evidence['direction_scores'],direction_min) if state=='lying' else None
     evidence.update(state=state or 'unknown',lying_direction=direction or 'unknown')
     relations=[v['assessment'].get('rule_features',{}).get('bed_relation',{}) for v,_ in usable]

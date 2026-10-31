@@ -40,6 +40,8 @@ class MeasurementGroup:
         profiles=[getattr(s.worker.engine,'body_state_profile',None) for s in members]
         if supported(profiles) and all(s.worker.engine.posture_classifier and s.worker.engine.posture_classifier.profile['version']=='automatic-posture-rules-0.8' for s in members):
             self.data['posture_fusion_policy']=copy.deepcopy(POLICY)
+        from .decision_evidence import PROFILE as DECISION_PROFILE
+        self.data['decision_evidence_profile']=copy.deepcopy(DECISION_PROFILE)
         self.finished, self.failed = False, False
         self._finalize_job=None
         self.save()
@@ -255,4 +257,6 @@ class MeasurementGroup:
                 'max_age_ns':int(tracking.get('config',{}).get('max_gap_ms',500)*1e6)})
         posture=combine_views(views,int(self.data['alignment_max_skew_ns']) if self.data['alignment_max_skew_ns'] is not None else None,
             confirmations(self.data),self.data['phase']=='recording' and all(s.kind!='video_file' for s in self.members),time.perf_counter_ns(),fusion_policy=self.data.get('posture_fusion_policy'))
+        from .decision_evidence import group as group_evidence
+        posture['decision_evidence']=group_evidence(views,posture)
         return dict(self.data,directory=str(self.directory),target_observations=observations,plan_progress=progress,posture_assessment=posture)

@@ -181,13 +181,6 @@ def read_observation(value,row,candidate,profile):
 
 
 def compose(state,relation):
-    """Body predictions do not require a bed; edge_sitting adds bed context."""
-    if state['status']!='predicted':return None,(state['reasons'] or ['body_state_unknown'])[0]
-    if state['state']=='lying':
-        direction=state['lying_direction']
-        if direction in ('supine','side'):return direction,None
-        return None,'prone_out_of_scope' if direction=='prone' else 'lying_direction_evidence_missing'
-    if state['state']=='sitting':
-        if relation['status']=='observed' and relation['relation']=='edge':return 'edge_sitting',None
-        return None,'bed_edge_relation_unconfirmed'
-    return None,'standing_or_other_out_of_scope'
+    """Compatibility entry point for the shared final decision function."""
+    from .posture_decision import finalize
+    return finalize(state, relation)

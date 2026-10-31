@@ -153,6 +153,7 @@ class LiveEngine:
         from .silhouette import PROFILE as SILHOUETTE_PROFILE
         from .native_pose_cues import PROFILE as NATIVE_PROFILE
         width, height = self.geometry
+        from .decision_evidence import PROFILE as DECISION_PROFILE
         measurement_id = uuid.uuid4().hex
         manifest = {'measurement_id': measurement_id, 'stream_id': self.stream_id,
                     'clock_id': self.clock_id, 'clock_origin_perf_counter_ns': str(self.origin),
@@ -174,6 +175,7 @@ class LiveEngine:
                     'preview_tracking_history_retained': True, 'hardware_dropped_frames': None, 'start_request': request,
                     'target_tracking_initial':self.target_tracker.current(),
                     'posture_assessment_profile':dict(PROFILE),
+                    'decision_evidence_profile':dict(DECISION_PROFILE),
                     'posture_evidence_profile':dict(EVIDENCE_PROFILE),
                     'silhouette_profile':dict(SILHOUETTE_PROFILE),
                     'native_pose_cues_profile':dict(NATIVE_PROFILE),
@@ -294,6 +296,8 @@ class LiveEngine:
         from copy import deepcopy
         row['image_runtime_metrics']=deepcopy(getattr(getattr(self.body_state_provider,'runtime',None),'last_metrics',None)) if (row.get('body_state_observation') or {}).get('decision') is not None else None
         row['posture_assessment']=assess_frame(row,*geometry,self.region,self.posture_classifier)
+        from .decision_evidence import single
+        row['decision_evidence']=single(row,self.body_state_profile)
         from .native_pose_cues import assess as assess_native
         row['native_pose_cues']=assess_native(row,*geometry)
         from .posture_evidence import compare_frame

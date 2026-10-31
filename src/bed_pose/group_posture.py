@@ -13,6 +13,9 @@ def profiles(group):
 
 
 def predictions(group,directory):
+    from .decision_evidence import PROFILE as DECISION_PROFILE, group as group_evidence
+    if 'decision_evidence_profile' in group and group['decision_evidence_profile']!=DECISION_PROFILE:
+        raise IntegrityError('Unsupported group decision evidence profile')
     configs=profiles(group);timeline=confirmations(group)
     policy=group.get('posture_fusion_policy')
     if policy is not None:
@@ -36,6 +39,8 @@ def predictions(group,directory):
                'experimental':True,'identity_verified':False,'exposure_synchronized':False}
         if policy is not None:
             result['method']=a['method'];result['fusion_evidence']=a.get('fusion_evidence')
+        if 'decision_evidence_profile' in group:
+            result['decision_evidence']=group_evidence(views,a)
         yield result
 
 

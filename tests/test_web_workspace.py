@@ -163,11 +163,13 @@ class WebTests(unittest.TestCase):
         manifest.pop('posture_evidence_profile')
         manifest.pop('silhouette_profile')
         manifest.pop('native_pose_cues_profile')
+        manifest.pop('decision_evidence_profile')
         for row in rows:
             row.pop('posture_assessment')
             row.pop('posture_evidence')
             row.pop('silhouette_observation');row.pop('silhouette_assessment')
             row.pop('native_pose_cues')
+            row.pop('decision_evidence')
         path.write_text(''.join(json.dumps(r)+'\n' for r in rows),encoding='utf-8')
         manifest['artifact_sha256']['live_frames.jsonl']=file_hash(path)
         atomic_json(root/'manifest.json',manifest)

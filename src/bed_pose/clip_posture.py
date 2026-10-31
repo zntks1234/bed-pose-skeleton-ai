@@ -105,9 +105,9 @@ def decide(cosines, logit_scale, configuration):
         logits=[cosines[k]*logit_scale for k in labels]
         if not all(math.isfinite(x) for x in logits):raise ValueError('Invalid CLIP logits')
         exps=[math.exp(x-max(logits)) for x in logits];total=sum(exps)
-        scores=dict(zip(labels,[x/total for x in exps]));best=max(scores,key=scores.get)
-        tied=sum(abs(v-scores[best])<=configuration['tie_tolerance'] for v in scores.values())>1
-        return scores, best if not tied and scores[best]>=threshold else None
+        scores=dict(zip(labels,[x/total for x in exps]))
+        from .posture_decision import choose
+        return scores, choose(scores, threshold, configuration['tie_tolerance'])
     states, state = group(STATE_NAMES, configuration['state_min'])
     directions, direction = group(DIRECTION_NAMES, configuration['direction_min'])
     reasons=[]

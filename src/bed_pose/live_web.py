@@ -574,6 +574,7 @@ class WebWorkspace:
                      media_seconds=int(media['relative_time_ns'])/1e9 if media else None)
         state['target_tracking']=row['target_tracking']
         state['posture_assessment']=row['posture_assessment']
+        state['decision_evidence']=row.get('decision_evidence')
         state['posture_evidence']=row.get('posture_evidence')
         state['native_pose_cues']=row.get('native_pose_cues')
         state['silhouette_assessment']=row.get('silhouette_assessment')
@@ -584,6 +585,7 @@ class WebWorkspace:
                         'clock_id':row['clock_id'],'received_ns':row['received_ns'],
                         'target_tracking':row['target_tracking'],
                         'posture_assessment':row['posture_assessment'],
+                        'decision_evidence':row.get('decision_evidence'),
                         'posture_evidence':row.get('posture_evidence'),
                         'native_pose_cues':row.get('native_pose_cues'),
                         'silhouette_assessment':row.get('silhouette_assessment'),

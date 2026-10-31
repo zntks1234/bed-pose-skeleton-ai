@@ -91,6 +91,9 @@ def _verify(directory, manifest, hashes=True):
     elif (selection['effective_stream_frame_id'] > manifest['first_stream_frame_id']
             or validate_selection(selection, selection['effective_stream_frame_id']) > unsigned_ns(manifest['started_ns'])):
         raise IntegrityError('Initial bed selection occurs after measurement start')
+    if 'decision_evidence_profile' in manifest:
+        from .decision_evidence import PROFILE as DECISION_PROFILE
+        if manifest['decision_evidence_profile']!=DECISION_PROFILE:raise IntegrityError('Unsupported decision evidence profile')
     if 'posture_assessment_profile' in manifest:
         from .posture import PROFILE
         if manifest['posture_assessment_profile']!=PROFILE:raise IntegrityError('Unsupported posture assessment profile')
@@ -259,6 +262,12 @@ def _verify(directory, manifest, hashes=True):
                 from .posture import assess_frame
                 if not equivalent(row['posture_assessment'],assess_frame(row,manifest['width'],manifest['height'],regions[row['bed_region_revision']],reference_model)):
                     raise IntegrityError('Posture assessment differs from source frame')
+            if 'decision_evidence_profile' in manifest or 'decision_evidence' in row:
+                if 'posture_assessment' not in row:raise IntegrityError('Missing posture assessment for decision evidence')
+                from .decision_evidence import PROFILE as DECISION_PROFILE, single
+                if (manifest.get('decision_evidence_profile')!=DECISION_PROFILE or 'decision_evidence' not in row
+                        or not equivalent(row['decision_evidence'],single(row,provider_profile))):
+                    raise IntegrityError('Decision evidence differs from source frame')
             if 'native_pose_cues_profile' in manifest or 'native_pose_cues' in row:
                 from .native_pose_cues import PROFILE as NATIVE_PROFILE, assess as assess_native
                 if 'posture_assessment' not in row:raise IntegrityError('Missing posture assessment for native cues')

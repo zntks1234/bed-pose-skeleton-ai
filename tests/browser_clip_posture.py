@@ -15,6 +15,10 @@ def main():
             page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(case.server.url)
             page.wait_for_function("()=>document.getElementById('posture-value').textContent==='바로 누움'")
+            page.locator('#decision-evidence summary').click()
+            assert page.locator('#decision-evidence-views p').count()==1
+            assert '단일 카메라 근거' in page.locator('#decision-evidence-note').inner_text()
+            assert '상태 기여 100%' in page.locator('#decision-evidence-views').inner_text()
             page.locator('#clip-evidence summary').click()
             page.wait_for_function("()=>document.getElementById('clip-input-image').naturalWidth===224")
             assert float(page.locator('#clip-lying').inner_text())>.9

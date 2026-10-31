@@ -72,9 +72,9 @@ def combine_views(views,max_skew_ns,confirmations,active,now_ns,fusion_policy=No
     if max_skew_ns is None or abs(times[1]-times[0])>max_skew_ns:reasons.append('pair_time_mismatch')
     if any(now_ns-t>v['max_age_ns'] or now_ns<t for v,t in zip(views,times)):reasons.append('stale_observation')
     if association_policy is not None:
-        from .bed_association import POLICY
-        if association_policy!=POLICY:raise ValueError('Unsupported bed association policy')
-        result['association_policy']=POLICY
+        from .bed_association import POLICY,PRIORITY_POLICY
+        if association_policy not in (POLICY,PRIORITY_POLICY):raise ValueError('Unsupported bed association policy')
+        result['association_policy']=association_policy
         if any(not v.get('unique_bed_candidate') for v in views):reasons.append('bed_person_unavailable_or_ambiguous')
     else:
         eligible=[(stamp,ids) for stamp,ids in confirmations if stamp<=min(times)]

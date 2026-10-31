@@ -91,6 +91,9 @@ def _verify(directory, manifest, hashes=True):
     elif (selection['effective_stream_frame_id'] > manifest['first_stream_frame_id']
             or validate_selection(selection, selection['effective_stream_frame_id']) > unsigned_ns(manifest['started_ns'])):
         raise IntegrityError('Initial bed selection occurs after measurement start')
+    if 'bed_target_selection_profile' in manifest:
+        from .bed_association import PROFILE as BED_TARGET_PROFILE
+        if manifest['bed_target_selection_profile']!=BED_TARGET_PROFILE:raise IntegrityError('Unsupported bed target profile')
     if 'decision_evidence_profile' in manifest:
         from .decision_evidence import PROFILE as DECISION_PROFILE
         if manifest['decision_evidence_profile']!=DECISION_PROFILE:raise IntegrityError('Unsupported decision evidence profile')
@@ -249,6 +252,11 @@ def _verify(directory, manifest, hashes=True):
             if not collision:
                 previous_model_ms = model_ms
             from .posture import assess_frame
+            if 'bed_target_selection_profile' in manifest or 'bed_target_selection' in row:
+                from .bed_association import select as select_bed_target
+                if ('bed_target_selection_profile' not in manifest or 'bed_target_selection' not in row
+                        or row['bed_target_selection']!=select_bed_target(row,regions[row['bed_region_revision']],manifest['width'],manifest['height'])):
+                    raise IntegrityError('Bed target selection differs from source observations')
             if state_mode != ('body_state_observation' in row):
                 raise IntegrityError('Missing or unexpected independent body-state observation')
             if 'person_crop_profile' in manifest or 'person_crop_observation' in row:

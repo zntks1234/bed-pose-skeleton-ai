@@ -69,7 +69,7 @@ def view_features(row,manifest,regions,input_id,bed_auto=False):
     region=regions[row['bed_region_revision']]
     if region is None:reasons.append('bed_region_missing')
     from .bed_association import eligible
-    is_eligible=bed_auto and eligible(row.get('candidate_count'),row.get('posture_assessment'),region)
+    is_eligible=bed_auto and eligible(row.get('candidate_count'),row.get('posture_assessment'),region,selection=row.get('bed_target_selection'),policy=bed_auto if isinstance(bed_auto,str) else 'unique-person-in-bed-v1')
     if bed_auto and not is_eligible:reasons.append('bed_person_unavailable_or_ambiguous')
     candidate_id=(row.get('posture_assessment') or {}).get('candidate_id') if bed_auto else tracking.get('candidate_id')
     candidate=next((p for p in row['mapped_people'] or [] if p['candidate_id']==candidate_id),None)
@@ -146,7 +146,7 @@ def iter_inputs(group,directory,*,legacy=False):
                     or int(ref['time_ns'])!=int(manifest['clock_origin_perf_counter_ns'])+int(row['received_ns'])):
                     raise IntegrityError('Alignment source reference mismatch')
                 consumed[side]+=1
-                view=view_features(row,manifest,regions[side],group['members'][side]['input_id'],bed_auto=group.get('association_policy')=='unique-person-in-bed-v1')
+                view=view_features(row,manifest,regions[side],group['members'][side]['input_id'],bed_auto=group.get('association_policy') if group.get('association_policy') in ('unique-person-in-bed-v1','bed-priority-v2') else False)
                 if legacy and view['joints'] is not None:
                     for joint in view['joints']:joint.pop('inside_bed')
                 views.append(view);reasons.extend(key+':'+r for r in view['hold_reasons'])
@@ -157,7 +157,7 @@ def iter_inputs(group,directory,*,legacy=False):
                     raise IntegrityError('Alignment delta mismatch')
                 eligible=[entry for entry in timeline if entry[0]<=min(int(v['time_ns']) for v in views)]
                 confirmed=eligible[-1][1] if eligible else {}
-                if group.get('association_policy')!='unique-person-in-bed-v1' and any(not v['tracking'].get('track_id') or confirmed.get(v['input_id'])!=v['tracking'].get('track_id') for v in views):
+                if group.get('association_policy') not in ('unique-person-in-bed-v1','bed-priority-v2') and any(not v['tracking'].get('track_id') or confirmed.get(v['input_id'])!=v['tracking'].get('track_id') for v in views):
                     reasons.append('operator_pair_confirmation_missing')
             elif aligned['status']=='unmatched' and sum(v is not None for v in views)==1:
                 reasons.append('unmatched_time')

@@ -15,8 +15,8 @@ class MeasurementGroup:
         if record_video and any(s.kind not in ('camera','demo') for s in members):
             raise ValueError('두 입력 모두 카메라여야 영상 녹화를 사용할 수 있습니다.')
         self.record_video=record_video
-        from .bed_association import POLICY as BED_POLICY
-        if association_policy not in (None,BED_POLICY):raise ValueError('지원하지 않는 대상 연결 방식입니다.')
+        from .bed_association import POLICY as BED_POLICY, PRIORITY_POLICY
+        if association_policy not in (None,BED_POLICY,PRIORITY_POLICY):raise ValueError('지원하지 않는 대상 연결 방식입니다.')
         self.association_policy=association_policy
         from .measurement_plan import validate_plan
         plan=validate_plan(plan)
@@ -45,6 +45,9 @@ class MeasurementGroup:
                      'same_person_assertion':'operator_report_not_verified' if targets else None,
                      'posture_prediction':{'status':'not_implemented','label':None}}
         if association_policy is not None:self.data['association_policy']=association_policy
+        if association_policy==PRIORITY_POLICY:
+            self.data['target_association_status']='bed_priority_per_frame_unverified'
+            self.data['target_pair_status']='bed_priority_not_identity_verified'
         from .multiview_posture import POLICY,EVIDENCE_POLICY,FORCED_POLICY,supported
         profiles=[getattr(s.worker.engine,'body_state_profile',None) for s in members]
         if supported(profiles) and all(s.worker.engine.posture_classifier and s.worker.engine.posture_classifier.profile['version'] in ('automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12') for s in members):
@@ -271,7 +274,7 @@ class MeasurementGroup:
                 'image_profile':getattr(s.worker.engine,'body_state_profile',None),
                 'reference_profile':s.state.get('automatic_posture_profile') or s.state.get('posture_reference_profile'),
                 'tracking_provisional':tracking.get('status')=='tracking_provisional',
-                'unique_bed_candidate':bed_eligible(s.state.get('candidate_count'),a,s.state.get('region')),
+                'unique_bed_candidate':bed_eligible(s.state.get('candidate_count'),a,s.state.get('region'),selection=s.state.get('bed_target_selection'),policy=self.association_policy or 'unique-person-in-bed-v1'),
                 'time_ns':str(s.worker.engine.origin+int(a['received_ns'])) if a else '0',
                 'max_age_ns':int(tracking.get('config',{}).get('max_gap_ms',500)*1e6)})
         posture=combine_views(views,int(self.data['alignment_max_skew_ns']) if self.data['alignment_max_skew_ns'] is not None else None,

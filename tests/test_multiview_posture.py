@@ -168,6 +168,57 @@ class MultiviewWebTests(unittest.TestCase):
         self.assertEqual([row['posture'] for row in checked_rows],original)
         self.assertTrue(all(row['depth_checked_posture']['status']=='held' for row in checked_rows))
 
+    def test_bed_person_preferred_over_passer_in_both_views_and_replayed(self):
+        from bed_pose.live_sources import SyntheticSource
+        from bed_pose.contracts import PoseOutput
+        from bed_pose.fusion_inputs import inspect_group
+        from bed_pose.io_utils import load_json
+        from pathlib import Path
+        import copy,json
+        original=self.workspace.factory
+        class Camera(SyntheticSource):
+            def __init__(self,index):super().__init__(interval=.02);self.index=index
+            def open(self):return dict(super().open(),kind='camera')
+        def factory(source,*args,**kwargs):return original(Camera(source.index),*args,**kwargs)
+        self.workspace.factory=factory
+        ids=[]
+        for i in (0,1):
+            status,value=self.request('/api/inputs',{'kind':'camera','camera':i,'use_clip':True})
+            self.assertEqual(status,200,value);sid=value['id'];ids.append(sid)
+            self.wait(lambda x:any(s['id']==sid and s['frame_id'] is not None for s in x['sessions']))
+            status,_=self.request('/api/control',{'id':sid,'action':'region','box':[0,100,350,260],'selected_frame_id':0})
+            self.assertEqual(status,200)
+            self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['region'] is not None)
+            adapter=self.workspace.sessions[sid].worker.engine.adapter
+            base=adapter.estimate
+            def two_people(m,orig=base):
+                result=orig(m);bed=copy.deepcopy(result.candidates[0]);passer=copy.deepcopy(bed)
+                passer['candidate_id']='passer'
+                for block in passer['pose_blocks']:
+                    if block['block_id']=='image':
+                        for xy in block['values']:xy[0]+=.4
+                for point in passer['sdk_landmarks']['image']:point['x']+=.4
+                return PoseOutput([passer,bed],m.model_timestamp_ms,True)
+            adapter.estimate=two_people
+        self.wait(lambda x:all(s['candidate_count']==2 for s in x['sessions']))
+        for s in self.workspace.snapshot()['sessions']:
+            self.assertEqual(s['bed_target_selection']['status'],'selected')
+            self.assertNotEqual(s['bed_target_selection']['candidate_id'],'passer')
+        payload={'action':'start','inputs':ids,'max_skew_ms':1000,
+                 'association_policy':'bed-priority-v2','bed_regions_confirmed':True}
+        status,result=self.request('/api/group',payload);self.assertEqual(status,200,result)
+        state=self.wait(lambda x:x['groups'][0]['posture_assessment']['label']=='supine' and all(s['recorded_frames']>=3 for s in x['sessions']))
+        self.assertFalse(state['groups'][0]['posture_assessment']['identity_verified'])
+        self.request('/api/group',{'action':'stop','group_id':result['group_id']})
+        group=self.wait(lambda x:x['groups'][0]['phase']=='completed',timeout=15)['groups'][0]
+        root=Path(group['directory']);self.assertEqual(inspect_group(root)['integrity'],'verified')
+        rows=[json.loads(line) for line in (root/'fusion_inputs.jsonl').read_text().splitlines()]
+        pair=next(r for r in rows if r['status']=='candidate_input')
+        self.assertTrue(all(v['unique_bed_candidate'] and v['posture_assessment']['candidate_id']!='passer' for v in pair['views']))
+        for member in group['members']:
+            manifest=load_json(Path(member['run_directory'])/'manifest.json')
+            self.assertEqual(manifest['bed_target_selection_profile']['version'],'bed-target-selection-0.1')
+
     def test_empty_bed_starts_then_auto_fuses_when_person_appears(self):
         from bed_pose.live_sources import SyntheticSource
         from bed_pose.contracts import PoseOutput

@@ -78,7 +78,9 @@ def observe(row,rgb,assessment,provider,profile,*,allow_missing_presence=False):
     if provider is None:result['reasons']=['body_state_provider_not_configured'];return result
     if provider.profile!=profile:result.update(status='held',reasons=['body_state_provider_profile_changed']);return result
     if row['processing_status']!='ok':result['reasons']=['processing_failed'];return result
-    if row.get('target_tracking',{}).get('status')=='held':result['reasons']=['target_held'];return result
+    selection=row.get('bed_target_selection') or {}
+    if row.get('target_tracking',{}).get('status')=='held' and not (selection.get('status')=='selected' and selection.get('candidate_id')==assessment['candidate_id']):
+        result['reasons']=['target_held'];return result
     people=[p for p in row.get('mapped_people') or [] if p['candidate_id']==assessment['candidate_id']]
     if len(people)!=1:result['reasons']=['body_state_target_unavailable'];return result
     # A provider gets no bed region, planned goal, sensor result or GT field.

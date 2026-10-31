@@ -164,6 +164,7 @@ class LiveEngine:
         from .native_pose_cues import PROFILE as NATIVE_PROFILE
         width, height = self.geometry
         from .decision_evidence import PROFILE as DECISION_PROFILE
+        from .bed_association import PROFILE as BED_TARGET_PROFILE
         self.stability.reset()
         measurement_id = uuid.uuid4().hex
         manifest = {'measurement_id': measurement_id, 'stream_id': self.stream_id,
@@ -193,6 +194,7 @@ class LiveEngine:
                     'native_pose_cues_profile':dict(NATIVE_PROFILE),
                     'reference_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version']=='reference-posture-0.1' else None,
                     'automatic_posture_profile':self.posture_classifier.profile if self.posture_classifier and self.posture_classifier.profile['version'].startswith('automatic-posture') else None,
+                    'bed_target_selection_profile': dict(BED_TARGET_PROFILE),
                     'target_policy': 'none', 'posture_classifier': self.posture_classifier.model_id if self.posture_classifier else 'not_implemented', 'event_analyzer': 'not_implemented'}
         if self.posture_classifier and self.posture_classifier.profile['version'] in ('automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
             manifest['body_state_provider_profile']=self.body_state_profile
@@ -307,6 +309,8 @@ class LiveEngine:
             failure = LiveFailure(code, str(exc))
         row['previous_processing_ns']=str(self.previous_processing_ns)
         row['target_tracking']=self.target_tracker.observe(row,*geometry)
+        from .bed_association import select as select_bed_target
+        row['bed_target_selection']=select_bed_target(row,self.region,*geometry)
         from .posture import assess_frame
         if self.posture_classifier and self.posture_classifier.profile['version'] in ('automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
             from .body_state import observe

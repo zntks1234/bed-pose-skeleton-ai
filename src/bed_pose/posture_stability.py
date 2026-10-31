@@ -115,7 +115,10 @@ def frame(machine,row):
 
 def group_context(views, assessment, region_revisions):
     evidence=assessment.get('fusion_evidence') or {}
-    return {'members':[(v['input_id'],(v.get('assessment') or {}).get('track_id'),
+    result={'members':[(v['input_id'],(v.get('assessment') or {}).get('track_id'),
                          (v.get('assessment') or {}).get('classifier_id')) for v in views],
             'regions':region_revisions,'method':assessment.get('method'),
             'contributors':[v['input_id'] for v in evidence.get('contributors',[]) if v['used']]}
+    if assessment.get('association_policy')=='bed-priority-v2':
+        result['bed_candidate_ids']=[(v.get('assessment') or {}).get('candidate_id') for v in views]
+    return result

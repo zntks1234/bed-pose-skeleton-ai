@@ -110,7 +110,7 @@ class StabilityRecordTests(unittest.TestCase):
         from bed_pose.live_recording import verify_live
         from bed_pose.contracts import IntegrityError
         gid=self.start_pair(with_regions=True)
-        self.wait(lambda x:all(s.get('stable_posture',{}).get('status')=='stable' for s in x['sessions']) and x['groups'][0]['posture_assessment'].get('stable_posture',{}).get('status')=='stable')
+        self.wait(lambda x:all((s.get('stable_posture') or {}).get('status')=='stable' for s in x['sessions']) and (x['groups'][0]['posture_assessment'].get('stable_posture') or {}).get('status')=='stable')
         self.request('/api/group',{'action':'stop','group_id':gid})
         g=self.wait(lambda x:x['groups'][0]['phase']=='completed')['groups'][0];root=Path(g['directory'])
         self.assertEqual(inspect_group(root)['integrity'],'verified')

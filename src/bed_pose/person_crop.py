@@ -10,7 +10,9 @@ def quality(row,candidate,width,height,boxes,profile):
     points,original=inspect_crop(row,candidate,width,height)
     q=dict(original,version='person-crop-quality-0.1',source='person_detection',bounds=None,
            status='held',reasons=[],joint_reasons=list(original['reasons']))
-    if row.get('target_tracking',{}).get('status')!='tracking_provisional':q['reasons']=['person_crop_target_not_tracked'];return points,q
+    tracking=row.get('target_tracking',{})
+    if tracking.get('status')!='tracking_provisional' or tracking.get('candidate_id')!=candidate:
+        q['reasons']=['person_crop_target_not_tracked'];return points,q
     if not any(points[i] is not None for i in (5,6)) or not any(points[i] is not None for i in (11,12)):
         q['reasons']=['person_crop_torso_anchors_missing'];return points,q
     anchors=[points[i] for i in (5,6,11,12) if points[i] is not None]
@@ -57,6 +59,7 @@ def observe(row,rgb,selection,detector):
     # Never spend a detector pass when the selected current target is missing.
     points,_=inspect_crop(row,candidate,w,h)
     eligible=(row['processing_status']=='ok' and row.get('target_tracking',{}).get('status')=='tracking_provisional'
+              and row.get('target_tracking',{}).get('candidate_id')==candidate
               and any(points[i] is not None for i in (5,6)) and any(points[i] is not None for i in (11,12)))
     if eligible:
         start=time.perf_counter_ns()
@@ -88,6 +91,7 @@ def validate(value,row,width,height,profile):
         return
     points,_=inspect_crop(row,candidate,width,height)
     eligible=(row['processing_status']=='ok' and row.get('target_tracking',{}).get('status')=='tracking_provisional'
+              and row.get('target_tracking',{}).get('candidate_id')==candidate
               and any(points[i] is not None for i in (5,6)) and any(points[i] is not None for i in (11,12)))
     if not eligible and (value['boxes'] or value['error'] is not None or value['elapsed_ms']!=0):raise ValueError('Detector evidence without current tracked anchors')
     _,q=quality(row,candidate,width,height,value['boxes'],profile)

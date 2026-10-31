@@ -32,7 +32,14 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
     reasons=[]
     if row['processing_status']!='ok':reasons.append('processing_failed')
     candidate=None
-    if tracking['status']=='held':reasons.append('target_held')
+    selection=row.get('bed_target_selection')
+    if isinstance(selection,dict) and selection.get('reason') not in ('bed_region_missing','no_bed_candidate'):
+        if selection.get('status')=='selected':
+            matches=[p for p in people if p['candidate_id']==selection.get('candidate_id')]
+            if len(matches)==1:candidate=matches[0]
+            else:reasons.append('bed_target_unavailable')
+        else:reasons.append(selection.get('reason') or 'bed_target_unavailable')
+    elif tracking['status']=='held':reasons.append('target_held')
     elif tracking['status']=='tracking_provisional':
         matches=[p for p in people if p['candidate_id']==tracking.get('candidate_id')]
         if len(matches)==1:candidate=matches[0]
@@ -65,7 +72,7 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
         'clock_id':row['clock_id'],'received_ns':row['received_ns'],
         'status':'held' if any(r!='classifier_not_configured' for r in reasons) else 'unavailable',
         'label':None,'reasons':reasons,'candidate_id':candidate['candidate_id'] if candidate else None,
-        'track_id':tracking.get('track_id'),'identity_verified':False,'quality_status':'not_assessed',
+        'track_id':tracking.get('track_id') if not isinstance(selection,dict) or selection.get('reason') in ('bed_region_missing','no_bed_candidate') or (candidate is not None and tracking.get('status')=='tracking_provisional' and tracking.get('candidate_id')==candidate.get('candidate_id')) else None,'identity_verified':False,'quality_status':'not_assessed',
         'usable_joints':sum(p is not None for p in points),'total_joints':len(points),
         'bed_region_available':region is not None,'classifier_id':getattr(classifier,'model_id',None)}
     if reasons:return result

@@ -26,7 +26,7 @@ def make_engine(source, model, output_root, options_root, *, demo=False, clip_mo
     if not model.is_file():
         raise ValueError('추론 모델(.task)을 먼저 선택하세요.')
     options = Path(options_root)/(uuid.uuid4().hex+'.json')
-    atomic_json(options, DEFAULT_OPTIONS)
+    atomic_json(options, dict(DEFAULT_OPTIONS, num_poses=3))
     settings = {'execution_mode': 'ordered_sequence', 'requested_device': pose_device,
                 'assets': [{'role': 'pose_landmarker_task', 'path': str(model), 'sha256': file_hash(model)}],
                 'adapter_options_path': str(options), 'adapter_options_sha256': file_hash(options)}

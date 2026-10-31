@@ -74,6 +74,27 @@ class MultiviewTests(unittest.TestCase):
         v[1]['assessment']['rule_features']['bed_relation']={'status':'observed','relation':'outside'}
         self.assertIsNone(evaluate(v)['label'])
 
+    def test_live_closest_candidate_requires_gated_unique_supported_evidence(self):
+        from bed_pose.multiview_posture import closest_candidate
+        v=views()
+        held=evaluate(v)
+        self.assertEqual(held['status'],'held')
+        self.assertEqual(closest_candidate(held)['label'],'supine')
+        self.assertIsNone(held['label'])
+        v[0]['time_ns']='1'
+        self.assertIsNone(closest_candidate(evaluate(v)))
+        v=views()
+        for x in v:
+            x['assessment']['rule_features']['body_state']['details']['direction_scores']={'supine':.4,'side':.4,'prone':.2}
+        self.assertIsNone(closest_candidate(evaluate(v)))
+        for x in v:
+            body=x['assessment']['rule_features']['body_state']
+            body['scores']={'lying':.05,'sitting':.85,'standing':.05,'other':.05}
+        self.assertEqual(closest_candidate(evaluate(v))['label'],'edge_sitting')
+        for x in v:
+            x['assessment']['rule_features']['body_state']['scores']={'lying':.05,'sitting':.05,'standing':.85,'other':.05}
+        self.assertIsNone(closest_candidate(evaluate(v)))
+
     def test_goal_sensor_and_gt_do_not_change_predictions(self):
         v=views();a=evaluate(v)
         for x in v:x.update(target_posture='side',sensor_results={'label':'side'},verified_gt='side')
@@ -107,6 +128,86 @@ class MultiviewWebTests(unittest.TestCase):
             'target_selections':selections,'same_person_confirmed':True,'tracking_required':True})
         self.assertEqual(status,200,result)
         return result['group_id']
+
+    def test_saved_group_depth_export_preserves_posture(self):
+        import json
+        from pathlib import Path
+        from bed_pose.io_utils import load_json, atomic_json
+        from bed_pose.stereo_depth import export
+        gid=self.start_pair()
+        self.wait(lambda x:all(s['recorded_frames']>=4 for s in x['sessions']))
+        self.request('/api/group',{'action':'stop','group_id':gid})
+        group=self.wait(lambda x:x['groups'][0]['phase']=='completed')['groups'][0]
+        root=Path(group['directory']); manifest=load_json(root/'manifest.json')
+        cameras=[]
+        for i, member in enumerate(manifest['members']):
+            run=load_json(Path(member['run_directory'])/'manifest.json')
+            cameras.append({'input_id':member['input_id'],'image_size':[run['width'],run['height']],
+                'intrinsic':[[500,0,320],[0,500,240],[0,0,1]],
+                'rotation_world_to_camera':[[1,0,0],[0,1,0],[0,0,1]],
+                'translation_world_to_camera':[-i,0,0]})
+        calibration={'version':'stereo-pinhole-0.1','image_coordinates':'undistorted_pinhole_pixels',
+            'unit':'m','quality':{'max_reprojection_error_px':3,'min_ray_angle_degrees':2},'cameras':cameras}
+        cal=self.root/'cal.json';atomic_json(cal,calibration)
+        out=self.root/'stereo';report=export(root,cal,out)
+        actual=[json.loads(line) for line in (out/'posture_with_depth.jsonl').read_text().splitlines()]
+        original=[json.loads(line) for line in (root/'posture_predictions.jsonl').read_text().splitlines()]
+        self.assertGreater(len(actual),0)
+        self.assertEqual([row['posture'] for row in actual],original)
+        self.assertEqual(report['rows'],len(original))
+        self.assertFalse(report['depth_used_in_classifier'])
+        self.assertTrue(all(row['stereo_depth']['time_basis']=='receive_time_approximation' for row in actual))
+        calibration['bed_normal_up_world']=[0,0,-1];atomic_json(cal,calibration)
+        checked=self.root/'checked';checked_report=export(root,cal,checked,depth_check=True)
+        checked_rows=[json.loads(line) for line in (checked/'posture_with_depth.jsonl').read_text().splitlines()]
+        self.assertTrue(checked_report['depth_used_in_classifier'])
+        self.assertEqual([row['posture'] for row in checked_rows],original)
+        self.assertTrue(all(row['depth_checked_posture']['status']=='held' for row in checked_rows))
+
+    def test_empty_bed_starts_then_auto_fuses_when_person_appears(self):
+        from bed_pose.live_sources import SyntheticSource
+        from bed_pose.contracts import PoseOutput
+        from bed_pose.fusion_inputs import inspect_group
+        from pathlib import Path
+        import json
+        original=self.workspace.factory
+        class Camera(SyntheticSource):
+            def __init__(self,index):super().__init__(interval=.02);self.index=index
+            def open(self):return dict(super().open(),kind='camera')
+        def factory(source,*args,**kwargs):return original(Camera(source.index),*args,**kwargs)
+        self.workspace.factory=factory
+        ids=[]
+        for i in (0,1):
+            status,value=self.request('/api/inputs',{'kind':'camera','camera':i,'use_clip':True})
+            self.assertEqual(status,200,value);sid=value['id'];ids.append(sid)
+            self.wait(lambda x:any(s['id']==sid and s['frame_id'] is not None for s in x['sessions']))
+            status,_=self.request('/api/control',{'id':sid,'action':'region','box':[0,0,640,360],'selected_frame_id':0})
+            self.assertEqual(status,200)
+            self.wait(lambda x:next(s for s in x['sessions'] if s['id']==sid)['region'] is not None)
+        switches=[]
+        for sid in ids:
+            adapter=self.workspace.sessions[sid].worker.engine.adapter
+            original_estimate=adapter.estimate
+            switch={'empty':True};switches.append(switch)
+            def estimate(m,orig=original_estimate,flag=switch):
+                return PoseOutput([],m.model_timestamp_ms,True) if flag['empty'] else orig(m)
+            adapter.estimate=estimate
+        self.wait(lambda x:all(s['candidate_count']==0 for s in x['sessions']))
+        payload={'action':'start','inputs':ids,'max_skew_ms':1000,
+                 'association_policy':'unique-person-in-bed-v1','bed_regions_confirmed':True}
+        status,result=self.request('/api/group',payload);self.assertEqual(status,200,result)
+        self.wait(lambda x:x['groups'][0]['phase']=='recording' and all(s['recorded_frames']>=2 for s in x['sessions']))
+        self.assertIsNone(self.workspace.snapshot()['groups'][0]['posture_assessment']['label'])
+        for switch in switches:switch['empty']=False
+        state=self.wait(lambda x:x['groups'][0]['posture_assessment']['label']=='supine' and all(s['recorded_frames']>=5 for s in x['sessions']))
+        self.assertFalse(state['groups'][0]['posture_assessment']['identity_verified'])
+        self.request('/api/group',{'action':'stop','group_id':result['group_id']})
+        group=self.wait(lambda x:x['groups'][0]['phase']=='completed',timeout=15)['groups'][0]
+        root=Path(group['directory']);self.assertEqual(inspect_group(root)['integrity'],'verified')
+        rows=[json.loads(line) for line in (root/'posture_predictions.jsonl').read_text().splitlines()]
+        self.assertTrue(any(r['status']=='held' for r in rows))
+        self.assertTrue(any(r['label']=='supine' for r in rows))
+        self.assertTrue(all(not r['identity_verified'] for r in rows))
 
     def test_live_fusion_no_bed_record_replay_and_tampering(self):
         import json

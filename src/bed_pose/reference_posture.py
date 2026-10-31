@@ -59,7 +59,7 @@ class ReferenceClassifier:
     def predict(self,observation):return self.evaluate(observation)[0]
 
 
-def combine_views(views,max_skew_ns,confirmations,active,now_ns,fusion_policy=None):
+def combine_views(views,max_skew_ns,confirmations,active,now_ns,fusion_policy=None,association_policy=None):
     """Equal mean of per-view normalized distances, receive-time gated; no 3D fusion."""
     result={'status':'held','label':None,'reasons':[],'views':[{k:value for k,value in v.items() if k!='image_profile'} for v in views],'experimental':True,
             'identity_verified':False,'exposure_synchronized':False,'method':fusion_policy['version'] if fusion_policy is not None else 'mean_reference_distance_v1'}
@@ -71,17 +71,24 @@ def combine_views(views,max_skew_ns,confirmations,active,now_ns,fusion_policy=No
     result['delta_ns']=str(times[1]-times[0])
     if max_skew_ns is None or abs(times[1]-times[0])>max_skew_ns:reasons.append('pair_time_mismatch')
     if any(now_ns-t>v['max_age_ns'] or now_ns<t for v,t in zip(views,times)):reasons.append('stale_observation')
-    eligible=[(stamp,ids) for stamp,ids in confirmations if stamp<=min(times)]
-    confirmed=max(eligible,key=lambda x:x[0])[1] if eligible else {}
-    for v in views:
-        a=v['assessment']
-        if not a.get('track_id') or a.get('track_id')!=confirmed.get(v['input_id']):reasons.append('operator_pair_confirmation_missing');break
+    if association_policy is not None:
+        from .bed_association import POLICY
+        if association_policy!=POLICY:raise ValueError('Unsupported bed association policy')
+        result['association_policy']=POLICY
+        if any(not v.get('unique_bed_candidate') for v in views):reasons.append('bed_person_unavailable_or_ambiguous')
+    else:
+        eligible=[(stamp,ids) for stamp,ids in confirmations if stamp<=min(times)]
+        confirmed=max(eligible,key=lambda x:x[0])[1] if eligible else {}
+        for v in views:
+            a=v['assessment']
+            if not a.get('track_id') or a.get('track_id')!=confirmed.get(v['input_id']):reasons.append('operator_pair_confirmation_missing');break
     if fusion_policy is not None:
-        if any(not v.get('tracking_provisional') for v in views):reasons.append('view_features_unavailable')
+        if association_policy is None and any(not v.get('tracking_provisional') for v in views):reasons.append('view_features_unavailable')
         if reasons:return result
         from .multiview_posture import fuse
         fused=fuse(views,fusion_policy)
         fused['delta_ns']=result['delta_ns']
+        if association_policy is not None:fused['association_policy']=association_policy
         return fused
     auto=[v.get('reference_profile',{}).get('version','').startswith('automatic-posture') if v.get('reference_profile') else False for v in views]
     if any(auto):

@@ -61,16 +61,20 @@ def bed_regions(directory,manifest):
     return regions
 
 
-def view_features(row,manifest,regions,input_id):
+def view_features(row,manifest,regions,input_id,bed_auto=False):
     tracking=row.get('target_tracking',{'status':'not_configured','candidate_id':None})
     reasons=[]
     if row['processing_status']!='ok':reasons.append('processing_failed')
-    if tracking['status']!='tracking_provisional':reasons.append('target_'+tracking['status'])
+    if not bed_auto and tracking['status']!='tracking_provisional':reasons.append('target_'+tracking['status'])
     region=regions[row['bed_region_revision']]
     if region is None:reasons.append('bed_region_missing')
-    candidate=next((p for p in row['mapped_people'] or [] if p['candidate_id']==tracking.get('candidate_id')),None)
+    from .bed_association import eligible
+    is_eligible=bed_auto and eligible(row.get('candidate_count'),row.get('posture_assessment'),region)
+    if bed_auto and not is_eligible:reasons.append('bed_person_unavailable_or_ambiguous')
+    candidate_id=(row.get('posture_assessment') or {}).get('candidate_id') if bed_auto else tracking.get('candidate_id')
+    candidate=next((p for p in row['mapped_people'] or [] if p['candidate_id']==candidate_id),None)
     features=None
-    if tracking['status']=='tracking_provisional' and candidate is not None:
+    if (is_eligible or not bed_auto and tracking['status']=='tracking_provisional') and candidate is not None:
         inspected=inspect_joints({'people':[candidate]},{'candidates':row['raw_candidates']},
                                  manifest['mapping_profile']['image_block_id'])[0]['joints']
         features=[]
@@ -86,7 +90,7 @@ def view_features(row,manifest,regions,input_id):
                 bed_mask=bool(inside and bed_xy is not None),
                 inside_bed=bool(contains(region,(joint['x_px'],joint['y_px']))) if numeric and region else None))
         if not any(j['image_mask'] for j in features):reasons.append('no_in_image_joints')
-    elif tracking['status']=='tracking_provisional':reasons.append('tracked_candidate_missing')
+    elif not bed_auto and tracking['status']=='tracking_provisional':reasons.append('tracked_candidate_missing')
     result={'input_id':input_id,'measurement_id':manifest['measurement_id'],'frame_id':row['frame_id'],
             'stream_frame_id':row['stream_frame_id'],'clock_id':row['clock_id'],'received_ns':row['received_ns'],
             'time_ns':str(int(manifest['clock_origin_perf_counter_ns'])+int(row['received_ns'])),
@@ -95,6 +99,7 @@ def view_features(row,manifest,regions,input_id):
             'score_source_block':manifest['mapping_profile']['image_block_id'],'bed_region_revision':row['bed_region_revision'],
             'bed_region':region,'tracking':tracking,'joints':features,'hold_reasons':reasons,
             'identity_verified':False,'input_quality_status':'not_assessed'}
+    if bed_auto:result['unique_bed_candidate']=bool(is_eligible and candidate is not None)
     if manifest.get('reference_posture_profile') or manifest.get('automatic_posture_profile'):
         result['posture_assessment']=row['posture_assessment']
     return result
@@ -141,7 +146,7 @@ def iter_inputs(group,directory,*,legacy=False):
                     or int(ref['time_ns'])!=int(manifest['clock_origin_perf_counter_ns'])+int(row['received_ns'])):
                     raise IntegrityError('Alignment source reference mismatch')
                 consumed[side]+=1
-                view=view_features(row,manifest,regions[side],group['members'][side]['input_id'])
+                view=view_features(row,manifest,regions[side],group['members'][side]['input_id'],bed_auto=group.get('association_policy')=='unique-person-in-bed-v1')
                 if legacy and view['joints'] is not None:
                     for joint in view['joints']:joint.pop('inside_bed')
                 views.append(view);reasons.extend(key+':'+r for r in view['hold_reasons'])
@@ -152,7 +157,7 @@ def iter_inputs(group,directory,*,legacy=False):
                     raise IntegrityError('Alignment delta mismatch')
                 eligible=[entry for entry in timeline if entry[0]<=min(int(v['time_ns']) for v in views)]
                 confirmed=eligible[-1][1] if eligible else {}
-                if any(not v['tracking'].get('track_id') or confirmed.get(v['input_id'])!=v['tracking'].get('track_id') for v in views):
+                if group.get('association_policy')!='unique-person-in-bed-v1' and any(not v['tracking'].get('track_id') or confirmed.get(v['input_id'])!=v['tracking'].get('track_id') for v in views):
                     reasons.append('operator_pair_confirmation_missing')
             elif aligned['status']=='unmatched' and sum(v is not None for v in views)==1:
                 reasons.append('unmatched_time')

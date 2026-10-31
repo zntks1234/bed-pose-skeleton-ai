@@ -16,6 +16,7 @@ def main():
             page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(case.server.url)
             page.wait_for_function("()=>document.getElementById('posture-value').textContent==='정면 신체 형태'")
+            page.locator('#posture-details > summary').click()
             assert page.locator('#separated-results').is_visible()
             # Long reasons must not collapse metric labels into word/character columns.
             for width in (390, 1024, 1280, 1920):

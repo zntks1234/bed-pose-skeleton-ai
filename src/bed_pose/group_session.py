@@ -10,7 +10,14 @@ from .live_recording import verify_live
 
 
 class MeasurementGroup:
-    def __init__(self, members, root, max_skew_ns=None, targets=(), plan=None):
+    def __init__(self, members, root, max_skew_ns=None, targets=(), plan=None, record_video=False, association_policy=None):
+        if type(record_video) is not bool:raise ValueError('녹화 설정을 확인하세요.')
+        if record_video and any(s.kind not in ('camera','demo') for s in members):
+            raise ValueError('두 입력 모두 카메라여야 영상 녹화를 사용할 수 있습니다.')
+        self.record_video=record_video
+        from .bed_association import POLICY as BED_POLICY
+        if association_policy not in (None,BED_POLICY):raise ValueError('지원하지 않는 대상 연결 방식입니다.')
+        self.association_policy=association_policy
         from .measurement_plan import validate_plan
         plan=validate_plan(plan)
         self.members = list(members)
@@ -20,6 +27,7 @@ class MeasurementGroup:
         created=str(time.perf_counter_ns())
         self.data = {'schema_version':'group-0.1-draft', 'group_id':self.id,
                      'measurement_mode':'planned_single' if plan else 'free',
+                     'video_recording_requested':record_video,
                      'phase':'preparing' if plan else 'starting', 'ledger_complete':False,
                      'created_perf_counter_ns':created,
                      'operator_initial_confirmation_perf_counter_ns':created,
@@ -36,6 +44,7 @@ class MeasurementGroup:
                      'target_pair_status':'operator_initialized_not_verified' if targets else 'not_configured',
                      'same_person_assertion':'operator_report_not_verified' if targets else None,
                      'posture_prediction':{'status':'not_implemented','label':None}}
+        if association_policy is not None:self.data['association_policy']=association_policy
         from .multiview_posture import POLICY,supported
         profiles=[getattr(s.worker.engine,'body_state_profile',None) for s in members]
         if supported(profiles) and all(s.worker.engine.posture_classifier and s.worker.engine.posture_classifier.profile['version']=='automatic-posture-rules-0.8' for s in members):
@@ -54,7 +63,7 @@ class MeasurementGroup:
 
     def _begin(self):
         if self.finished or self.data['phase'] not in ('preparing','starting'):return
-        if any(s.state['closed'] or s.worker.stop_requested.is_set() or s.state['recording'] or s.state['pending'] or (not s.state['region'] and not self.data.get('posture_fusion_policy')) for s in self.members):
+        if any(s.state['closed'] or s.worker.stop_requested.is_set() or s.state['recording'] or s.state['pending'] or (not s.state['region'] and (self.association_policy is not None or not self.data.get('posture_fusion_policy'))) for s in self.members):
             self.fail('PLAN_START_INPUT_UNAVAILABLE')
             return
         self.data['phase']='starting'
@@ -64,7 +73,7 @@ class MeasurementGroup:
         self.save()
         for session in self.members:
             session.state['pending']='start'
-            session.worker.submit('start')
+            session.worker.submit('start',record_video=self.record_video,reset_tracking=self.association_policy is not None)
 
     def ready(self,trigger='operator_ready'):
         if self.finished or self.data['phase']!='preparing':raise ValueError('준비 중인 계획 측정이 없습니다.')
@@ -246,6 +255,7 @@ class MeasurementGroup:
         from .reference_posture import combine_views
         from .fusion_inputs import confirmations
         views=[]
+        from .bed_association import eligible as bed_eligible
         for s in self.members:
             a=s.state.get('posture_assessment')
             tracking=s.state.get('target_tracking') or {}
@@ -253,10 +263,13 @@ class MeasurementGroup:
                 'image_profile':getattr(s.worker.engine,'body_state_profile',None),
                 'reference_profile':s.state.get('automatic_posture_profile') or s.state.get('posture_reference_profile'),
                 'tracking_provisional':tracking.get('status')=='tracking_provisional',
+                'unique_bed_candidate':bed_eligible(s.state.get('candidate_count'),a,s.state.get('region')),
                 'time_ns':str(s.worker.engine.origin+int(a['received_ns'])) if a else '0',
                 'max_age_ns':int(tracking.get('config',{}).get('max_gap_ms',500)*1e6)})
         posture=combine_views(views,int(self.data['alignment_max_skew_ns']) if self.data['alignment_max_skew_ns'] is not None else None,
-            confirmations(self.data),self.data['phase']=='recording' and all(s.kind!='video_file' for s in self.members),time.perf_counter_ns(),fusion_policy=self.data.get('posture_fusion_policy'))
+            confirmations(self.data),self.data['phase']=='recording' and all(s.kind!='video_file' for s in self.members),time.perf_counter_ns(),fusion_policy=self.data.get('posture_fusion_policy'),association_policy=self.association_policy)
+        from .multiview_posture import closest_candidate
+        posture['live_closest_candidate']=closest_candidate(posture)
         from .decision_evidence import group as group_evidence
         posture['decision_evidence']=group_evidence(views,posture)
         return dict(self.data,directory=str(self.directory),target_observations=observations,plan_progress=progress,posture_assessment=posture)

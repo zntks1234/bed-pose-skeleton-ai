@@ -116,6 +116,10 @@ class TargetTracker:
             self.track=track
             return dict(track.state)
 
+    def reset(self):
+        with self.lock:
+            self.track=None
+
     def hold(self,reason):
         with self.lock:
             if self.track and self.track.state['status']!='held':

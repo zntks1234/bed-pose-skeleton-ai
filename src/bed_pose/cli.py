@@ -105,8 +105,17 @@ def main(argv=None):
     posture_eval.add_argument('--output',type=Path,required=True)
     group_inspect=commands.add_parser('group-inspect',help='Verify original records, alignment and two-view input features')
     group_inspect.add_argument('--run',type=Path,required=True)
+    stereo=commands.add_parser('stereo-evidence', help='Attach calibrated stereo joint estimates to existing group posture results')
+    stereo.add_argument('--run',type=Path,required=True)
+    stereo.add_argument('--calibration',type=Path,required=True)
+    stereo.add_argument('--output',type=Path,required=True)
+    stereo.add_argument('--depth-check',action='store_true',help='Require agreement with existing 3D geometry rules')
     args = parser.parse_args(argv)
     try:
+        if args.command=='stereo-evidence':
+            from .stereo_depth import export
+            print(json.dumps(export(args.run,args.calibration,args.output,depth_check=args.depth_check),ensure_ascii=False))
+            return 0
         if args.command=='person-setup':
             from .person_detector import setup
             print(json.dumps(setup(args.output,args.source),ensure_ascii=False))

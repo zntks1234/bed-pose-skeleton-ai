@@ -88,7 +88,12 @@ def evaluate(obs,cfg):
         if not np.isfinite(camera).all() or np.min(camera[:,2])<=0 or error>cfg['auto_reprojection_max']:
             return finish(reason='auto_view_registration_uncertain')
     except (cv2.error,ValueError,np.linalg.LinAlgError):return finish(reason='auto_view_registration_uncertain')
-    p=camera;s=(p[5]+p[6])/2;h=(p[11]+p[12])/2;torso=h-s;length=np.linalg.norm(torso)
+    return classify_registered(obs,cfg,camera,normal,e,finish)
+
+
+def classify_registered(obs,cfg,p,normal,e,finish):
+    """Apply the existing 0.6 geometry rules to already registered coordinates."""
+    s=(p[5]+p[6])/2;h=(p[11]+p[12])/2;torso=h-s;length=np.linalg.norm(torso)
     if length<=1e-9:return finish(reason='degenerate_body_geometry')
     f=body_geometry([p[i].tolist() for i in (5,6,11,12)],3)
     if max(f[n]['axial'] for n in ('shoulders','hips'))>cfg['body_axial_max'] or f['line_angle_degrees'] is None or f['line_angle_degrees']>cfg['body_line_angle_max']:

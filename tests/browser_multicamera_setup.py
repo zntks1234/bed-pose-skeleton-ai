@@ -41,20 +41,25 @@ def main():
             assert page.locator('#group-start').is_disabled()
             assert page.evaluate('snapshot.groups.length')==0
             page.locator('#multi-configure-group').click()
-            for side in ('a','b'):
-                page.locator('#target-'+side).click()
-                page.locator('#target-confirm').wait_for(state='visible')
-                if not page.locator('#target-dialog details').evaluate('(el)=>el.open'):
-                    page.locator('#target-dialog details summary').click()
-                page.locator('#track-gap').fill('10000');page.locator('#track-speed').fill('100')
-                page.locator('#target-confirm').click()
-                page.wait_for_function("()=>!document.getElementById('target-dialog').open")
+            ids=page.evaluate('snapshot.sessions.map(s=>s.id)')
+            for sid in ids:
+                frame=next(s for s in case.workspace.snapshot()['sessions'] if s['id']==sid)['frame_id']
+                status,_=case.control(sid,'region',box=[0,0,640,360],selected_frame_id=frame)
+                assert status==200
+            case.wait(lambda x:all(s['region'] is not None for s in x['sessions']))
+            page.wait_for_function("()=>snapshot.sessions.every(s=>s.region)")
             assert page.locator('#group-start').is_disabled()
-            page.locator('#same-person').check();page.locator('#group-skew').fill('1000')
+            page.locator('#beds-confirmed').check();page.locator('#group-skew').fill('1000')
+            page.locator('#group-record-video').check()
             page.locator('#group-start').click()
             page.wait_for_function("()=>document.getElementById('fused-label').textContent==='바로 누움'")
             page.locator('#group-stop').click()
             page.wait_for_function("()=>snapshot.groups[0].phase==='completed'")
+            from bed_pose.io_utils import load_json
+            from pathlib import Path
+            members=page.evaluate('snapshot.groups[0].members')
+            assert all(load_json(Path(m['run_directory'])/'manifest.json')['video_recording'] for m in members)
+            assert all((Path(m['run_directory'])/'analysis_video.mkv').exists() for m in members)
             # Third camera adds a view; it is never silently fused into the pair.
             page.locator('#add-camera').click();page.locator('#camera-index').select_option('2')
             page.locator('#connect-input').click()
@@ -76,7 +81,7 @@ def main():
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
             assert not errors,errors
             browser.close()
-        print('PASS: normal UI adds 1/2/3 cameras, prevents duplicate selection, confirms target pair before fusion, removes camera and preserves inputs across modes')
+        print('PASS: normal UI adds 1/2/3 cameras, prevents duplicate selection, confirms bed regions before fusion, removes camera and preserves inputs across modes')
     finally:case.doCleanups()
 
 if __name__=='__main__':main()

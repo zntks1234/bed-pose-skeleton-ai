@@ -30,13 +30,16 @@ def predictions(group,directory):
             views.append({'input_id':group['members'][index]['input_id'],'closed':v is None,
                 'time_ns':v['time_ns'] if v else '0','max_age_ns':int(group['alignment_max_skew_ns'])+1,
                 'tracking_provisional':v is not None and v['tracking']['status']=='tracking_provisional',
+                'unique_bed_candidate':v is not None and v.get('unique_bed_candidate',False),
                 'image_profile':image_profiles[index],'reference_profile':configs[index],'assessment':v.get('posture_assessment') if v else None})
-        a=combine_views(views,int(group['alignment_max_skew_ns']),timeline,True,max(times,default=0),fusion_policy=policy)
+        a=combine_views(views,int(group['alignment_max_skew_ns']),timeline,True,max(times,default=0),fusion_policy=policy,association_policy=group.get('association_policy'))
         if row['status']=='held' and policy is None:a.update(status='held',label=None,reasons=list(dict.fromkeys(a['reasons']+row['hold_reasons'])))
         result={'version':'group-posture-0.3' if policy is not None else 'group-posture-0.2' if automatic else 'group-reference-posture-0.1','group_id':group['group_id'],'alignment_id':row['alignment_id'],
                'frame_refs':[{'measurement_id':v['measurement_id'],'frame_id':v['frame_id']} if v else None for v in row['views']],
                'status':a['status'],'label':a['label'],'reasons':a['reasons'],'normalized_distances':a.get('normalized_distances'),
                'experimental':True,'identity_verified':False,'exposure_synchronized':False}
+        if group.get('association_policy') is not None:
+            result['association_policy']=group['association_policy']
         if policy is not None:
             result['method']=a['method'];result['fusion_evidence']=a.get('fusion_evidence')
         if 'decision_evidence_profile' in group:

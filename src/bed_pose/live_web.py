@@ -284,11 +284,16 @@ class WebWorkspace:
                 members=[self.sessions[sid] for sid in ids]
                 if len({s.kind for s in members})!=1:
                     raise ValueError('카메라끼리 또는 영상 파일끼리 묶으세요.')
+                from .bed_association import POLICY as BED_POLICY
+                association=values.get('association_policy')
+                if association not in (None,BED_POLICY):raise ValueError('지원하지 않는 대상 연결 방식입니다.')
+                if association==BED_POLICY and values.get('bed_regions_confirmed') is not True:
+                    raise ValueError('두 입력의 침대 영역을 확인하세요.')
                 from .multiview_posture import supported
                 image_fusion=supported([s.worker.engine.body_state_profile for s in members]) and all((s.state.get('automatic_posture_profile') or {}).get('version')=='automatic-posture-rules-0.8' for s in members)
                 for session in members:
                     if (session.state['closed'] or session.worker.stop_requested.is_set() or session.state['phase']=='closing' or session.state['pending']
-                            or session.state['recording'] or session.state['frame_id'] is None or (not session.state['region'] and not image_fusion)
+                            or session.state['recording'] or session.state['frame_id'] is None or (not session.state['region'] and (association==BED_POLICY or not image_fusion))
                             or self.active_group(session.id)):
                         raise ValueError('두 입력의 연결과 침대 영역을 준비하고 개별 측정을 종료하세요.')
                 tolerance=values.get('max_skew_ms')
@@ -319,7 +324,7 @@ class WebWorkspace:
                                         'tracking_at_group_start':session.worker.engine.target_tracker.current()})
                 if values.get('tracking_required') is True and any(s.worker.engine.target_tracker.current()['status']!='tracking_provisional' for s in members):
                     raise ValueError('양쪽 대상을 다시 지정해 잠정 추적을 준비하세요.')
-                group=MeasurementGroup(members,self.output_root,None if tolerance is None else int(tolerance*1_000_000),targets=targets,plan=values.get('measurement_plan'))
+                group=MeasurementGroup(members,self.output_root,None if tolerance is None else int(tolerance*1_000_000),targets=targets,plan=values.get('measurement_plan'),record_video=values.get('record_video',False),association_policy=association)
                 self.groups[group.id]=group
                 try:group.start()
                 except Exception:
@@ -407,7 +412,10 @@ class WebWorkspace:
                 independent=(state.get('automatic_posture_profile') or {}).get('version') in (SEPARATED_METHOD,BODY_STATE_METHOD)
                 if state['frame_id'] is None or (not state['region'] and not independent) or state['recording']:
                     raise ValueError('영상에서 침대 영역을 먼저 지정하세요.')
-                session.worker.submit('start')
+                record_video=values.get('record_video',False)
+                if type(record_video) is not bool:raise ValueError('녹화 설정을 확인하세요.')
+                if record_video and session.kind not in ('camera','demo'):raise ValueError('카메라 입력에서만 녹화할 수 있습니다.')
+                session.worker.submit('start',record_video=record_video)
             elif action == 'stop':
                 if not state['recording']:
                     raise ValueError('진행 중인 측정이 없습니다.')
@@ -455,7 +463,7 @@ class WebWorkspace:
             state.update(region=value['region'], pending=None)
         elif kind == 'started':
             state.update(recording=True, pending=None, directory=value['directory'], recorded_frames=0,
-                         elapsed=0, phase='recording', integrity=None)
+                         elapsed=0, phase='recording', integrity=None, video_recording=value.get('video_recording',False))
             state['started_ns'] = value['started_ns']
         elif kind == 'stopped':
             manifest = value['manifest']
@@ -801,10 +809,12 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
             elif url.path == '/api/preview-quality':
                 result=workspace.set_preview_quality(values.get('quality'))
             elif url.path == '/api/records/image':
-                with workspace.lock:
-                    asset=workspace.assets.get(values.get('video_asset'))
-                    if not asset or asset['kind']!='video':raise ValueError('대조할 원본 영상 파일을 선택하세요.')
-                    video=asset['path']
+                video=None
+                if values.get('video_asset') is not None:
+                    with workspace.lock:
+                        asset=workspace.assets.get(values.get('video_asset'))
+                        if not asset or asset['kind']!='video':raise ValueError('대조할 원본 영상 파일을 선택하세요.')
+                        video=asset['path']
                 result=workspace.records.image(values.get('record_id'),values.get('frame_id'),video)
             elif url.path == '/api/records/open':
                 result=workspace.records.open(values.get('record_id'))

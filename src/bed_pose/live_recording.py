@@ -346,6 +346,9 @@ def verify_live(directory):
     try:
         manifest = load_json(directory/'manifest.json')
         counts = _verify(directory, manifest)
+        if manifest.get('video_recording'):
+            from .camera_video import verify_video
+            verify_video(directory,manifest)
         return {'measurement_id': manifest['measurement_id'], 'run_status': manifest['run_status'],
                 'ledger_complete': True, 'counts': counts, 'integrity': 'verified'}
     except IntegrityError:
@@ -361,6 +364,7 @@ class LiveRecorder:
         self.clock, self.broken = clock, False
         self.streams = {}
         self.event_count = 0
+        self.video = None
         self.manifest = dict(manifest, recorded_events=0, schema_version=LIVE_SCHEMA, run_status='recording',
                              ledger_complete=False, artifact_sha256={}, recorded_frames=0,
                              counts={'ok': 0, 'failed': 0}, errors=[])
@@ -389,9 +393,14 @@ class LiveRecorder:
         self.event_count += 1
         self.manifest['recorded_events'] = self.event_count
 
-    def frame(self, row):
+    def frame(self, row, rgb=None):
         row = dict(row, schema_version=LIVE_SCHEMA, measurement_id=self.manifest['measurement_id'],
                    frame_id=self.manifest['recorded_frames'], record_started_ns=str(self.clock()))
+        if self.video is not None:
+            try:self.video.frame(rgb,row,row['frame_id'])
+            except Exception as exc:
+                self.broken=True
+                raise IntegrityError('Video recording failed') from exc
         self._write('live_frames.jsonl', row)
         self.manifest['recorded_frames'] += 1
         self.manifest['counts'][row['processing_status']] += 1
@@ -417,6 +426,9 @@ class LiveRecorder:
     def finalize(self, outcome='succeeded', errors=()):
         self.manifest.update(run_status=outcome, errors=list(errors))
         try:
+            if self.video is not None:
+                self.manifest['video_artifact']=self.video.finish()
+                self.video=None
             self.close()
             self.manifest['finished_ns'] = str(self.clock())
             if self.broken:

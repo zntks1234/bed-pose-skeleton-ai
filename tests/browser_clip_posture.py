@@ -15,6 +15,7 @@ def main():
             page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(case.server.url)
             page.wait_for_function("()=>document.getElementById('posture-value').textContent==='바로 누움'")
+            page.locator('#posture-details > summary').click()
             page.locator('#decision-evidence summary').click()
             assert page.locator('#decision-evidence-views p').count()==1
             assert '단일 카메라 근거' in page.locator('#decision-evidence-note').inner_text()

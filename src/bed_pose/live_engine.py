@@ -145,7 +145,10 @@ class LiveEngine:
                  'registered_ns':str(self.clock()),'assertion':'operator_reference_not_verified'}}
             self.posture_classifier=ReferenceClassifier(profile)
 
-    def start_measurement(self, request=None):
+    def start_measurement(self, request=None, record_video=False):
+        if type(record_video) is not bool:raise ValueError('녹화 설정을 확인하세요.')
+        if record_video and self.source_profile.get('kind') not in ('camera','synthetic'):
+            raise ValueError('영상 녹화는 카메라 입력에서만 지원합니다.')
         from .automatic_posture import SEPARATED_METHOD,BODY_STATE_METHOD
         independent=self.posture_classifier and self.posture_classifier.profile['version'] in (SEPARATED_METHOD,BODY_STATE_METHOD)
         if not self.opened or self.geometry is None or (self.region is None and not independent):
@@ -176,7 +179,7 @@ class LiveEngine:
                     'requested_settings': self.settings, 'requested_settings_sha256': object_hash(self.settings),
                     'execution_mode': self.settings['execution_mode'], 'stream_reset': self.reset_profile,
                     'environment': {'python': platform.python_version(), 'platform': platform.platform(), 'numpy': np.__version__},
-                    'video_recording': False, 'tracking_scope': 'input_stream',
+                    'video_recording': record_video, 'tracking_scope': 'input_stream',
                     'preview_tracking_history_retained': True, 'hardware_dropped_frames': None, 'start_request': request,
                     'target_tracking_initial':self.target_tracker.current(),
                     'posture_assessment_profile':dict(PROFILE),
@@ -195,6 +198,12 @@ class LiveEngine:
             manifest['person_crop_profile']=deepcopy(self.person_detector.profile)
         if getattr(self.source,'latest_camera',False):self.source.minimum_time=int(manifest['started_ns'])
         self.recorder = LiveRecorder(self.output_root/measurement_id, manifest, self.clock)
+        if record_video:
+            from .camera_video import CameraVideo
+            try:self.recorder.video=CameraVideo(self.recorder.directory,width,height,manifest['started_ns'])
+            except Exception:
+                self.recorder.close();self.recorder=None
+                raise
         self.recorder.event('measurement_started', effective_stream_frame_id=self.next_frame_id, request=request)
         return self.recorder.directory
 
@@ -322,7 +331,7 @@ class LiveEngine:
             a=row['posture_assessment']
             row['posture_prediction']={'status':'experimental' if a['label'] else 'held','label':a['label']}
         if self.recorder:
-            self.recorder.frame(row)
+            self.recorder.frame(row, rgb=rgb)
         diagnostics=self.posture_diagnostics.observe(row['posture_assessment'],self.region_revision)
         if failure:
             raise failure
@@ -419,12 +428,13 @@ class LiveWorker(threading.Thread):
                             model=self.engine.posture_classifier
                             self.messages.put(('posture_reference',{'profile':model.profile if model else None,'model_id':model.model_id if model else None}))
                         elif action == 'start':
-                            path = self.engine.start_measurement(request=request)
+                            if values.get('reset_tracking',False):self.engine.target_tracker.reset()
+                            path = self.engine.start_measurement(request=request,record_video=values.get('record_video',False))
                             if getattr(self.engine.source, 'is_file', False):
                                 self.paused = False
                                 self.engine.processing_rate.reset()
                                 self.messages.put(('playback', {'paused': False}))
-                            self.messages.put(('started', {'directory': str(path), 'started_ns': self.engine.recorder.manifest['started_ns']}))
+                            self.messages.put(('started', {'directory': str(path), 'started_ns': self.engine.recorder.manifest['started_ns'], 'video_recording':self.engine.recorder.manifest['video_recording']}))
                         elif action == 'stop':
                             path, manifest = self.engine.stop_measurement(request=request)
                             self.messages.put(('stopped', {'directory': str(path), 'manifest': manifest}))

@@ -64,3 +64,27 @@ def fuse(views,policy):
     if reason:result['reasons']=[reason]
     else:result.update(status='predicted',label=label)
     return result
+
+
+def closest_candidate(result):
+    """Display-only best candidate from gated current scores, never a recorded prediction."""
+    if result.get('status') != 'held':
+        return None
+    evidence = result.get('fusion_evidence') or {}
+    states = evidence.get('state_scores')
+    if not scores_valid(states, STATES):
+        return None
+    state = choose(states, 0.)
+    if state == 'sitting':
+        return {'label':'edge_sitting', 'kind':'closest_candidate',
+                'caveat':'sitting_shape_bed_edge_unconfirmed'}
+    if state != 'lying':
+        return None
+    directions = evidence.get('direction_scores')
+    if not scores_valid(directions, DIRECTIONS):
+        return None
+    direction = choose(directions, 0.)
+    if direction not in ('supine', 'side'):
+        return None
+    return {'label':direction, 'kind':'closest_candidate',
+            'caveat':'below_decision_criteria'}

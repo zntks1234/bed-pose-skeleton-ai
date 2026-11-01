@@ -14,7 +14,7 @@ from .io_utils import load_json, atomic_json
 from .live_recording import SUPPORTED_SCHEMAS
 
 ID=re.compile(r'[0-9a-f]{32}')
-FILES={'manifest.json','live_frames.jsonl','control_events.jsonl','analysis_video.mkv','video_frames.jsonl'}
+FILES={'manifest.json','live_frames.jsonl','control_events.jsonl','analysis_video.mkv','analysis_video.mp4','video_frames.jsonl'}
 PIN='.keep'
 
 
@@ -83,9 +83,10 @@ def _candidate(directory,protected,group_id=None,segment_index=None):
         if type(data.get('video_recording')) is not bool:return None
         if data['video_recording']:
             video=data.get('video_artifact')
-            if (not isinstance(video,dict) or video.get('version')!='analysis-video-0.1'
-                    or video.get('index_path')!='video_frames.jsonl'
-                    or names!={'manifest.json','live_frames.jsonl','control_events.jsonl','video_frames.jsonl','analysis_video.mkv'}):return None
+            from .camera_video import video_format
+            video_name,_=video_format(video)
+            if (video.get('index_path')!='video_frames.jsonl'
+                    or names!={'manifest.json','live_frames.jsonl','control_events.jsonl','video_frames.jsonl',video_name}):return None
         elif names!={'manifest.json','live_frames.jsonl','control_events.jsonl'}:return None
         return int(timestamp)
     except (OSError,ValueError,KeyError,TypeError,AttributeError):return None

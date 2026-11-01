@@ -59,7 +59,7 @@ def main():
             from pathlib import Path
             members=page.evaluate('snapshot.groups[0].members')
             assert all(load_json(Path(m['run_directory'])/'manifest.json')['video_recording'] for m in members)
-            assert all((Path(m['run_directory'])/'analysis_video.mkv').exists() for m in members)
+            assert all((Path(m['run_directory'])/'analysis_video.mp4').exists() for m in members)
             # Third camera adds a view; it is never silently fused into the pair.
             page.locator('#add-camera').click();page.locator('#camera-index').select_option('2')
             page.locator('#connect-input').click()

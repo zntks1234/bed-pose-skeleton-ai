@@ -21,9 +21,12 @@ class CameraVideoTests(unittest.TestCase):
         _,manifest=engine.stop_measurement();engine.close()
         import av
         import numpy as np
-        with av.open(str(root/'analysis_video.mkv')) as video:
+        with av.open(str(root/'analysis_video.mp4')) as video:
+            self.assertEqual(video.streams.video[0].codec_context.name,'h264')
             decoded=[f.to_ndarray(format='rgb24') for f in video.decode(video=0)]
-        for actual,expected in zip(decoded,frames,strict=True):np.testing.assert_array_equal(actual,expected)
+        for actual,expected in zip(decoded,frames,strict=True):
+            self.assertEqual(actual.shape,expected.shape)
+            self.assertLess(np.abs(actual.astype(float)-expected).mean(),5)
         self.assertTrue(manifest['video_recording'])
         self.assertEqual(manifest['video_artifact']['frame_count'],4)
         self.assertEqual(verify_live(root)['integrity'],'verified')
@@ -56,9 +59,58 @@ class CameraVideoTests(unittest.TestCase):
 
     def test_video_off_does_not_create_artifacts(self):
         engine=self.ready(self.engine());root=engine.start_measurement();engine.step();engine.stop_measurement();engine.close()
-        self.assertFalse((root/'analysis_video.mkv').exists())
+        self.assertFalse((root/'analysis_video.mp4').exists())
         self.assertFalse((root/'video_frames.jsonl').exists())
         self.assertEqual(verify_live(root)['integrity'],'verified')
+
+class VideoFormatCompatibilityTests(unittest.TestCase):
+    setUp=LiveTests.setUp
+    engine=LiveTests.engine
+    ready=LiveTests.ready
+
+    def test_legacy_mkv_is_verified_and_opened(self):
+        import av
+        from fractions import Fraction
+        from bed_pose.record_library import RecordLibrary
+        engine=self.ready(self.engine());root=engine.start_measurement(record_video=True)
+        frames=[engine.step()['rgb'].copy() for _ in range(2)]
+        engine.stop_measurement();engine.close()
+        data=load_json(root/'manifest.json')
+        indices=[json.loads(line) for line in (root/'video_frames.jsonl').read_text().splitlines()]
+        target=root/'analysis_video.mkv'
+        with av.open(str(target),'w',format='matroska') as container:
+            stream=container.add_stream('ffv1',rate=30)
+            stream.width=data['width'];stream.height=data['height'];stream.pix_fmt='bgr0'
+            stream.time_base=stream.codec_context.time_base=Fraction(1,1000)
+            for rgb,item in zip(frames,indices,strict=True):
+                frame=av.VideoFrame.from_ndarray(rgb,format='rgb24')
+                frame.pts=item['video_pts_ms'];frame.time_base=Fraction(1,1000)
+                for packet in stream.encode(frame):container.mux(packet)
+            for packet in stream.encode():container.mux(packet)
+        data['video_artifact'].update(version='analysis-video-0.1',path=target.name,
+                                      codec='ffv1',video_sha256=file_hash(target))
+        atomic_json(root/'manifest.json',data)
+        (root/'analysis_video.mp4').unlink()
+        self.assertEqual(verify_live(root)['integrity'],'verified')
+        library=RecordLibrary(root.parent);library.open(root.name)
+        self.assertEqual(library.image(root.name,1)['frame_id'],1)
+
+    def test_mp4_keeps_odd_dimensions_and_irregular_timestamps(self):
+        import av
+        import numpy as np
+        from fractions import Fraction
+        from bed_pose.camera_video import CameraVideo
+        writer=CameraVideo(self.root,65,47,1000000000)
+        for i,offset in enumerate((0,2,87,1200)):
+            writer.frame(np.full((47,65,3),i*40,dtype=np.uint8),
+                         {'received_ns':str(1000000000+offset*1000000),'stream_frame_id':i},i)
+        writer.finish()
+        with av.open(str(self.root/'analysis_video.mp4')) as container:
+            frames=list(container.decode(video=0))
+        self.assertEqual([(f.width,f.height) for f in frames],[(65,47)]*4)
+        self.assertEqual([f.pts*f.time_base for f in frames],
+                         [Fraction(v,1000) for v in (0,2,87,1200)])
+
 
 class TwoCameraVideoTests(unittest.TestCase):
     import test_group_session as group_tests

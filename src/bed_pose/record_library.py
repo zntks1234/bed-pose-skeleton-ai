@@ -123,17 +123,18 @@ class OpenRecord:
         media=row.get('source_media')
         if recorded:
             import av
-            from .camera_video import VIDEO,INDEX
+            from .camera_video import video_format,INDEX
             artifact=self.manifest['video_artifact']
-            if any((self.directory/name).is_symlink() or (self.directory/name).resolve().parent!=self.directory for name in (VIDEO,INDEX)):
+            video_name,_=video_format(artifact)
+            if any((self.directory/name).is_symlink() or (self.directory/name).resolve().parent!=self.directory for name in (video_name,INDEX)):
                 raise ValueError('녹화 파일 경로가 올바르지 않습니다.')
-            if file_hash(self.directory/VIDEO)!=artifact['video_sha256'] or file_hash(self.directory/INDEX)!=artifact['index_sha256']:
+            if file_hash(self.directory/video_name)!=artifact['video_sha256'] or file_hash(self.directory/INDEX)!=artifact['index_sha256']:
                 raise ValueError('녹화 영상 또는 프레임 인덱스가 변경되었습니다.')
             with (self.directory/INDEX).open(encoding='utf-8') as stream:
                 for _ in range(frame_id+1):item=strict_loads(next(stream))
             if item['frame_id']!=frame_id or item['stream_frame_id']!=row['stream_frame_id'] or item['received_ns']!=row['received_ns']:
                 raise ValueError('영상과 로그 프레임이 일치하지 않습니다.')
-            with av.open(str(self.directory/VIDEO)) as container:
+            with av.open(str(self.directory/video_name)) as container:
                 for i,frame in enumerate(container.decode(video=0)):
                     if i==frame_id:break
                 else:raise ValueError('녹화 영상에서 프레임을 찾지 못했습니다.')

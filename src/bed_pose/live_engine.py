@@ -60,9 +60,9 @@ class LiveEngine:
         if body_state_provider is not None:
             from .body_state import validate_profile
             self.body_state_profile=validate_profile(body_state_provider.profile,execution_kind)
-        from .automatic_posture import AutomaticClassifier,SEPARATED_DEFAULTS,FORCED_DEFAULTS
+        from .automatic_posture import AutomaticClassifier,SEPARATED_DEFAULTS,NATIVE_DEFAULTS,FORCED_DEFAULTS
         self.posture_classifier=(AutomaticClassifier(FORCED_DEFAULTS,body_state_profile=self.body_state_profile)
-                                 if body_state_provider is not None else AutomaticClassifier(SEPARATED_DEFAULTS)
+                                 if body_state_provider is not None else AutomaticClassifier(NATIVE_DEFAULTS)
                                  if execution_kind=='model_inference' else None)
 
     def clock(self):
@@ -156,8 +156,8 @@ class LiveEngine:
         if type(record_video) is not bool:raise ValueError('녹화 설정을 확인하세요.')
         if record_video and self.source_profile.get('kind') not in ('camera','synthetic'):
             raise ValueError('영상 녹화는 카메라 입력에서만 지원합니다.')
-        from .automatic_posture import SEPARATED_METHOD,BODY_STATE_METHODS
-        independent=self.posture_classifier and self.posture_classifier.profile['version'] in (SEPARATED_METHOD,*BODY_STATE_METHODS)
+        from .automatic_posture import SEPARATED_METHOD,NATIVE_METHOD,BODY_STATE_METHODS
+        independent=self.posture_classifier and self.posture_classifier.profile['version'] in (SEPARATED_METHOD,NATIVE_METHOD,*BODY_STATE_METHODS)
         if not self.opened or self.geometry is None or (self.region is None and not independent):
             raise ValueError('영상이 표시된 뒤 침대 영역을 먼저 지정하세요.')
         if self.recorder:
@@ -458,11 +458,11 @@ class LiveWorker(threading.Thread):
                             self.messages.put(('target_selected',{'tracking':tracking,'selection_id':values.get('selection_id')}))
                         elif action == 'posture_mode':
                             if self.engine.recorder:raise ValueError('측정을 종료한 뒤 설정을 바꾸세요.')
-                            from .automatic_posture import AutomaticClassifier,DEFAULTS,AUTO_DEFAULTS,SEPARATED_DEFAULTS,FORCED_DEFAULTS
+                            from .automatic_posture import AutomaticClassifier,DEFAULTS,AUTO_DEFAULTS,SEPARATED_DEFAULTS,NATIVE_DEFAULTS,FORCED_DEFAULTS
                             mode=values.get('mode')
                             if mode not in ('automatic','off') or values.get('view') not in ('auto','body_state','bed_auto','oblique','overhead'):raise ValueError('판정 방식과 촬영 각도를 확인하세요.')
                             use_state=values['view']=='body_state' or (values['view']=='auto' and self.engine.body_state_provider is not None)
-                            profile=FORCED_DEFAULTS if use_state else SEPARATED_DEFAULTS if values['view']=='auto' else AUTO_DEFAULTS if values['view']=='bed_auto' else dict(DEFAULTS,view=values['view'])
+                            profile=FORCED_DEFAULTS if use_state else NATIVE_DEFAULTS if values['view']=='auto' else AUTO_DEFAULTS if values['view']=='bed_auto' else dict(DEFAULTS,view=values['view'])
                             self.engine.posture_classifier=AutomaticClassifier(profile,body_state_profile=self.engine.body_state_profile if use_state else None) if mode=='automatic' else None
                             model=self.engine.posture_classifier
                             self.messages.put(('posture_mode',{'profile':model.profile if model else None,'model_id':model.model_id if model else None}))

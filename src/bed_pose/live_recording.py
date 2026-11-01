@@ -83,7 +83,7 @@ def _verify(directory, manifest, hashes=True):
     region = manifest['initial_bed_region']
     if region is not None:validate_region(region, manifest['width'], manifest['height'])
     elif (manifest['schema_version']!=LIVE_SCHEMA
-          or (manifest.get('automatic_posture_profile') or {}).get('version') not in ('automatic-posture-rules-0.7','automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12')):
+          or (manifest.get('automatic_posture_profile') or {}).get('version') not in ('automatic-posture-rules-0.7','automatic-posture-rules-0.8','automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12','automatic-posture-rules-0.13')):
         raise IntegrityError('Initial bed region is required by the recorded mode')
     selection = manifest['initial_bed_selection']
     if selection is None:

@@ -75,7 +75,7 @@ def bed_relation(points,region,cfg,width,height):
     result={'version':VERSION,'status':'unknown','relation':None,'reasons':[],
             'semantics':'image_region_membership_not_physical_occupancy',
             'physical_occupancy':'unknown','hip_edge_fraction':None}
-    if cfg.get('version') in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
+    if cfg.get('version') in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12','automatic-posture-rules-0.13'):
         result['torso_available']=(len(points)==17 and all(points[i] is not None for i in (5,6,11,12)))
     if region is None:result['reasons']=['bed_region_required'];return result
     if len(points)!=17 or any(points[i] is None for i in (11,12)):
@@ -92,7 +92,7 @@ def bed_relation(points,region,cfg,width,height):
         if uv is None:result['reasons']=['bed_coordinate_unavailable'];return result
         edge=max(0.,min(*uv,1-uv[0],1-uv[1]))
         result.update(status='observed',relation='edge' if edge<=cfg['edge_fraction'] else 'inside',hip_edge_fraction=edge)
-        if cfg.get('version') in ('automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
+        if cfg.get('version') in ('automatic-posture-rules-0.9','automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12','automatic-posture-rules-0.13'):
             # Camera projection, not a physical bed-contact measurement. Both knees
             # must cross the same nearest edge while both hips remain inside.
             side=min(range(4),key=lambda i:(uv[0],1-uv[0],uv[1],1-uv[1])[i])
@@ -106,7 +106,7 @@ def bed_relation(points,region,cfg,width,height):
             result['knee_edge_evidence']={'nearest_edge':side,'knees_cross_same_edge':bool(crossing),
                                           'hip_limit':cfg['knee_edge_hip_limit'],'supported':supported}
             if supported:result['relation']='edge'
-            if cfg['version'] in ('automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
+            if cfg['version'] in ('automatic-posture-rules-0.10','automatic-posture-rules-0.11','automatic-posture-rules-0.12','automatic-posture-rules-0.13'):
                 ankles=[relative_xy(region,points[i]) if points[i] is not None else None for i in (15,16)]
                 ankles_valid=all(a is not None and all(math.isfinite(x) for x in a) for a in ankles)
                 def outside_same_side(p):
@@ -123,7 +123,7 @@ def bed_relation(points,region,cfg,width,height):
                     'knees_near_same_edge':knee_near,'knee_limit':cfg['foot_edge_knee_limit'],
                     'supported':foot_supported,'semantics':'ankle_projection_not_physical_contact'}
                 if foot_supported:result['relation']='edge'
-                if cfg['version'] in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12'):
+                if cfg['version'] in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12','automatic-posture-rules-0.13'):
                     # Hip proximity alone is not enough. Knees must be near or
                     # beyond the same edge, and both ankles beyond that edge.
                     result['edge_posture_evidence']={

@@ -56,7 +56,7 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
     # Version 0.11 uses the source model's visibility rather than treating
     # every finite coordinate as an observed joint. Presence is optional for
     # browser GPU output; missing visibility cannot establish joint quality.
-    if (candidate and getattr(classifier,'profile',{}).get('version') in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12')):
+    if (candidate and getattr(classifier,'profile',{}).get('version') in ('automatic-posture-rules-0.11','automatic-posture-rules-0.12','automatic-posture-rules-0.13')):
         raw=[p for p in row.get('raw_candidates',[]) if p.get('candidate_id')==candidate['candidate_id']]
         scores=raw[0].get('sdk_landmarks',{}).get('image',[]) if len(raw)==1 else []
         for i,joint in enumerate(candidate['joints']):
@@ -79,16 +79,16 @@ def assess_frame(row,width,height,region,classifier: PostureClassifier | None=No
     try:
         from .bed_geometry import observation_region
         from .reference_posture import ReferenceClassifier
-        from .automatic_posture import AutomaticClassifier,METHOD,WORLD_METHOD,AUTO_METHOD,SEPARATED_METHOD,BODY_STATE_METHODS
+        from .automatic_posture import AutomaticClassifier,METHOD,WORLD_METHOD,AUTO_METHOD,SEPARATED_METHOD,NATIVE_METHOD,BODY_STATE_METHODS
         world=None
-        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (WORLD_METHOD,METHOD,AUTO_METHOD,SEPARATED_METHOD,*BODY_STATE_METHODS):
+        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (WORLD_METHOD,METHOD,AUTO_METHOD,SEPARATED_METHOD,NATIVE_METHOD,*BODY_STATE_METHODS):
             from .posture_evidence import world_body_evidence
             world=world_body_evidence(row,candidate)
         pose=None
-        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (AUTO_METHOD,SEPARATED_METHOD,*BODY_STATE_METHODS):
+        if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (AUTO_METHOD,SEPARATED_METHOD,NATIVE_METHOD,*BODY_STATE_METHODS):
             from .viewpoint_posture import world_points
             pose=world_points(row,candidate)
-        separated=isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (SEPARATED_METHOD,*BODY_STATE_METHODS)
+        separated=isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in (SEPARATED_METHOD,NATIVE_METHOD,*BODY_STATE_METHODS)
         state=None
         if isinstance(classifier,AutomaticClassifier) and classifier.profile['version'] in BODY_STATE_METHODS:
             from .body_state import read_observation

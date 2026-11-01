@@ -92,10 +92,13 @@ def combine_views(views,max_skew_ns,confirmations,active,now_ns,fusion_policy=No
         return fused
     auto=[v.get('reference_profile',{}).get('version','').startswith('automatic-posture') if v.get('reference_profile') else False for v in views]
     if any(auto):
+        bed_native=(association_policy is not None and
+                    all((v.get('reference_profile') or {}).get('version')=='automatic-posture-rules-0.13' for v in views))
         result['method']='automatic_two_view_agreement_v1'
         if reasons:return result
         if not all(auto):reasons.append('mixed_classifier_modes')
-        elif any(not v.get('tracking_provisional') or v['assessment']['status']!='predicted' for v in views):reasons.append('view_features_unavailable')
+        elif any((not v.get('tracking_provisional') and not bed_native)
+                 or v['assessment']['status']!='predicted' for v in views):reasons.append('view_features_unavailable')
         elif views[0]['assessment']['label']!=views[1]['assessment']['label']:reasons.append('view_posture_conflict')
         else:result.update(status='predicted',label=views[0]['assessment']['label'])
         return result

@@ -260,7 +260,7 @@ class ClipWebTests(unittest.TestCase):
         sid2=self.add_video(False)
         second=next(x for x in self.workspace.snapshot()['sessions'] if x['id']==sid2)
         self.assertIsNone(second['body_state_provider_profile'])
-        self.assertEqual(second['automatic_posture_profile']['version'],'automatic-posture-rules-0.7')
+        self.assertEqual(second['automatic_posture_profile']['version'],'automatic-posture-rules-0.13')
         self.assertEqual(self.request('/api/inputs',{'kind':'demo','use_clip':True})[0],400)
 
 

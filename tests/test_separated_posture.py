@@ -89,6 +89,7 @@ class SeparationWebTests(unittest.TestCase):
     demo=web.WebTests.demo
 
     def body_input(self):
+        self.enterContext(patch('bed_pose.automatic_posture.NATIVE_DEFAULTS',SEPARATED_DEFAULTS))
         from bed_pose.live_engine import LiveEngine
         from bed_pose.pose.fake import FakeAdapter
         from bed_pose.pose.mediapipe import mapping_profile

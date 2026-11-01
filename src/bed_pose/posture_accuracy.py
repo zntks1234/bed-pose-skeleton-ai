@@ -96,7 +96,7 @@ def evaluate(directory,output,annotations=None):
     annotation_hash=file_hash(annotations) if annotations is not None else None
     provenance,labels=load_annotations(annotations,manifest['measurement_id']) if annotations is not None else (None,{})
     version=(manifest.get('automatic_posture_profile') or {}).get('version')
-    classes=FORCED_LABELS if version=='automatic-posture-rules-0.12' else EVIDENCE_LABELS if version=='automatic-posture-rules-0.11' else LABELS
+    classes=FORCED_LABELS if version in ('automatic-posture-rules-0.12','automatic-posture-rules-0.13') else EVIDENCE_LABELS if version=='automatic-posture-rules-0.11' else LABELS
     with frames_path.open(encoding='utf-8') as stream:metrics=summarize((strict_loads(line) for line in stream),labels,classes)
     if (file_hash(manifest_path)!=manifest_hash or file_hash(frames_path)!=frames_hash
             or annotations is not None and file_hash(annotations)!=annotation_hash):

@@ -106,7 +106,7 @@ class MultiviewWebTests(unittest.TestCase):
     setUp=ClipWebTests.setUp
     cleanup=ClipWebTests.cleanup
 
-    def start_pair(self,with_regions=False):
+    def start_pair(self,with_regions=False,blackbox=False):
         from bed_pose.live_sources import SyntheticSource
         original=self.workspace.factory
         class Camera(SyntheticSource):
@@ -128,10 +128,47 @@ class MultiviewWebTests(unittest.TestCase):
                 'tracking_config':{'max_gap_ms':10000,'max_speed_diagonals_per_second':100}})
             self.wait(lambda x:any(s['id']==sid and s.get('target_selection_applied')==selected['selection_id'] for s in x['sessions']))
             selections.append({'ticket':capture['ticket'],'candidate_id':candidate})
-        status,result=self.request('/api/group',{'action':'start','inputs':ids,'max_skew_ms':1000,
+        status,result=self.request('/api/group',{'action':'start','inputs':ids,'max_skew_ms':1000,'blackbox':blackbox,'segment_seconds':1 if blackbox else None,
             'target_selections':selections,'same_person_confirmed':True,'tracking_required':True})
         self.assertEqual(status,200,result)
         return result['group_id']
+
+    def test_group_segment_saved_stability_continues(self):
+        from pathlib import Path
+        from bed_pose.io_utils import load_json
+        from bed_pose.fusion_inputs import inspect_group
+        gid=self.start_pair(blackbox=True)
+        self.wait(lambda x:len(x['groups'][0].get('segments',[]))>=2 and all(v['status']=='completed' for v in x['groups'][0]['segments'][:2]),timeout=15)
+        self.request('/api/group',{'action':'stop','group_id':gid})
+        group=self.wait(lambda x:x['groups'][0]['phase']=='completed',timeout=15)['groups'][0]
+        first,second=(Path(v['directory']) for v in group['segments'][:2])
+        a,b=load_json(first/'manifest.json'),load_json(second/'manifest.json')
+        self.assertEqual(inspect_group(first)['integrity'],'verified')
+        self.assertEqual(inspect_group(second)['integrity'],'verified')
+        self.assertEqual(b['initial_group_stability_checkpoint'],a['posture_predictions']['final_stability_checkpoint'])
+        self.assertEqual(b['group_stability_sequence_offset'],a['posture_predictions']['next_stability_sequence'])
+
+    def test_group_stability_continues_after_older_segment_is_deleted(self):
+        from pathlib import Path
+        from bed_pose.io_utils import load_json
+        from bed_pose.blackbox_retention import _size
+        from bed_pose.fusion_inputs import inspect_group
+        gid=self.start_pair(blackbox=True)
+        group=self.wait(lambda x:bool(x['groups'][0].get('segments')) and x['groups'][0]['segments'][0]['status']=='completed',timeout=15)['groups'][0]
+        old=group['segments'][0];first=load_json(Path(old['directory'])/'manifest.json')
+        with self.workspace.lock:
+            root=self.workspace.output_root/'blackbox';total=_size(root)
+            size=_size(Path(old['directory']))+sum(_size(Path(p)) for p in old['members'])
+            self.workspace.groups[gid].data['retention_max_bytes']=max(1,total-size//2)
+            self.workspace._tick_retention()
+            self.workspace.groups[gid].data['retention_max_bytes']=1024**4
+        state=self.wait(lambda x:x['groups'][0]['segments'][0]['status']=='deleted' and len(x['groups'][0]['segments'])>=2 and x['groups'][0]['segments'][1]['status']=='completed',timeout=15)
+        self.assertEqual(state['groups'][0]['phase'],'recording')
+        second=Path(state['groups'][0]['segments'][1]['directory']);manifest=load_json(second/'manifest.json')
+        self.assertEqual(manifest['initial_group_stability_checkpoint'],first['posture_predictions']['final_stability_checkpoint'])
+        self.assertEqual(inspect_group(second)['integrity'],'verified')
+        self.request('/api/group',{'action':'stop','group_id':gid})
+        self.wait(lambda x:x['groups'][0]['phase']=='completed',timeout=15)
 
     def test_saved_group_depth_export_preserves_posture(self):
         import json

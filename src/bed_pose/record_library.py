@@ -5,6 +5,8 @@ from pathlib import Path
 from .pose_display import display_people
 import re
 import threading
+import os
+import uuid
 
 from .contracts import IntegrityError
 from .io_utils import file_hash,load_json,strict_loads
@@ -204,6 +206,36 @@ class RecordLibrary:
             raise ValueError('측정 기록을 찾을 수 없습니다.')
         return path.resolve()
 
+    def protection_paths(self,directory,manifest):
+        """Return the two recorded camera directories when their group is known."""
+        segment=manifest.get('blackbox_segment') or {}
+        gid=segment.get('group_id');index=segment.get('index')
+        if not isinstance(gid,str) or ID.fullmatch(gid) is None or type(index) is not int:return [directory]
+        if (self.root/'groups').is_symlink():return [directory]
+        group=self.root/'groups'/gid
+        summary=group/'manifest.json'
+        if group.is_symlink() or summary.is_symlink() or not summary.is_file() or summary.stat().st_size>4*1024**2:return [directory]
+        try:
+            data=load_json(summary)
+            if data.get('group_id')!=gid:return [directory]
+            entry=next((s for s in data.get('segments',[]) if s.get('index')==index),None)
+            values=entry.get('members') if entry else [m.get('run_directory') for m in data.get('members',[])]
+            if not isinstance(values,list) or len(values)!=2:return [directory]
+            paths=[]
+            for value in values:
+                if not isinstance(value,str):return [directory]
+                path=Path(value)
+                if path.parent!=self.root or ID.fullmatch(path.name) is None:return [directory]
+                path=self.directory(path.name)
+                source=path/'manifest.json'
+                if source.is_symlink() or not source.is_file() or source.stat().st_size>4*1024**2:return [directory]
+                other=load_json(source)
+                part=other.get('blackbox_segment') or {}
+                if part.get('group_id')!=gid or part.get('index')!=index:return [directory]
+                paths.append(path)
+            return paths if len(set(paths))==2 and directory in paths else [directory]
+        except (OSError,ValueError,TypeError,KeyError,AttributeError):return [directory]
+
     def catalog(self,offset=0,limit=50):
         pagination(offset,limit);items=[]
         for path in self.root.iterdir() if self.root.is_dir() else []:
@@ -212,7 +244,9 @@ class RecordLibrary:
                 directory=self.directory(path.name)
                 if (directory/'manifest.json').is_symlink() or (directory/'manifest.json').stat().st_size>4*1024**2:
                     raise ValueError('Unsupported manifest')
-                item=metadata(load_json(directory/'manifest.json'),path.name)
+                manifest=load_json(directory/'manifest.json')
+                item=metadata(manifest,path.name)
+                item['protected']=any((p/'.keep').exists() or (p/'.keep').is_symlink() for p in self.protection_paths(directory,manifest))
             except (OSError,ValueError,TypeError,KeyError,AttributeError,RecursionError):
                 item={'record_id':path.name,'availability':'invalid','integrity':'not_checked'}
             items.append(item)
@@ -224,35 +258,63 @@ class RecordLibrary:
         return {'items':items[offset:offset+limit],'offset':offset,'limit':limit,'total':len(items)}
 
     def open(self,record_id):
-        try:
-            record=OpenRecord(self.directory(record_id),record_id)
-        except (IntegrityError,OSError,KeyError,TypeError) as exc:
-            raise ValueError('기록 검사에 실패했습니다. 파일 누락·변경·지원 형식을 확인하세요.') from exc
         with self.lock:
+            try:
+                record=OpenRecord(self.directory(record_id),record_id)
+            except (IntegrityError,OSError,KeyError,TypeError) as exc:
+                raise ValueError('기록 검사에 실패했습니다. 파일 누락·변경·지원 형식을 확인하세요.') from exc
+            record.lease_id=uuid.uuid4().hex
             self.opened[record_id]=record;self.opened.move_to_end(record_id)
             while len(self.opened)>4:self.opened.popitem(last=False)
+            protected=any((p/'.keep').exists() or (p/'.keep').is_symlink() for p in self.protection_paths(record.directory,record.manifest))
         # Return original settings for inspection, never for live reconfiguration.
-        return dict(record.meta,integrity='verified',counts=record.manifest['counts'],
+        return dict(record.meta,integrity='verified',counts=record.manifest['counts'],protected=protected,lease_id=record.lease_id,
                     automatic_profile=record.manifest.get('automatic_posture_profile'),
                     stability_profile=record.manifest.get('stability_profile'),
                     score_semantics='independent_rule_fit_not_probability',
                     content='stored_frame_results_no_video_replay')
 
+    def protect(self,record_id,protected):
+        if type(protected) is not bool:raise ValueError('보관 설정을 확인하세요.')
+        with self.lock:
+            directory=self.directory(record_id)
+            manifest=load_json(directory/'manifest.json')
+            if manifest.get('storage_class')!='blackbox' or manifest.get('ledger_complete') is not True:
+                raise ValueError('완료된 블랙박스 기록만 보관 설정할 수 있습니다.')
+            markers=[p/'.keep' for p in self.protection_paths(directory,manifest)]
+            if any(m.is_symlink() or (m.exists() and not m.is_file()) for m in markers):raise ValueError('보관 설정 파일을 확인하세요.')
+            for marker in markers:
+                if protected:
+                    flags=os.O_WRONLY|os.O_CREAT|getattr(os,'O_NOFOLLOW',0)
+                    fd=os.open(marker,flags,0o600)
+                    try:os.fsync(fd)
+                    finally:os.close(fd)
+                else:marker.unlink(missing_ok=True)
+            return {'record_id':record_id,'protected':protected}
+
+    def release(self,record_id,lease_id):
+        with self.lock:
+            record=self.opened.get(record_id)
+            if record is not None and record.lease_id==lease_id:self.opened.pop(record_id,None)
+
     def frames(self,record_id,offset=0,limit=50):
-        self.directory(record_id)
-        with self.lock:record=self.opened.get(record_id)
-        if record is None:raise ValueError('기록 목록에서 측정을 먼저 여세요.')
-        return record.page(offset,limit)
+        with self.lock:
+            self.directory(record_id)
+            record=self.opened.get(record_id)
+            if record is None:raise ValueError('기록 목록에서 측정을 먼저 여세요.')
+            return record.page(offset,limit)
 
     def timeline(self,record_id,basis=None,bins=240):
-        self.directory(record_id)
-        with self.lock:record=self.opened.get(record_id)
-        if record is None:raise ValueError('기록 목록에서 측정을 먼저 여세요.')
-        if basis is None:basis='media' if record.meta['source_kind']=='video_file' else 'receive'
-        return record.timeline(basis,bins)
+        with self.lock:
+            self.directory(record_id)
+            record=self.opened.get(record_id)
+            if record is None:raise ValueError('기록 목록에서 측정을 먼저 여세요.')
+            if basis is None:basis='media' if record.meta['source_kind']=='video_file' else 'receive'
+            return record.timeline(basis,bins)
 
     def image(self,record_id,frame_id,video=None):
-        self.directory(record_id)
-        with self.lock:record=self.opened.get(record_id)
-        if record is None:raise ValueError('기록 목록에서 측정을 먼저 여세요.')
-        return record.image(frame_id,video)
+        with self.lock:
+            self.directory(record_id)
+            record=self.opened.get(record_id)
+            if record is None:raise ValueError('기록 목록에서 측정을 먼저 여세요.')
+            return record.image(frame_id,video)

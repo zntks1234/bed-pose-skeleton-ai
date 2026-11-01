@@ -147,7 +147,12 @@ class LiveEngine:
                  'registered_ns':str(self.clock()),'assertion':'operator_reference_not_verified'}}
             self.posture_classifier=ReferenceClassifier(profile)
 
-    def start_measurement(self, request=None, record_video=False):
+    def start_measurement(self, request=None, record_video=False, blackbox=False, segment=None):
+        if type(blackbox) is not bool:raise ValueError('저장 방식을 확인하세요.')
+        if segment is not None:
+            from .blackbox_storage import validate_segment
+            segment=validate_segment(segment)
+            if not blackbox:raise ValueError('블랙박스 구간은 별도 저장이 필요합니다.')
         if type(record_video) is not bool:raise ValueError('녹화 설정을 확인하세요.')
         if record_video and self.source_profile.get('kind') not in ('camera','synthetic'):
             raise ValueError('영상 녹화는 카메라 입력에서만 지원합니다.')
@@ -165,7 +170,7 @@ class LiveEngine:
         width, height = self.geometry
         from .decision_evidence import PROFILE as DECISION_PROFILE
         from .bed_association import PROFILE as BED_TARGET_PROFILE
-        self.stability.reset()
+        if segment is None or segment['index']==0:self.stability.reset()
         measurement_id = uuid.uuid4().hex
         manifest = {'measurement_id': measurement_id, 'stream_id': self.stream_id,
                     'clock_id': self.clock_id, 'clock_origin_perf_counter_ns': str(self.origin),
@@ -203,7 +208,15 @@ class LiveEngine:
             from copy import deepcopy
             manifest['person_crop_profile']=deepcopy(self.person_detector.profile)
         if getattr(self.source,'latest_camera',False):self.source.minimum_time=int(manifest['started_ns'])
-        self.recorder = LiveRecorder(self.output_root/measurement_id, manifest, self.clock)
+        if blackbox:manifest['storage_class']='blackbox'
+        if segment is not None:
+            manifest['blackbox_segment']=segment
+            manifest['initial_stability_checkpoint']=self.stability.checkpoint()
+        if blackbox:
+            from .blackbox_storage import blackbox_root
+            root=blackbox_root(self.output_root,create=True)
+        else:root=self.output_root
+        self.recorder = LiveRecorder(root/measurement_id, manifest, self.clock)
         if record_video:
             from .camera_video import CameraVideo
             try:self.recorder.video=CameraVideo(self.recorder.directory,width,height,manifest['started_ns'])
@@ -212,6 +225,24 @@ class LiveEngine:
                 raise
         self.recorder.event('measurement_started', effective_stream_frame_id=self.next_frame_id, request=request)
         return self.recorder.directory
+
+    def rotate_blackbox_segment(self):
+        """Close a segment and open its successor while keeping the live engine state.
+
+        The owner must schedule this between frames and handle errors as a stopped
+        measurement. Finalization is synchronous; capture gaps are possible.
+        """
+        if self.recorder is None or 'blackbox_segment' not in self.recorder.manifest:
+            raise ValueError('구간 분할 중인 블랙박스 측정이 없습니다.')
+        old=self.recorder.manifest
+        segment=old['blackbox_segment']
+        successor={'series_id':segment['series_id'],'index':segment['index']+1,
+                   'previous_measurement_id':old['measurement_id']}
+        if 'group_id' in segment:successor['group_id']=segment['group_id']
+        video=old['video_recording']
+        directory,manifest=self.stop_measurement(reason='blackbox_segment_boundary')
+        following=self.start_measurement(record_video=video,blackbox=True,segment=successor)
+        return directory,manifest,following
 
     def stop_measurement(self, outcome='succeeded', errors=(), reason='user_stop', request=None):
         if self.recorder is None:
@@ -408,6 +439,7 @@ class LiveWorker(threading.Thread):
     def run(self):
         outcome, error = 'succeeded', None
         close_reason = 'stream_closed'
+        segment_seconds,segment_due=None,None
         try:
             self.engine.open()
             self.messages.put(('ready', {}))
@@ -440,18 +472,38 @@ class LiveWorker(threading.Thread):
                             self.messages.put(('posture_reference',{'profile':model.profile if model else None,'model_id':model.model_id if model else None}))
                         elif action == 'start':
                             if values.get('reset_tracking',False):self.engine.target_tracker.reset()
-                            path = self.engine.start_measurement(request=request,record_video=values.get('record_video',False))
+                            options={'request':request,'record_video':values.get('record_video',False)}
+                            if values.get('blackbox',False):options['blackbox']=True
+                            segment_seconds=values.get('segment_seconds')
+                            group_segment=values.get('group_segment')
+                            if group_segment is not None:
+                                if not values.get('blackbox',False) or segment_seconds is not None:
+                                    raise ValueError('그룹 구간 설정을 확인하세요.')
+                                options['segment']=group_segment
+                            if segment_seconds is not None:
+                                if (not values.get('blackbox',False) or type(segment_seconds) is not int
+                                        or not 1<=segment_seconds<=86400):
+                                    raise ValueError('구간 길이는 1~86400초여야 합니다.')
+                                options['segment']={'series_id':uuid.uuid4().hex,'index':0,'previous_measurement_id':None}
+                            path = self.engine.start_measurement(**options)
+                            segment_due=time.monotonic()+segment_seconds if segment_seconds is not None else None
                             if getattr(self.engine.source, 'is_file', False):
                                 self.paused = False
                                 self.engine.processing_rate.reset()
                                 self.messages.put(('playback', {'paused': False}))
-                            self.messages.put(('started', {'directory': str(path), 'started_ns': self.engine.recorder.manifest['started_ns'], 'video_recording':self.engine.recorder.manifest['video_recording']}))
+                            self.messages.put(('started', {'directory': str(path), 'started_ns': self.engine.recorder.manifest['started_ns'], 'video_recording':self.engine.recorder.manifest['video_recording'], 'segmented_recording':segment_seconds is not None or group_segment is not None,
+                                'retention_max_bytes':values.get('retention_max_bytes')}))
                         elif action == 'stop':
                             path, manifest = self.engine.stop_measurement(request=request)
+                            segment_seconds=segment_due=None
                             self.messages.put(('stopped', {'directory': str(path), 'manifest': manifest}))
                             if getattr(self.engine.source, 'is_file', False):
                                 self.paused = True
                                 self.messages.put(('playback', {'paused': True}))
+                        elif action == 'rotate_group_segment':
+                            old,manifest,path=self.engine.rotate_blackbox_segment()
+                            self.messages.put(('segment_rotated',{'directory':str(path),'previous_directory':str(old),
+                                'segment_index':self.engine.recorder.manifest['blackbox_segment']['index']}))
                         elif action == 'playback' and getattr(self.engine.source, 'is_file', False):
                             self.paused = bool(values['paused'])
                             self.engine.processing_rate.reset()
@@ -466,6 +518,11 @@ class LiveWorker(threading.Thread):
                         self.messages.put(('command_rejected', {'message': str(exc),'action':action}))
                 if self.stop_requested.is_set():
                     break
+                if segment_due is not None and time.monotonic()>=segment_due and self.engine.recorder is not None:
+                    old,manifest,path=self.engine.rotate_blackbox_segment()
+                    segment_due=time.monotonic()+segment_seconds
+                    self.messages.put(('segment_rotated',{'directory':str(path),'previous_directory':str(old),
+                        'segment_index':self.engine.recorder.manifest['blackbox_segment']['index']}))
                 if self.paused and self.engine.next_frame_id > 0:
                     self.stop_requested.wait(0.03)
                     continue

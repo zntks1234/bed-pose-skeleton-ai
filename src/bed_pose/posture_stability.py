@@ -46,6 +46,33 @@ class Stabilizer:
         self.current=None;self.confirmed_ns=None;self.pending=None;self.since=None;self.count=0
         self.result=None
 
+    def checkpoint(self):
+        """State before the next observation, for independently replayable segments."""
+        return {key:deepcopy(getattr(self,key)) for key in
+                ('context','time','sequence','current','confirmed_ns','pending','since','count')}
+
+    def restore(self, state):
+        keys={'context','time','sequence','current','confirmed_ns','pending','since','count'}
+        if not isinstance(state,dict) or set(state)!=keys:raise ValueError('Invalid stability checkpoint')
+        def unsigned(value):return type(value) is int and value>=0
+        empty=state['context'] is None
+        if (empty != (state['time'] is None) or empty != (state['sequence'] is None)
+                or (not empty and (not isinstance(state['context'],str) or len(state['context'])!=64
+                                   or any(c not in '0123456789abcdef' for c in state['context'])
+                                   or not unsigned(state['time']) or not unsigned(state['sequence'])))
+                or state['current'] not in (None,*LABELS) or state['pending'] not in (None,*LABELS)
+                or not unsigned(state['count'])
+                or (state['pending'] is None and (state['since'] is not None or state['count']!=0))
+                or (state['pending'] is not None and (not unsigned(state['since']) or state['count']<1))
+                or (state['current'] is None) != (state['confirmed_ns'] is None)
+                or (state['confirmed_ns'] is not None and not unsigned(state['confirmed_ns']))
+                or (empty and (state['current'] is not None or state['pending'] is not None))
+                or (not empty and ((state['since'] is not None and state['since']>state['time'])
+                                   or (state['confirmed_ns'] is not None and state['confirmed_ns']>state['time'])))):
+            raise ValueError('Invalid stability checkpoint')
+        for key,value in state.items():setattr(self,key,deepcopy(value))
+        self.result=None
+
     def observe(self, assessment, timestamp_ns, sequence, context):
         if type(timestamp_ns) is not int or timestamp_ns<0 or type(sequence) is not int or sequence<0:
             raise ValueError('Invalid stability observation identity/time')

@@ -10,7 +10,17 @@ from .live_recording import verify_live
 
 
 class MeasurementGroup:
-    def __init__(self, members, root, max_skew_ns=None, targets=(), plan=None, record_video=False, association_policy=None):
+    def __init__(self, members, root, max_skew_ns=None, targets=(), plan=None, record_video=False, association_policy=None, blackbox=False, segment_seconds=None):
+        if type(blackbox) is not bool:raise ValueError('저장 방식을 확인하세요.')
+        if segment_seconds is not None and (not blackbox or type(segment_seconds) is not int or not 1<=segment_seconds<=86400):raise ValueError('구간 길이는 1~86400초여야 합니다.')
+        self.blackbox=blackbox
+        self.segment_seconds=segment_seconds
+        self.segment_due=None
+        self.rotating=None
+        self.segment_jobs={}
+        self.segment_tail=None
+        self.segment_carry=None
+        self.segment_carry_index=-1
         if type(record_video) is not bool:raise ValueError('녹화 설정을 확인하세요.')
         if record_video and any(s.kind not in ('camera','demo') for s in members):
             raise ValueError('두 입력 모두 카메라여야 영상 녹화를 사용할 수 있습니다.')
@@ -44,6 +54,8 @@ class MeasurementGroup:
                      'target_pair_status':'operator_initialized_not_verified' if targets else 'not_configured',
                      'same_person_assertion':'operator_report_not_verified' if targets else None,
                      'posture_prediction':{'status':'not_implemented','label':None}}
+        if blackbox:self.data['storage_class']='blackbox'
+        if segment_seconds is not None:self.data.update(segment_seconds=segment_seconds,segments=[])
         if association_policy is not None:self.data['association_policy']=association_policy
         if association_policy==PRIORITY_POLICY:
             self.data['target_association_status']='bed_priority_per_frame_unverified'
@@ -82,7 +94,8 @@ class MeasurementGroup:
         self.save()
         for session in self.members:
             session.state['pending']='start'
-            session.worker.submit('start',record_video=self.record_video,reset_tracking=self.association_policy is not None)
+            segment={'series_id':session.worker.engine.stream_id,'index':0,'previous_measurement_id':None,'group_id':self.id} if self.segment_seconds is not None else None
+            session.worker.submit('start',record_video=self.record_video,reset_tracking=self.association_policy is not None,blackbox=self.blackbox,group_segment=segment)
 
     def ready(self,trigger='operator_ready'):
         if self.finished or self.data['phase']!='preparing':raise ValueError('준비 중인 계획 측정이 없습니다.')
@@ -134,6 +147,7 @@ class MeasurementGroup:
             member['started_ack_perf_counter_ns']=str(time.perf_counter_ns())
             if all(m['run_directory'] for m in self.data['members']) and self.data['phase']=='starting':
                 self.data['phase']='recording'
+                if self.segment_seconds is not None:self.segment_due=time.monotonic()+self.segment_seconds
                 if self.data['measurement_plan']:
                     self.data['measurement_plan'].update(status='recording',measurement_started_perf_counter_ns=str(max(int(m['measurement_started_perf_counter_ns']) for m in self.data['members'])))
             if self.data['measurement_plan'] and all(m['run_directory'] for m in self.data['members']):
@@ -141,6 +155,18 @@ class MeasurementGroup:
                 plan['measurement_started_perf_counter_ns']=str(max(int(m['measurement_started_perf_counter_ns']) for m in self.data['members']))
                 plan['stop_before_both_started']=bool(self.data['requested_stop_perf_counter_ns'] and
                     int(self.data['requested_stop_perf_counter_ns'])<int(plan['measurement_started_perf_counter_ns']))
+            self.save()
+        elif kind=='segment_rotated' and self.segment_seconds is not None:
+            if self.rotating is None or session.id not in self.rotating['pending']:
+                self.fail('UNEXPECTED_SEGMENT_ROTATION',session.id);return
+            if value['previous_directory']!=member['run_directory'] or value['segment_index']!=self.rotating['index']+1:
+                self.fail('SEGMENT_ROTATION_MISMATCH',session.id);return
+            self.rotating['pending'].remove(session.id)
+            member['run_directory']=value['directory']
+            if not self.rotating['pending']:
+                self._finish_segment(self.rotating)
+                self.rotating=None
+                self.segment_due=time.monotonic()+self.segment_seconds
             self.save()
         elif kind=='target_selected':
             self.data.setdefault('target_reselections',[]).append({'input_id':session.id,
@@ -165,6 +191,24 @@ class MeasurementGroup:
 
     def tick(self):
         if self.finished:return
+        if self.rotating is not None and any(s.id in self.rotating['pending'] and s.state['closed'] for s in self.members):
+            self.rotating=None
+            self.failed=True
+            self.data['errors'].append({'code':'SEGMENT_ROTATION_INTERRUPTED'})
+            self.stop(close_inputs=True)
+        for index,job in list(self.segment_jobs.items()):
+            try:result=job.get_nowait()
+            except queue.Empty:continue
+            del self.segment_jobs[index]
+            segment=next(item for item in self.data['segments'] if item['index']==index)
+            segment.update(status=result['phase'],ledger_complete=result['ledger_complete'])
+            if index>self.segment_carry_index and result.get('posture_predictions',{}).get('status')=='generated':
+                self.segment_carry=result['posture_predictions']
+                self.segment_carry_index=index
+            if result['phase']!='completed' or not result['ledger_complete']:
+                self.failed=True;self.data['errors'].append({'code':'SEGMENT_FINALIZATION_FAILED','segment_index':index})
+                if self.data['phase'] in ('starting','recording'):self.stop(close_inputs=True)
+            self.save()
         plan=self.data['measurement_plan']
         if self.data['phase']=='preparing':
             if any(s.state['closed'] or s.state['phase']=='closing' for s in self.members):self.fail('PLAN_INPUT_CLOSED')
@@ -177,6 +221,11 @@ class MeasurementGroup:
 
         if self.data['phase']=='recording':self.public(update_stability=True)
 
+        if self.data['phase']=='recording' and self.segment_due is not None and self.rotating is None and time.monotonic()>=self.segment_due:
+            index=len(self.data['segments'])
+            self.rotating={'index':index,'pending':{s.id for s in self.members},'members':copy.deepcopy(self.data['members'])}
+            for session in self.members:session.worker.submit('rotate_group_segment')
+
         if self._finalize_job is not None:
             try:self.data=self._finalize_job.get_nowait()
             except queue.Empty:return
@@ -185,12 +234,15 @@ class MeasurementGroup:
             return
         done=all(m['stopped_ack_perf_counter_ns'] is not None or member.state['closed']
                  for member,m in zip(self.members,self.data['members']))
-        if not done:return
+        if not done or self.rotating is not None or self.segment_jobs:return
         self.data['phase']='finalizing'
         self.save()
         self._finalize_job=queue.Queue(maxsize=1)
         work=copy.copy(self)
         work.data=copy.deepcopy(self.data)
+        if self.segment_seconds is not None:
+            work.data['group_segment_index']=len(self.data['segments'])
+            self._apply_segment_carry(work.data,self.segment_carry)
         def finalize():
             try:work._finish_record()
             except Exception as exc:
@@ -200,6 +252,51 @@ class MeasurementGroup:
                 except Exception:pass
             self._finalize_job.put(work.data)
         threading.Thread(target=finalize,daemon=True).start()
+
+    def _finish_segment(self, rotation):
+        index=rotation['index']
+        directory=self.directory/'segments'/str(index)
+        directory.mkdir(parents=True,exist_ok=False)
+        work=copy.copy(self)
+        work.directory=directory
+        work.data=copy.deepcopy(self.data)
+        work.data.pop('segments',None)
+        work.data['members']=rotation['members']
+        work.data['group_segment_index']=index
+        work.data['phase']='finalizing'
+        work.failed=False;work.finished=False
+        item={'index':index,'directory':str(directory),'status':'finalizing',
+              'members':[m['run_directory'] for m in rotation['members']]}
+        self.data['segments'].append(item)
+        job=queue.Queue(maxsize=1);self.segment_jobs[index]=job
+        previous=self.segment_tail
+        tail={'done':threading.Event(),'result':None}
+        self.segment_tail=tail
+        def finalize():
+            try:
+                if previous is not None:
+                    previous['done'].wait()
+                    prior=previous['result']
+                    if prior['phase']!='completed' or not prior['ledger_complete']:
+                        raise RuntimeError('Previous group segment failed')
+                    self._apply_segment_carry(work.data,prior.get('posture_predictions'))
+                work._finish_record()
+            except Exception as exc:
+                work.data.update(phase='failed',ledger_complete=False)
+                work.data['errors'].append({'code':'SEGMENT_FINALIZATION_FAILED','exception_type':type(exc).__name__})
+                try:work.save()
+                except Exception:pass
+            tail['result']=work.data
+            tail['done'].set()
+            job.put(work.data)
+        threading.Thread(target=finalize,daemon=True).start()
+
+    @staticmethod
+    def _apply_segment_carry(data,artifact):
+        if isinstance(artifact,dict) and artifact.get('status')=='generated':
+            checkpoint=artifact.get('final_stability_checkpoint')
+            if checkpoint is not None:data['initial_group_stability_checkpoint']=copy.deepcopy(checkpoint)
+            data['group_stability_sequence_offset']=artifact['next_stability_sequence']
 
     def _finish_record(self):
         for session,member in zip(self.members,self.data['members']):
@@ -237,7 +334,7 @@ class MeasurementGroup:
                 self.failed=True
                 self.data['errors'].append({'code':'FUSION_INPUT_FAILED','exception_type':type(exc).__name__})
         self.data['phase']='failed' if self.failed else 'completed'
-        self.data['ledger_complete']=not any(e['code'] in ('MEMBER_NOT_STARTED','MEMBER_VERIFICATION_FAILED','ALIGNMENT_FAILED','FUSION_INPUT_FAILED') for e in self.data['errors'])
+        self.data['ledger_complete']=not any(e['code'] in ('MEMBER_NOT_STARTED','MEMBER_VERIFICATION_FAILED','ALIGNMENT_FAILED','FUSION_INPUT_FAILED','SEGMENT_FINALIZATION_FAILED','SEGMENT_ROTATION_INTERRUPTED') for e in self.data['errors'])
         self.data['finished_perf_counter_ns']=str(time.perf_counter_ns())
         if self.data['measurement_plan']:
             self.data['measurement_plan']['status']=self.data['phase']

@@ -65,6 +65,7 @@ class WebWorkspace:
         self.output_root = Path(output_root).resolve()
         from .record_library import RecordLibrary
         self.records=RecordLibrary(self.output_root)
+        self.blackbox_records=None
         self.temp = tempfile.TemporaryDirectory(prefix='bed-pose-browser-')
         self.temp_root = Path(self.temp.name)
         self.factory = engine_factory
@@ -108,6 +109,7 @@ class WebWorkspace:
         self.preview_quality = PREVIEW_DEFAULT
         self.stop_requested = threading.Event()
         self.monitor_stop = threading.Event()
+        self.retention_next = 0.0
         self.scan_state = {'busy': False, 'indices': [], 'error': None}
         self.monitor = threading.Thread(target=self._monitor, daemon=True)
         self.monitor.start()
@@ -265,7 +267,14 @@ class WebWorkspace:
                 if session.worker is not None:current['stable_posture']=project(current.get('stable_posture'),session.worker.engine.clock() if session.kind=='camera' else None,closed=current.get('closed',False) or current.get('phase') in ('error','closing'))
                 sessions.append(current)
                 if session.settings_key not in known_profiles:profiles[session.settings_key]=session.settings_bundle
-            result={'sessions':sessions,'groups':[g.public() for g in self.groups.values()],
+            groups=[]
+            for group in self.groups.values():
+                current=group.public()
+                if compact and isinstance(current.get('segments'),list):
+                    current['segments_total']=len(current['segments'])
+                    current['segments']=current['segments'][-20:]
+                groups.append(current)
+            result={'sessions':sessions,'groups':groups,
                     'scan':self.scan_state,'closing':self.stop_requested.is_set(),
                     'preview_quality':self.preview_quality,'model':self.model_name,
                     'model_available':self.model.is_file() and self.model_error is None,'model_error':self.model_error,'clip':self.clip_status,'person_crop':self.person_crop_status,
@@ -273,6 +282,18 @@ class WebWorkspace:
             if compact:result['profiles']=profiles
             # Detach mutable values once; HTTP performs the single JSON serialization.
             return deepcopy(result)
+
+    def record_library(self, storage):
+        if storage == 'normal':return self.records
+        if storage == 'blackbox':
+            from .blackbox_storage import blackbox_root
+            root=blackbox_root(self.output_root)
+            with self.lock:
+                if self.blackbox_records is None:
+                    from .record_library import RecordLibrary
+                    self.blackbox_records=RecordLibrary(root)
+                return self.blackbox_records
+        raise ValueError('기록 저장 위치를 확인하세요.')
 
     def set_preview_quality(self, quality):
         if not isinstance(quality,str) or quality not in PREVIEW_PROFILES:
@@ -393,7 +414,20 @@ class WebWorkspace:
                                         'tracking_at_group_start':session.worker.engine.target_tracker.current()})
                 if values.get('tracking_required') is True and any(s.worker.engine.target_tracker.current()['status']!='tracking_provisional' for s in members):
                     raise ValueError('양쪽 대상을 다시 지정해 잠정 추적을 준비하세요.')
-                group=MeasurementGroup(members,self.output_root,None if tolerance is None else int(tolerance*1_000_000),targets=targets,plan=values.get('measurement_plan'),record_video=values.get('record_video',False),association_policy=association)
+                blackbox=values.get('blackbox',False)
+                if type(blackbox) is not bool:raise ValueError('저장 방식을 확인하세요.')
+                limit=values.get('retention_max_bytes')
+                if limit is not None and (not blackbox or type(limit) is not int or not 1024**2<=limit<=1024**5):
+                    raise ValueError('블랙박스 용량은 1 MiB 이상이어야 합니다.')
+                segment_seconds=values.get('segment_seconds')
+                if segment_seconds is not None and (not blackbox or type(segment_seconds) is not int or not 1<=segment_seconds<=86400):
+                    raise ValueError('구간 길이는 1~86400초여야 합니다.')
+                from .blackbox_storage import blackbox_root
+                root=blackbox_root(self.output_root,create=True) if blackbox else self.output_root
+                group=MeasurementGroup(members,root,None if tolerance is None else int(tolerance*1_000_000),targets=targets,plan=values.get('measurement_plan'),record_video=values.get('record_video',False),association_policy=association,blackbox=blackbox,segment_seconds=segment_seconds)
+                if limit is not None:
+                    group.data['retention_max_bytes']=limit
+                    group.save()
                 self.groups[group.id]=group
                 try:group.start()
                 except Exception:
@@ -483,8 +517,19 @@ class WebWorkspace:
                     raise ValueError('영상에서 침대 영역을 먼저 지정하세요.')
                 record_video=values.get('record_video',False)
                 if type(record_video) is not bool:raise ValueError('녹화 설정을 확인하세요.')
+                blackbox=values.get('blackbox',False)
+                if type(blackbox) is not bool:raise ValueError('저장 방식을 확인하세요.')
+                if blackbox:
+                    from .blackbox_storage import blackbox_root
+                    blackbox_root(self.output_root)
                 if record_video and session.kind not in ('camera','demo'):raise ValueError('카메라 입력에서만 녹화할 수 있습니다.')
-                session.worker.submit('start',record_video=record_video)
+                segment_seconds=values.get('segment_seconds')
+                if segment_seconds is not None and (not blackbox or type(segment_seconds) is not int or not 1<=segment_seconds<=86400):
+                    raise ValueError('구간 길이는 1~86400초여야 합니다.')
+                limit=values.get('retention_max_bytes')
+                if limit is not None and (not blackbox or segment_seconds is None or type(limit) is not int or not 1024**2<=limit<=1024**5):
+                    raise ValueError('블랙박스 용량은 1 MiB 이상이어야 합니다.')
+                session.worker.submit('start',record_video=record_video,blackbox=blackbox,segment_seconds=segment_seconds,retention_max_bytes=limit)
             elif action == 'stop':
                 if not state['recording']:
                     raise ValueError('진행 중인 측정이 없습니다.')
@@ -532,13 +577,18 @@ class WebWorkspace:
             state.update(region=value['region'], pending=None)
         elif kind == 'started':
             state.update(recording=True, pending=None, directory=value['directory'], recorded_frames=0,
-                         elapsed=0, phase='recording', integrity=None, video_recording=value.get('video_recording',False))
+                         elapsed=0, phase='recording', integrity=None, video_recording=value.get('video_recording',False),
+                         segmented_recording=value.get('segmented_recording',False),
+                         segment_index=0 if value.get('segmented_recording',False) else None,
+                         retention_max_bytes=value.get('retention_max_bytes'),retention_status=None)
             state['started_ns'] = value['started_ns']
+        elif kind == 'segment_rotated':
+            state.update(directory=value['directory'],recorded_frames=0,segment_index=value['segment_index'])
         elif kind == 'stopped':
             manifest = value['manifest']
             state.update(recording=False, pending=None, directory=value['directory'],
                          recorded_frames=manifest['recorded_frames'],
-                         elapsed=(int(manifest['finished_ns'])-int(manifest['started_ns']))/1e9,
+                         elapsed=(int(manifest['finished_ns'])-int(state['started_ns'] if state.get('segmented_recording') else manifest['started_ns']))/1e9,
                          integrity='verified' if manifest['ledger_complete'] else 'incomplete',
                          phase='error' if manifest['run_status'] == 'failed' else 'preview')
             if manifest['run_status'] == 'failed' and not state['error']:
@@ -714,6 +764,55 @@ class WebWorkspace:
                         self.target_tickets={k:v for k,v in self.target_tickets.items() if v['input_id']!=session.id}
 
                 self._tick_groups()
+                if time.monotonic()>=self.retention_next:
+                    self.retention_next=time.monotonic()+5
+                    self._tick_retention()
+
+    def _tick_retention(self):
+        active=[s for s in self.sessions.values() if s.state.get('recording') and s.state.get('retention_max_bytes')]
+        groups=[g for g in self.groups.values() if not g.finished and g.data.get('retention_max_bytes')
+                and g.data['phase'] in ('starting','recording')]
+        if not active and not groups:return
+        def update(status):
+            reason=status['reason']
+            for session in active:
+                session.state['retention_status']=status
+                if reason and not session.state.get('pending'):
+                    session.state['pending']='stop';session.worker.submit('stop')
+            for group in groups:
+                group.data['retention_status']=status
+                if reason:
+                    group.data['retention_stop_reason']=reason
+                    try:group.stop()
+                    except Exception:
+                        group.failed=group.finished=True
+                        group.data.update(phase='failed',ledger_complete=False)
+                        group.data['errors'].append({'code':'GROUP_WRITE_FAILED'})
+                        for member in group.members:member.worker.request_close()
+        from .blackbox_retention import reclaim
+        from .blackbox_storage import blackbox_root
+        try:
+            library=self.record_library('blackbox')
+            protected={Path(s.state['directory']).name for s in self.sessions.values() if s.state.get('recording') and s.state.get('directory')}
+            if not library.lock.acquire(blocking=False):
+                free=shutil.disk_usage(blackbox_root(self.output_root)).free
+                if free>=256*1024**2:return
+                reason='기록 열람 중 디스크 여유 공간이 256 MiB 미만입니다.'
+                status={'used_bytes':None,'free_bytes':free,'deleted_count':0,'reason':reason}
+                update(status)
+                return
+            try:
+                limits=[s.state['retention_max_bytes'] for s in active]+[g.data['retention_max_bytes'] for g in groups]
+                result=reclaim(self.output_root,min(limits),protected|set(library.opened),self.groups)
+            finally:library.lock.release()
+            free=shutil.disk_usage(blackbox_root(self.output_root)).free
+            reason=None if result['within_limit'] and free>=256*1024**2 else (
+                '디스크 여유 공간이 256 MiB 미만입니다.' if free<256*1024**2 else '보호 중인 기록 때문에 저장 한도 안으로 줄일 수 없습니다.')
+            status={'used_bytes':result['bytes'],'free_bytes':free,'deleted_count':len(result['deleted']),'reason':reason}
+        except (OSError,ValueError,TypeError,KeyError,AttributeError,RecursionError) as exc:
+            reason='저장 용량을 안전하게 관리할 수 없습니다. '+str(exc)
+            status={'used_bytes':None,'free_bytes':None,'deleted_count':0,'reason':reason}
+        update(status)
 
     def _tick_groups(self):
         for group in self.groups.values():
@@ -819,13 +918,13 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 return self._reply(200,body,etag=etag)
             if path == '/api/records/timeline':
                 query=parse_qs(url.query)
-                result=self.server.workspace.records.timeline(query.get('record_id',[''])[0],
+                result=self.server.workspace.record_library(query.get('storage',['normal'])[0]).timeline(query.get('record_id',[''])[0],
                     query.get('basis',[None])[0],int(query.get('bins',['240'])[0]))
                 return self._reply(200,result)
             if path in ('/api/records','/api/records/frames'):
                 query=parse_qs(url.query)
                 offset=int(query.get('offset',['0'])[0]);limit=int(query.get('limit',['50'])[0])
-                library=self.server.workspace.records
+                library=self.server.workspace.record_library(query.get('storage',['normal'])[0])
                 result=(library.catalog(offset,limit) if path=='/api/records' else
                         library.frames(query.get('record_id',[''])[0],offset,limit))
                 return self._reply(200,result)
@@ -897,9 +996,14 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                         asset=workspace.assets.get(values.get('video_asset'))
                         if not asset or asset['kind']!='video':raise ValueError('대조할 원본 영상 파일을 선택하세요.')
                         video=asset['path']
-                result=workspace.records.image(values.get('record_id'),values.get('frame_id'),video)
+                result=workspace.record_library(values.get('storage','normal')).image(values.get('record_id'),values.get('frame_id'),video)
             elif url.path == '/api/records/open':
-                result=workspace.records.open(values.get('record_id'))
+                result=workspace.record_library(values.get('storage','normal')).open(values.get('record_id'))
+            elif url.path == '/api/records/protect':
+                result=workspace.record_library('blackbox').protect(values.get('record_id'),values.get('protected'))
+            elif url.path == '/api/records/release':
+                workspace.record_library(values.get('storage','normal')).release(values.get('record_id'),values.get('lease_id'))
+                result={'released':True}
             elif url.path == '/api/target-select':
                 result = workspace.select_target(values)
             elif url.path == '/api/target-capture':

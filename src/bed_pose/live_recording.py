@@ -126,11 +126,25 @@ def _verify(directory, manifest, hashes=True):
         try:validate_profile(provider_profile,manifest['execution_kind'])
         except ValueError as exc:raise IntegrityError('Invalid body-state provider profile') from exc
     stabilizer=None
+    if 'blackbox_segment' in manifest:
+        from .blackbox_storage import validate_segment
+        try:
+            validate_segment(manifest['blackbox_segment'])
+            if (manifest.get('storage_class')!='blackbox' or 'initial_stability_checkpoint' not in manifest
+                    or 'stability_profile' not in manifest):
+                raise ValueError('Invalid blackbox segment metadata')
+        except (ValueError,TypeError) as exc:raise IntegrityError('Invalid blackbox segment metadata') from exc
     if 'stability_profile' in manifest:
         from .posture_stability import Stabilizer,profile as stability_profile
         try:
             if manifest['stability_profile']!=stability_profile(manifest['stability_profile']):raise ValueError('Invalid stability profile')
             stabilizer=Stabilizer(manifest['stability_profile'])
+            if 'initial_stability_checkpoint' in manifest:
+                if manifest.get('storage_class')!='blackbox' or 'blackbox_segment' not in manifest:
+                    raise ValueError('Unexpected stability checkpoint')
+                stabilizer.restore(manifest['initial_stability_checkpoint'])
+                if stabilizer.sequence is not None and stabilizer.sequence >= manifest['first_stream_frame_id']:
+                    raise ValueError('Invalid checkpoint frame boundary')
         except (ValueError,TypeError) as exc:raise IntegrityError('Invalid stability profile') from exc
     revision = manifest['initial_bed_revision']
     regions={manifest['initial_bed_revision']:manifest['initial_bed_region']}
